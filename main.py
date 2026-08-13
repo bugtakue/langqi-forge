@@ -310,6 +310,14 @@ def build_octos_env(config_dir: Path) -> dict:
         "model": model,
         "sandbox": {"allow_network": True},
         "memory": {"refresh": {"enabled": False}},
+        # Rounds 24-28: deepseek-v4 turns ended "ok" with EMPTY content and
+        # zero tool calls. Root cause (octos source): when ChatConfig.
+        # max_tokens is unset, octos sends no max_tokens for deepseek-family
+        # models, so the provider's tiny default (4096) applies — the
+        # reasoning model spends the whole budget on reasoning_content and
+        # returns finish_reason=length with no content and no tool calls.
+        # gateway.max_output_tokens feeds AgentConfig.chat_max_tokens.
+        "gateway": {"max_output_tokens": 32768},
     }
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
