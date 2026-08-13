@@ -633,24 +633,40 @@ visible page text.
 verbatim from the requirement document into the UI (e.g. if it says the \
 header exposes "Register" and "Login" links, use exactly those English \
 strings as <a> link text; if it says the button is "Next step", the button \
-text is exactly "Next step"). Tests locate elements by these exact strings.
+text is exactly "Next step"). Tests locate elements by these exact strings, \
+some with ANCHORED regexes like /^name$/i — a field the requirement calls \
+"Name" must be labeled exactly "Name"; "Full Name" or "Your Name" never \
+matches.
 - UNIQUENESS (strict mode): any value the page echoes — search criteria, \
 city names, dates, usernames — must appear in EXACTLY ONE visible element. \
 Put normalized search criteria in ONE summary line; train cards show train \
 number, stations, and times but must NOT repeat the searched city names or \
-date as bare text anywhere else on the page (duplicate occurrences fail the \
-tests with "strict mode violation").
+date as bare text anywhere else on the page. Round 31 shipped cards with a \
+"Shanghai to Beijing" route line under a criteria summary containing the \
+same words: getByText('Shanghai') matched 3 elements and every \
+search/booking test died with "strict mode violation".
 - SEED DATA: when the requirement states concrete published records (e.g. \
 "a Shanghai to Beijing journey on Sun, May 31 has train number G532"), the \
 database seed MUST include exactly those records, with dates stored and \
 matched as the verbatim strings shown ("Sun, May 31" is data, not an ISO \
-date). Search matching is case-insensitive and trims surrounding whitespace.
+date). Search matching is case-insensitive and trims surrounding whitespace. \
+OPTION LABELS ARE FIXTURE DATA TOO: every concrete example value in the \
+requirement (account nationalities, seat classes, station lists) must \
+appear verbatim as <option>/radio labels — if the sample account has \
+nationality "Chinese", the select must include an option labeled exactly \
+"Chinese". Round 31's registration tests all timed out because the \
+nationality select lacked the fixture's option label ("did not find some \
+options").
 - SESSIONS: after registration or login, redirect to the home page and show \
 the exact username plus a "Sign out" link in the header; the session must \
 survive page reload (cookie or token persisted in the browser).
 - ERROR STATES: failed validation stays on the same page, shows an inline \
 message naming the problem (tests match words like required/invalid/match/\
-terms/duplicate), keeps the anonymous header, and creates no records.
+terms/duplicate), keeps the anonymous header, and creates no records. Show \
+EXACTLY ONE error element at a time — never a per-field error and a \
+form-level summary together: round 31 rendered both "Date is required." \
+and "Please fix the invalid search criteria.", two elements matched the \
+test's error regex, and strict mode failed the assertion.
 - TEXT ONLY: every string you need exists as plain text in the requirement \
 YAML/files. Reference images are illustrative only — NEVER attempt OCR, \
 ASCII rendering, or any other image text extraction, and never try to \
