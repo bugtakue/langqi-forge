@@ -15,7 +15,7 @@ Configuration is via environment variables:
     OCTOS_MODEL     (override model name)
     OCTOS_BIN       (path to the octos binary; default: ./bin/octos then PATH)
     OCTOS_MAX_ITERATIONS (default 500)
-    OCTOS_NODE_TIMEOUT   (seconds per requirement node, default 1800)
+    OCTOS_NODE_TIMEOUT   (seconds per requirement node, default 1200)
 """
 
 from __future__ import annotations
