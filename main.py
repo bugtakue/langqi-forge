@@ -461,9 +461,10 @@ class OctosDriver:
             "failed to send", "streaming request",
             # Round 22: the platform-injected key returned HTTP 403
             # "Authentication failed" mid-run after ~25 min of working
-            # requests. A short retry window lets a rotated/recovered key
-            # save the run instead of failing every remaining turn in 0s.
-            "403", "authentication failed"))
+            # requests; round 23 got HTTP 401 "无效的令牌" from the start.
+            # A short retry window lets a rotated/recovered key save the
+            # run instead of failing every remaining turn in 0s.
+            "403", "authentication failed", "401", "unauthorized"))
 
     def _run_with_retries(self, fn, attempts: int = 3) -> tuple[bool, str]:
         ok, text = fn()
