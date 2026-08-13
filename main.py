@@ -458,7 +458,12 @@ class OctosDriver:
         return any(k in lowered for k in (
             "temporarily unavailable", "503", "502", "429", "rate limit",
             "timeout", "timed out", "connection reset", "overloaded",
-            "failed to send", "streaming request"))
+            "failed to send", "streaming request",
+            # Round 22: the platform-injected key returned HTTP 403
+            # "Authentication failed" mid-run after ~25 min of working
+            # requests. A short retry window lets a rotated/recovered key
+            # save the run instead of failing every remaining turn in 0s.
+            "403", "authentication failed"))
 
     def _run_with_retries(self, fn, attempts: int = 3) -> tuple[bool, str]:
         ok, text = fn()
