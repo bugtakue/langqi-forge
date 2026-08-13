@@ -103,12 +103,25 @@ def _postflight_structure_check(output_dir: Path, web_port: int = 3000) -> None:
 
 def _free_web_port(web_port: int) -> None:
     """Best-effort kill of whatever still listens on the app port."""
+    # NOTE: log only when a PID was really killed — a bare
+    # `lsof | xargs -r kill` pipeline exits 0 even with an empty port,
+    # and a misleading "freed" line cost us a wrong diagnosis in round 22.
+    try:
+        pids = subprocess.run(["lsof", "-ti", f":{web_port}"],
+                              capture_output=True, text=True,
+                              timeout=15).stdout.split()
+    except (OSError, subprocess.TimeoutExpired):
+        pids = []
+    if not pids:
+        log(f"[postflight] port {web_port} already free")
+        return
     for cmd in (["fuser", "-k", f"{web_port}/tcp"],
                 ["sh", "-c", f"lsof -ti :{web_port} | xargs -r kill"]):
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             if r.returncode == 0:
-                log(f"[postflight] freed port {web_port} via {cmd[0]}")
+                log(f"[postflight] killed {len(pids)} listener(s) on port "
+                    f"{web_port} via {cmd[0]}: {pids}")
                 return
         except (OSError, subprocess.TimeoutExpired):
             continue
