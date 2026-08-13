@@ -544,11 +544,17 @@ violation = 0 score):
 `npm run build` script. A static HTML/CSS/JS frontend is fine; then \
 "build" can be a small Node script that copies the static files into \
 frontend/dist/. A Vite/React setup is also fine if you keep it minimal.
-- backend/  — Node.js + Express + better-sqlite3, with a package.json that \
-has a `npm run start` script. The backend reads the PORT environment \
+- backend/  — Node.js + Express, with a package.json that \
+has a `npm run start` script. Persistence MUST be pure JavaScript: a JSON \
+file (e.g. backend/data/db.json) loaded into memory at startup and written \
+back on every mutation. DO NOT use better-sqlite3, sqlite3, bcrypt, or any \
+npm package with native bindings — this sandbox cannot download prebuilt \
+binaries nor compile them, so native modules can never be smoke-tested \
+here. Hash passwords with Node's built-in crypto (scrypt). The backend \
+reads the PORT environment \
 variable (default {port}), serves the built frontend from frontend/dist/ at \
 http://localhost:{port}/ and exposes JSON APIs under /api/.
-- Seed the SQLite database with realistic demo data at startup if tables are empty.
+- Seed the JSON store with realistic demo data at startup if it is empty.
 
 """ + UI_CONTRACT_PROMPT + """
 Verification steps the runner will perform later — make sure they ALL pass:
@@ -557,16 +563,24 @@ Verification steps the runner will perform later — make sure they ALL pass:
 3. http://127.0.0.1:{port}/ serves the app.
 
 After scaffolding, run npm install for both directories, build the frontend, \
-and smoke-test that the backend serves the app on port {port}. Keep \
-dependencies minimal. Do not use TypeScript.\
+and smoke-test that the backend serves the app. Keep \
+dependencies minimal. Do not use TypeScript.
+
+PORT SAFETY (the benchmark runner watches the grading port): during ALL of \
+your work, run servers for smoke tests ONLY on port {smoke} \
+(PORT={smoke}). NEVER bind anything to port {port} yourself — if the \
+runner observes a server on port {port} while you are still working, it \
+terminates the whole run immediately. When you finish, every server you \
+started must be stopped.
 """
 
 NODE_PROMPT_TEMPLATE = """\
 You are implementing one requirement node of a larger full-stack web \
 application. The application skeleton in the current working directory \
-(frontend/ built with `npm run build` into frontend/dist/, Express + \
-better-sqlite3 backend in backend/ started with `npm run start`, serving \
-everything on port {port}) already exists.
+(frontend/ built with `npm run build` into frontend/dist/, Express backend \
+in backend/ with pure-JS JSON-file persistence, started with \
+`npm run start`, serving \
+everything on the port given by the PORT env var) already exists.
 
 Implement the following requirement completely — backend API, database \
 tables/queries, and the frontend UI to exercise it:
@@ -580,7 +594,10 @@ Rules:
 
 """ + UI_CONTRACT_PROMPT + """
 - After implementing, run `npm run build` in frontend/ and restart the \
-backend to verify the new endpoint(s) respond correctly (e.g. with curl).
+backend ON PORT {smoke} (PORT={smoke} npm run start) to verify the new \
+endpoint(s) respond correctly (e.g. with curl), then stop that server. \
+NEVER bind anything to port {port} — the runner watches that port and \
+terminates the run if it sees a server there while you are still working.
 - Commit nothing yourself; the harness handles git.
 """
 
@@ -588,8 +605,10 @@ FINAL_CHECK_PROMPT = """\
 Do a final end-to-end check of the web application in the current directory:
 1. Run `npm run build` in frontend/ and fix any build errors.
 2. Kill any leftover server process, then start the backend fresh with \
-PORT={port} via `npm run start` in backend/.
-3. Verify the app loads at http://localhost:{port}/ and every implemented \
+PORT={smoke} via `npm run start` in backend/. NEVER use port {port} — \
+the benchmark runner watches that port and terminates the run if it sees \
+a server there while you are still working.
+3. Verify the app loads at http://localhost:{smoke}/ and every implemented \
 API endpoint works (exercise them with curl, including error cases).
 4. Audit every form against the benchmark UI contract below and fix \
 violations (these silently score 0 in the automated tests):
@@ -710,6 +729,13 @@ def main() -> int:
         # (round 21 died that way and produced zero executed tests).
         budget = int(os.environ.get("OCTOS_TIME_BUDGET", "2700"))
         t_run_start = time.time()
+        # Smoke tests must NEVER use the grading port: round 21 was SIGTERMed
+        # minutes after the final-verification turn started a server on
+        # port 3000 — the runner appears to treat a live grading port as
+        # "agent finished" and kills the process.
+        smoke_port = int(os.environ.get("OCTOS_SMOKE_PORT", "3100"))
+        if smoke_port == args.web_port:
+            smoke_port += 1
 
         def time_up() -> bool:
             return time.time() - t_run_start > budget
@@ -735,7 +761,9 @@ def main() -> int:
                     break
                 t0 = time.time()
                 skeleton_ok, skeleton_text = driver.run(
-                    APP_SKELETON_PROMPT.format(port=args.web_port), node_timeout,
+                    APP_SKELETON_PROMPT.format(port=args.web_port,
+                                               smoke=smoke_port),
+                    node_timeout,
                 )
                 log(f"[flow] skeleton turn attempt {sk_attempt} "
                     f"{'ok' if skeleton_ok else 'FAILED'} "
@@ -764,7 +792,9 @@ def main() -> int:
                 log(f"[flow] node {idx}/{len(atomic_nodes)} {node_id} starting")
                 t0 = time.time()
                 ok, text = driver.run(
-                    NODE_PROMPT_TEMPLATE.format(port=args.web_port, node_spec=describe_node(node)),
+                    NODE_PROMPT_TEMPLATE.format(port=args.web_port,
+                                                smoke=smoke_port,
+                                                node_spec=describe_node(node)),
                     node_timeout,
                 )
                 log(f"[flow] node {node_id} {'ok' if ok else 'FAILED'} "
@@ -784,7 +814,9 @@ def main() -> int:
                 log("[flow] final verification turn starting")
                 t0 = time.time()
                 ok, text = driver.run(
-                    FINAL_CHECK_PROMPT.format(port=args.web_port), node_timeout,
+                    FINAL_CHECK_PROMPT.format(port=args.web_port,
+                                              smoke=smoke_port),
+                    node_timeout,
                 )
                 log(f"[flow] final check {'ok' if ok else 'FAILED'} "
                     f"in {time.time()-t0:.0f}s: {text[-300:]!r}")
