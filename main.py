@@ -425,9 +425,12 @@ class OctosDriver:
     def _run_with_heartbeat(fn) -> tuple[bool, str]:
         """Run a turn in a thread, logging a keepalive line every 30s.
 
-        Round 21 was SIGTERMed minutes into a silent turn: the runner appears
-        to kill the agent when its log output stalls. Turns legitimately run
-        for several minutes, so keep the log alive while we wait.
+        Round 21 was SIGTERMed ~7 min into a silent final-verification turn.
+        Two candidate triggers: the runner kills on stalled log output, or it
+        watches the grading port and kills once a server answers there (the
+        stronger hypothesis — earlier 7.5-min silent turns survived, and
+        there is no stage time cap: round 20 generated for 44 min). The
+        keepalive covers the first; OCTOS_SMOKE_PORT covers the second.
         """
         import threading
         box: dict = {}
