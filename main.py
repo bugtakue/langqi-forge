@@ -450,7 +450,9 @@ def build_octos_env(config_dir: Path) -> dict:
         # reasoning model spends the whole budget on reasoning_content and
         # returns finish_reason=length with no content and no tool calls.
         # gateway.max_output_tokens feeds AgentConfig.chat_max_tokens.
-        "gateway": {"max_output_tokens": 32768},
+        # 32768 proved insufficient headroom in round 34 (six consecutive
+        # ~150s turns of pure reasoning, empty content); raised to 65536.
+        "gateway": {"max_output_tokens": 65536},
     }
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
@@ -1052,6 +1054,15 @@ def main() -> int:
                             break
                 if skeleton_ok:
                     break
+                # Round 34: four skeleton attempts + nudges all returned
+                # empty in the SAME session — once the context accumulates
+                # empty assistant turns, the model keeps reasoning-and-
+                # truncating the same way. Reset the session so the next
+                # attempt starts from a clean context.
+                if sk_attempt < 4:
+                    log("[flow] resetting session before next skeleton "
+                        "attempt (empty-context loop)")
+                    driver.close()
                 time.sleep(45)
             if not skeleton_ok:
                 raise RuntimeError(f"skeleton scaffolding failed: {skeleton_text}")
