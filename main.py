@@ -631,6 +631,15 @@ terminates the run if it sees a server there while you are still working.
 - Commit nothing yourself; the harness handles git.
 """
 
+NUDGE_PROMPT = """\
+You ended your last turn before creating any files. Stop analyzing. In \
+your very next actions, CREATE the project files with your file-writing \
+tools: frontend/package.json (with the build script), the frontend page \
+sources, backend/package.json (with the start script), and the backend \
+server including the JSON store and seed data required by the requirement \
+document. Do not describe the plan — write the files now.\
+"""
+
 FINAL_CHECK_PROMPT = """\
 Do a final end-to-end check of the web application in the current directory:
 1. Run `npm run build` in frontend/ and fix any build errors.
@@ -810,6 +819,25 @@ def main() -> int:
                                      "on disk; treating as failed")
                     log("[flow] skeleton produced no frontend/backend; "
                         "retrying with emphasis on writing files")
+                    # Round 25/27 pattern: the model ends the turn with a
+                    # text announcement ("then start building") instead of
+                    # tool calls, and full re-prompts get empty replies.
+                    # Nudge the SAME session to execute before burning a
+                    # whole fresh attempt.
+                    for nudge in range(1, 3):
+                        if time_up():
+                            break
+                        log(f"[flow] nudge turn {nudge}/2: push the model "
+                            f"to actually write files")
+                        n_ok, n_text = driver.run(NUDGE_PROMPT, 600)
+                        log(f"[flow] nudge {nudge} "
+                            f"{'ok' if n_ok else 'FAILED'}: "
+                            f"{n_text[-200:]!r}")
+                        if ((output_dir / "frontend").is_dir()
+                                and (output_dir / "backend").is_dir()):
+                            log("[flow] nudge produced frontend/ + backend/")
+                            skeleton_ok = True
+                            break
                 if skeleton_ok:
                     break
                 time.sleep(45)
