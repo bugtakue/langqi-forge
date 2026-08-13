@@ -540,6 +540,14 @@ survive page reload (cookie or token persisted in the browser).
 - ERROR STATES: failed validation stays on the same page, shows an inline \
 message naming the problem (tests match words like required/invalid/match/\
 terms/duplicate), keeps the anonymous header, and creates no records.
+- TEXT ONLY: every string you need exists as plain text in the requirement \
+YAML/files. Reference images are illustrative only — NEVER attempt OCR, \
+ASCII rendering, or any other image text extraction, and never try to \
+install extra tools for it. Round 24 burned a 28-minute turn on image \
+text extraction and produced no code at all.
+- WRITE CODE FIRST: start creating project files in your very first \
+actions. A turn that only reads and analyzes without writing files is a \
+failed turn, no matter how good the analysis is.
 """
 
 APP_SKELETON_PROMPT = """\
@@ -777,6 +785,18 @@ def main() -> int:
                 log(f"[flow] skeleton turn attempt {sk_attempt} "
                     f"{'ok' if skeleton_ok else 'FAILED'} "
                     f"in {time.time()-t0:.0f}s: {skeleton_text[-300:]!r}")
+                # Round 24: every turn reported "ok" while writing zero
+                # files (the model wandered into OCR attempts). A turn
+                # without frontend/ and backend/ on disk is a failed turn
+                # regardless of what the driver reports.
+                if skeleton_ok and not (
+                        (output_dir / "frontend").is_dir()
+                        and (output_dir / "backend").is_dir()):
+                    skeleton_ok = False
+                    skeleton_text = ("turn ended ok but no frontend/backend "
+                                     "on disk; treating as failed")
+                    log("[flow] skeleton produced no frontend/backend; "
+                        "retrying with emphasis on writing files")
                 if skeleton_ok:
                     break
                 time.sleep(45)
