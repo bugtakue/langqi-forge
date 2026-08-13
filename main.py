@@ -24,6 +24,8 @@ import argparse
 import json
 import os
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -126,6 +128,94 @@ def _free_web_port(web_port: int) -> None:
         except (OSError, subprocess.TimeoutExpired):
             continue
     log(f"[postflight] port {web_port} cleanup attempted (no tool matched)")
+
+
+def _rehearse_startup(output_dir: Path, smoke_port: int) -> str | None:
+    """Run the grading sequence ourselves, on the smoke port.
+
+    Returns None when the app builds and comes up, else a short error
+    description suitable for feeding back into a repair turn. Round 30:
+    generation finished cleanly, then `npm start` crashed at grading with
+    `Cannot find module './seed'` — the runner's 120s readiness probe
+    failed and zero Playwright tests executed. This rehearsal catches
+    exactly that class of failure before the runner ever sees it.
+    """
+    frontend = output_dir / "frontend"
+    backend = output_dir / "backend"
+    if not (frontend.is_dir() and backend.is_dir()):
+        return "frontend/ or backend/ missing at workspace root"
+
+    def run_cmd(cmd: list, cwd: Path, timeout: int) -> tuple:
+        try:
+            r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True,
+                               timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return 124, f"timeout after {timeout}s"
+        except OSError as exc:
+            return 127, str(exc)
+        out = ((r.stdout or "") + "\n" + (r.stderr or "")).strip()
+        return r.returncode, out[-1500:]
+
+    # 1. Frontend build (the runner builds before serving).
+    if (frontend / "package.json").exists():
+        rc, out = run_cmd(["npm", "install", "--no-audit", "--no-fund"],
+                          frontend, 600)
+        if rc != 0 and not (frontend / "node_modules").is_dir():
+            return f"frontend `npm install` failed:\n{out}"
+        rc, out = run_cmd(["npm", "run", "build"], frontend, 600)
+        if rc != 0:
+            return f"frontend `npm run build` failed:\n{out}"
+
+    # 2. Backend boot on the SMOKE port — never the grading port.
+    if not (backend / "package.json").exists():
+        return "backend/package.json missing"
+    rc, out = run_cmd(["npm", "install", "--no-audit", "--no-fund"],
+                      backend, 600)
+    if rc != 0 and not (backend / "node_modules").is_dir():
+        return f"backend `npm install` failed:\n{out}"
+    _free_web_port(smoke_port)
+    log_file = Path(tempfile.mkstemp(prefix="octos-rehearsal-",
+                                     suffix=".log")[1])
+    env = dict(os.environ, PORT=str(smoke_port))
+    try:
+        with open(log_file, "w") as fh:
+            try:
+                proc = subprocess.Popen(
+                    ["npm", "start"], cwd=backend, env=env,
+                    stdout=fh, stderr=subprocess.STDOUT,
+                    start_new_session=True)
+            except OSError as exc:
+                return f"backend `npm start` could not launch: {exc}"
+            try:
+                deadline = time.time() + 45
+                while time.time() < deadline:
+                    if proc.poll() is not None:
+                        out = log_file.read_text(errors="replace")
+                        return (f"backend `npm start` exited early "
+                                f"(rc={proc.returncode}):\n{out[-1500:]}")
+                    try:
+                        with socket.create_connection(
+                                ("127.0.0.1", smoke_port), timeout=2):
+                            log("[rehearsal] backend bound smoke port "
+                                f"{smoke_port}; shutting it down")
+                            return None
+                    except OSError:
+                        time.sleep(1)
+                out = log_file.read_text(errors="replace")
+                return (f"backend did not bind port {smoke_port} within "
+                        f"45s:\n{out[-1500:]}")
+            finally:
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, OSError):
+                    pass
+                # npm orphans its node child; kill anything left by port.
+                _free_web_port(smoke_port)
+    finally:
+        try:
+            log_file.unlink()
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------- requirements
@@ -666,6 +756,28 @@ Finally, STOP every server process you started — the benchmark runner starts \
 the backend itself afterwards, so port {port} must be free when you finish.\
 """
 
+REHEARSAL_REPAIR_PROMPT = """\
+The app you built just failed its pre-grading startup rehearsal. The \
+benchmark runner executes exactly this sequence, and it failed on our own \
+smoke run:
+
+1. cd frontend && npm install && npm run build   (must exit 0)
+2. cd backend && npm install && npm start        (must bind the port and \
+stay up)
+
+Rehearsal error:
+{error}
+
+Fix the project so this exact sequence works. Typical causes: a require() \
+path that does not match the real file location, a file you referenced but \
+never wrote, a syntax error in a module loaded at startup, or a dependency \
+missing from package.json. After fixing, verify it yourself: run the build \
+in frontend/, then start the backend with PORT={smoke}, confirm it binds, \
+and STOP it afterwards. NEVER bind port {port} yourself — the runner \
+terminates the run if it sees a server there while you are still working. \
+Write the fix now — do not just describe it.\
+"""
+
 
 # ---------------------------------------------------------------- main flow
 
@@ -898,6 +1010,37 @@ def main() -> int:
                 )
                 log(f"[flow] final check {'ok' if ok else 'FAILED'} "
                     f"in {time.time()-t0:.0f}s: {text[-300:]!r}")
+
+            # Startup rehearsal: run the grading sequence ourselves on the
+            # smoke port and hand any failure back for repair. Round 30
+            # finished generation cleanly, then `npm start` crashed at
+            # grading (Cannot find module './seed') and zero Playwright
+            # tests executed. Not gated on time_up(): the runner's kill
+            # trigger is a live grading port (round 21), not elapsed time
+            # (round 20 generated 44 min and scored), and the rehearsal
+            # only ever touches the smoke port.
+            for rehearsal in range(1, 4):
+                log(f"[rehearsal] startup rehearsal {rehearsal}/3 "
+                    f"(smoke port {smoke_port})")
+                t0 = time.time()
+                err = _rehearse_startup(output_dir, smoke_port)
+                if err is None:
+                    log(f"[rehearsal] app builds and starts cleanly "
+                        f"in {time.time()-t0:.0f}s")
+                    break
+                log(f"[rehearsal] FAILED in {time.time()-t0:.0f}s: "
+                    f"{err.splitlines()[0][:200]}")
+                if rehearsal == 3:
+                    log("[rehearsal] giving up; submitting as-is")
+                    break
+                ok_r, text_r = driver.run(
+                    REHEARSAL_REPAIR_PROMPT.format(
+                        error=err[-1200:], port=args.web_port,
+                        smoke=smoke_port),
+                    node_timeout,
+                )
+                log(f"[rehearsal] repair turn "
+                    f"{'ok' if ok_r else 'FAILED'}: {text_r[-200:]!r}")
         finally:
             driver.close()
         for node in atomic_nodes:
