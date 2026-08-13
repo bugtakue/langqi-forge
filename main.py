@@ -414,10 +414,40 @@ class OctosDriver:
 
     def run(self, prompt: str, timeout: int) -> tuple[bool, str]:
         if self.mode == "chat":
-            return self._run_with_retries(
-                lambda: run_octos(self.octos_bin, self.cwd, prompt, self.env,
-                                  self.data_dir, timeout, self.max_iterations))
-        return self._run_with_retries(lambda: self._run_stdio(prompt, timeout))
+            fn = lambda: run_octos(self.octos_bin, self.cwd, prompt, self.env,
+                                   self.data_dir, timeout, self.max_iterations)
+        else:
+            fn = lambda: self._run_stdio(prompt, timeout)
+        return self._run_with_heartbeat(
+            lambda: self._run_with_retries(fn))
+
+    @staticmethod
+    def _run_with_heartbeat(fn) -> tuple[bool, str]:
+        """Run a turn in a thread, logging a keepalive line every 30s.
+
+        Round 21 was SIGTERMed minutes into a silent turn: the runner appears
+        to kill the agent when its log output stalls. Turns legitimately run
+        for several minutes, so keep the log alive while we wait.
+        """
+        import threading
+        box: dict = {}
+
+        def target() -> None:
+            try:
+                box["r"] = fn()
+            except Exception as exc:  # pragma: no cover - defensive
+                box["r"] = (False, f"turn raised: {exc}"[:500])
+
+        th = threading.Thread(target=target, daemon=True)
+        th.start()
+        t0 = time.time()
+        while True:
+            th.join(30)
+            if not th.is_alive():
+                break
+            log(f"[flow] turn still running ({int(time.time() - t0)}s elapsed)")
+        return box.get("r", (False, "turn thread ended without result"))
+
 
     @staticmethod
     def _transient(text: str) -> bool:
@@ -673,7 +703,16 @@ def main() -> int:
 
         octos_bin = find_octos()
         max_iter = int(os.environ.get("OCTOS_MAX_ITERATIONS", "200"))
-        node_timeout = int(os.environ.get("OCTOS_NODE_TIMEOUT", "1800"))
+        node_timeout = int(os.environ.get("OCTOS_NODE_TIMEOUT", "1200"))
+        # Wall-clock budget for the whole generation flow. If we exceed it,
+        # stop starting new turns and go straight to postflight — a partial
+        # template that exits cleanly scores better than a SIGTERM mid-turn
+        # (round 21 died that way and produced zero executed tests).
+        budget = int(os.environ.get("OCTOS_TIME_BUDGET", "2700"))
+        t_run_start = time.time()
+
+        def time_up() -> bool:
+            return time.time() - t_run_start > budget
         data_dir = Path(tempfile.mkdtemp(prefix="octos-data-"))
         config_dir = Path(tempfile.mkdtemp(prefix="octos-config-"))
         env = build_octos_env(config_dir)
@@ -691,6 +730,9 @@ def main() -> int:
             skeleton_ok = False
             skeleton_text = ""
             for sk_attempt in range(1, 5):
+                if time_up():
+                    log("[flow] time budget exhausted before skeleton retry")
+                    break
                 t0 = time.time()
                 skeleton_ok, skeleton_text = driver.run(
                     APP_SKELETON_PROMPT.format(port=args.web_port), node_timeout,
@@ -709,6 +751,13 @@ def main() -> int:
             failed: list[str] = []
             for idx, node in enumerate(atomic_nodes, 1):
                 node_id = str(node.get("id"))
+                if time_up():
+                    log(f"[flow] time budget exhausted; skipping {node_id} "
+                        f"and remaining nodes")
+                    events.mark_implementation_started(node_id)
+                    events.mark_implementation_failed(node_id, "skipped: time budget")
+                    failed.append(node_id)
+                    continue
                 events.mark_design_started(node_id)
                 events.mark_design_done(node_id, "design folded into octos implementation prompt")
                 events.mark_implementation_started(node_id)
@@ -728,13 +777,17 @@ def main() -> int:
                     failed.append(node_id)
 
             # Final verification pass; octos leaves the port free.
-            log("[flow] final verification turn starting")
-            t0 = time.time()
-            ok, text = driver.run(
-                FINAL_CHECK_PROMPT.format(port=args.web_port), node_timeout,
-            )
-            log(f"[flow] final check {'ok' if ok else 'FAILED'} "
-                f"in {time.time()-t0:.0f}s: {text[-300:]!r}")
+            ok, text = False, "skipped: time budget"
+            if time_up():
+                log("[flow] time budget exhausted; skipping final verification")
+            else:
+                log("[flow] final verification turn starting")
+                t0 = time.time()
+                ok, text = driver.run(
+                    FINAL_CHECK_PROMPT.format(port=args.web_port), node_timeout,
+                )
+                log(f"[flow] final check {'ok' if ok else 'FAILED'} "
+                    f"in {time.time()-t0:.0f}s: {text[-300:]!r}")
         finally:
             driver.close()
         for node in atomic_nodes:
