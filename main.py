@@ -29,6 +29,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -128,6 +129,48 @@ def _free_web_port(web_port: int) -> None:
         except (OSError, subprocess.TimeoutExpired):
             continue
     log(f"[postflight] port {web_port} cleanup attempted (no tool matched)")
+
+
+def _port_watchdog(web_port: int, output_dir: Path,
+                   stop: "threading.Event") -> None:
+    """Reap OUR processes that bind the grading port during generation.
+
+    Round 33: SIGTERM 3 minutes into the final-check turn — the strongest
+    hypothesis is that the app (whose code defaults to the grading port)
+    was started without the smoke-port override and the runner's port
+    watch killed the run, exactly like round 21. That watch takes minutes
+    to fire (round 21's server lived long enough to be logged repeatedly),
+    so polling every 5s wins the race.
+
+    Only processes whose cwd is inside our workspace are killed: the
+    runner machine is shared across tenants (round 17 saw the port grabbed
+    by an external process), and killing a foreign listener could sabotage
+    someone else's grading.
+    """
+    root = str(output_dir).rstrip("/")
+    while not stop.is_set():
+        try:
+            pids = subprocess.run(["lsof", "-ti", f":{web_port}"],
+                                  capture_output=True, text=True,
+                                  timeout=10).stdout.split()
+        except (OSError, subprocess.TimeoutExpired):
+            pids = []
+        for pid in pids:
+            try:
+                cwd = os.readlink(f"/proc/{pid}/cwd")
+            except OSError:
+                cwd = ""
+            if cwd.startswith(root):
+                log(f"[watchdog] port {web_port} bound by our process "
+                    f"{pid} (cwd={cwd}); killing")
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, ValueError):
+                    pass
+            else:
+                log(f"[watchdog] port {web_port} held by foreign process "
+                    f"{pid} (cwd={cwd or '?'}); leaving it")
+        stop.wait(5)
 
 
 def _rehearse_startup(output_dir: Path, smoke_port: int) -> str | None:
@@ -932,6 +975,24 @@ def main() -> int:
         data_dir = Path(tempfile.mkdtemp(prefix="octos-data-"))
         config_dir = Path(tempfile.mkdtemp(prefix="octos-config-"))
         env = build_octos_env(config_dir)
+        # Make the smoke port the INHERITED default for anything the agent
+        # starts: generated apps read `process.env.PORT || <grading port>`,
+        # so a bare `npm start` inside a turn would otherwise bind the
+        # grading port and get us SIGTERMed (round 21; round 33 died the
+        # same way 3 minutes into the final check). An explicit
+        # `PORT=xxx npm start` from the prompt still wins over this.
+        env["PORT"] = str(smoke_port)
+        # Independent seatbelt: reap anything that binds the grading port
+        # during generation. The runner's own port watch takes minutes to
+        # fire (round 21), this polls every 5s, so we win the race against
+        # any accidental bind the prompt didn't prevent.
+        watchdog_stop = threading.Event()
+        watchdog = threading.Thread(
+            target=_port_watchdog,
+            args=(args.web_port, output_dir, watchdog_stop),
+            daemon=True,
+        )
+        watchdog.start()
         driver = OctosDriver(
             octos_bin, output_dir, env, data_dir, max_iter,
             events_log=output_dir / ".arc" / "octos-events.jsonl",
@@ -1073,6 +1134,7 @@ def main() -> int:
                 log(f"[rehearsal] repair turn "
                     f"{'ok' if ok_r else 'FAILED'}: {text_r[-200:]!r}")
         finally:
+            watchdog_stop.set()
             driver.close()
         for node in atomic_nodes:
             node_id = str(node.get("id"))
