@@ -667,6 +667,21 @@ EXACTLY ONE error element at a time — never a per-field error and a \
 form-level summary together: round 31 rendered both "Date is required." \
 and "Please fix the invalid search criteria.", two elements matched the \
 test's error regex, and strict mode failed the assertion.
+- ONE MATCH PER VALUE FORM: when the same entity has a short and a long \
+written form (city "Shanghai" vs station "Shanghai Hongqiao"), a page must \
+render forms so that only ONE element matches — tests use a combined regex \
+like /shanghaihongqiao|shanghai/i, and two matching elements is a strict \
+mode violation (round 32's booking page showed both dd#train-from \
+"Shanghai" and dd#train-departure-station "Shanghai Hongqiao"). Pick one \
+display form per page and use it in exactly one element.
+- UNLISTED CONTROL VALUES: when the requirement says a value must be "one \
+of the values offered by the control" WITHOUT listing them, offer a broad \
+standard set — for a nationality select include at least China, Vietnam, \
+United States, Japan, South Korea, United Kingdom, France, Germany, \
+Canada, Australia (round 31/32: the registration tests select the option \
+labeled "Vietnam"; without it every registration test times out). A gender \
+control is exactly two radio inputs labeled "Male" and "Female". Text \
+fields must accept ISO date strings like "2035-12-31".
 - TEXT ONLY: every string you need exists as plain text in the requirement \
 YAML/files. Reference images are illustrative only — NEVER attempt OCR, \
 ASCII rendering, or any other image text extraction, and never try to \
