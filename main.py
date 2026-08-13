@@ -14,7 +14,7 @@ Configuration is via environment variables:
     OCTOS_PROVIDER  (override provider name, e.g. deepseek/openai/anthropic)
     OCTOS_MODEL     (override model name)
     OCTOS_BIN       (path to the octos binary; default: ./bin/octos then PATH)
-    OCTOS_MAX_ITERATIONS (default 200)
+    OCTOS_MAX_ITERATIONS (default 500)
     OCTOS_NODE_TIMEOUT   (seconds per requirement node, default 1800)
 """
 
@@ -751,7 +751,7 @@ def main() -> int:
         runtime.git.ensure_repo()
 
         octos_bin = find_octos()
-        max_iter = int(os.environ.get("OCTOS_MAX_ITERATIONS", "200"))
+        max_iter = int(os.environ.get("OCTOS_MAX_ITERATIONS", "500"))
         node_timeout = int(os.environ.get("OCTOS_NODE_TIMEOUT", "1200"))
         # Wall-clock budget for the whole generation flow. If we exceed it,
         # stop starting new turns and go straight to postflight — a partial
