@@ -461,7 +461,7 @@ class OctosDriver:
 
 # ---------------------------------------------------------------- prompts
 
-# Hard-won UI contract from a real bench run (round 16, ticketbooking):
+# Hard-won UI contract from real bench runs (rounds 16/19/20, ticketbooking):
 # the platform's Playwright tests drive the UI with getByLabel/getByRole and
 # fill human-readable values. Native widgets silently score 0.
 UI_CONTRACT_PROMPT = """\
@@ -479,6 +479,28 @@ containing words like "required" / "invalid" / "missing" — tests assert on \
 visible page text.
 - Buttons are real <button> elements with plain text labels (e.g. "Search", \
 "Book", "Register", "Sign in").
+- VERBATIM TEXT: copy every visible label / link / button / heading string \
+verbatim from the requirement document into the UI (e.g. if it says the \
+header exposes "Register" and "Login" links, use exactly those English \
+strings as <a> link text; if it says the button is "Next step", the button \
+text is exactly "Next step"). Tests locate elements by these exact strings.
+- UNIQUENESS (strict mode): any value the page echoes — search criteria, \
+city names, dates, usernames — must appear in EXACTLY ONE visible element. \
+Put normalized search criteria in ONE summary line; train cards show train \
+number, stations, and times but must NOT repeat the searched city names or \
+date as bare text anywhere else on the page (duplicate occurrences fail the \
+tests with "strict mode violation").
+- SEED DATA: when the requirement states concrete published records (e.g. \
+"a Shanghai to Beijing journey on Sun, May 31 has train number G532"), the \
+database seed MUST include exactly those records, with dates stored and \
+matched as the verbatim strings shown ("Sun, May 31" is data, not an ISO \
+date). Search matching is case-insensitive and trims surrounding whitespace.
+- SESSIONS: after registration or login, redirect to the home page and show \
+the exact username plus a "Sign out" link in the header; the session must \
+survive page reload (cookie or token persisted in the browser).
+- ERROR STATES: failed validation stays on the same page, shows an inline \
+message naming the problem (tests match words like required/invalid/match/\
+terms/duplicate), keeps the anonymous header, and creates no records.
 """
 
 APP_SKELETON_PROMPT = """\
