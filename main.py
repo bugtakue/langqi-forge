@@ -827,7 +827,19 @@ API endpoint works (exercise them with curl, including error cases).
 violations (these silently score 0 in the automated tests):
 
 """ + UI_CONTRACT_PROMPT + """
-5. Fix anything else that is broken.
+5. STRICT-MODE SELF-TEST — mechanical, not by eye: for every value the \
+requirement echoes (city names, dates, usernames, station names), \
+enumerate EVERY element that will contain it in the rendered DOM. If your \
+pages are server-rendered, do it against the running server: `curl -s \
+<page> | grep -o 'Shanghai' | wc -l` — the count must be 1 (one element). \
+If pages are client-rendered, read the render code instead and list the \
+elements each value lands in (summary line? card title? both = failure). \
+Any searched value appearing in more than one element is a strict-mode \
+failure in the real tests — round 32 passed every search test after \
+fixing this, round 35 regressed by skipping the check. Also trigger each \
+validation failure and confirm exactly ONE error element is rendered. Fix \
+duplicates by restructuring the markup, keeping the information.
+6. Fix anything else that is broken.
 Finally, STOP every server process you started — the benchmark runner starts \
 the backend itself afterwards, so port {port} must be free when you finish.\
 """
