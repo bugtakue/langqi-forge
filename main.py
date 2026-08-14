@@ -454,6 +454,15 @@ def build_octos_env(config_dir: Path) -> dict:
         # ~150s turns of pure reasoning, empty content); raised to 65536.
         "gateway": {"max_output_tokens": 65536},
     }
+    if provider == "deepseek":
+        # Rounds 34/36: even with 65536 output tokens, ~150s turns came back
+        # empty — far too short to exhaust the budget, so the reasoning
+        # spend itself is the problem (server-side clamp or runaway
+        # thinking). octos maps gateway.reasoning_effort onto DeepSeek V4's
+        # reasoning_effort + thinking toggle (only for api.deepseek.com
+        # routes, which is what the platform uses); "low" caps the
+        # reasoning spend so content actually gets emitted.
+        config["gateway"]["reasoning_effort"] = "low"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
     env["OCTOS_CONFIG_DIR"] = str(config_dir)
