@@ -1,4 +1,4 @@
-# octos-arc — ARC-Bench 标准适配包(参考实现)
+# arc-adapter — ARC-Bench 标准适配包(参考实现)
 
 这是 [Octos](https://github.com/octos-org/octos) 在 [ARC-Bench](https://arc-bench.com) 上的适配包,同时作为**标准参考实现**:想让自己的 agent 上 ARC-Bench,照这个仓库的结构写即可。配套提交脚本与教程:https://arc-bench-tutorial.vercel.app
 
@@ -49,6 +49,12 @@ python main.py <requirement_path> [--output-dir DIR] [--type web] [--web-port N]
 1. Fork 本仓库;
 2. 把 `octos_stdio.py` 换成驱动你的 agent 的代码(CLI、SDK、HTTP 均可),让 `main.py` 里的每个需求节点轮到它去实现;
 3. 用提交脚本验证打包结果:`sh arc.sh pack https://github.com/你的org/你的repo`,确认 zip 内容后 `sh arc.sh submit … 你的仓库链接` 开考。
+
+## 魔改 Octos core 参赛:完整示例
+
+fork 了 octos、改了 core 逻辑,想让改过的版本上场?见 [`examples/core-mod/`](examples/core-mod/):一个能真实 `git apply` 的示例 diff、配套胶水改动,以及"构建 → 换下载来源 → 提交 → 在成绩日志里验证魔改真的上场"的全流程。
+
+一句话记住核心事实:适配包**不内置** Octos,runner 考试时按 `main.py` 顶部 `OCTOS_RELEASE_URL` 现场下载——不把这个地址指向你自己的构建,上场的仍是官方版,且不报错。
 
 ## 工程要点(真实踩坑)
 

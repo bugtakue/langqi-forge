@@ -49,7 +49,12 @@ class OctosStdioSession:
     def _read_stderr(self) -> None:
         assert self.proc.stderr is not None
         for line in self.proc.stderr:
-            self._stderr_lines.append(line.rstrip())
+            line = line.rstrip()
+            self._stderr_lines.append(line)
+            if "[arc-mod]" in line:
+                # Patched-core proof marker (examples/core-mod): forward it so
+                # the driver can log it into the graded stdout/stderr capture.
+                self.on_event("core/marker", {"line": line})
 
     def _read_stdout(self) -> None:
         assert self.proc.stdout is not None

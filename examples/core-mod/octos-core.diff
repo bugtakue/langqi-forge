@@ -1,0 +1,42 @@
+diff --git a/crates/octos-agent/src/agent/prompt_segments.rs b/crates/octos-agent/src/agent/prompt_segments.rs
+index 2265a1d0..2f182e3c 100644
+--- a/crates/octos-agent/src/agent/prompt_segments.rs
++++ b/crates/octos-agent/src/agent/prompt_segments.rs
+@@ -130,6 +130,19 @@ impl PromptSegments {
+                 }
+             }
+         }
++        // [arc-mod] ARC-Bench exam hook: extra rules injected by the adapter
++        // via env become a trailing system-prompt section. Absent/empty env
++        // renders byte-identically to the unpatched build.
++        if let Ok(extra) = std::env::var("OCTOS_ARC_EXTRA_RULES") {
++            let extra = extra.trim();
++            if !extra.is_empty() {
++                if !out.is_empty() {
++                    out.push_str("\n\n");
++                }
++                out.push_str("## ARC exam rules\n");
++                out.push_str(extra);
++            }
++        }
+         out
+     }
+ }
+diff --git a/crates/octos-cli/src/commands/serve.rs b/crates/octos-cli/src/commands/serve.rs
+index 84de350c..71a6e1f8 100644
+--- a/crates/octos-cli/src/commands/serve.rs
++++ b/crates/octos-cli/src/commands/serve.rs
+@@ -1501,6 +1501,13 @@ impl ServeCommand {
+         crate::api::ui_protocol_transport::spawn_background_activity_sink(state.clone());
+ 
+         if self.stdio {
++            // [arc-mod] proof-of-run marker: the ARC adapter greps stderr for
++            // this line to confirm the patched core (not the official release
++            // tarball) is what the grading machine actually executed.
++            let rules_chars = std::env::var("OCTOS_ARC_EXTRA_RULES")
++                .map(|v| v.trim().len())
++                .unwrap_or(0);
++            eprintln!("[arc-mod] custom core active, extra_rules_chars={rules_chars}");
+             crate::api::ui_protocol_transport::stdio_connection(state).await?;
+             tracing::info!("stopping all gateway child processes");
+             let _ = process_manager.stop_all().await;

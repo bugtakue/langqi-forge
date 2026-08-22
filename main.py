@@ -470,6 +470,12 @@ def build_octos_env(config_dir: Path) -> dict:
     # octos-runner sets this too) — without it octos dies with
     # "failed to send streaming request to OpenAI".
     env.setdefault("OCTOS_DISABLE_STREAMING", "1")
+    # examples/core-mod: a bundle-root EXTRA_RULES.md becomes extra system-
+    # prompt rules when a patched core honors OCTOS_ARC_EXTRA_RULES; the
+    # official release ignores the variable, so shipping the file is harmless.
+    rules_file = Path(__file__).resolve().parent / "EXTRA_RULES.md"
+    if rules_file.is_file() and "OCTOS_ARC_EXTRA_RULES" not in env:
+        env["OCTOS_ARC_EXTRA_RULES"] = rules_file.read_text(encoding="utf-8")[:8000]
     # Resolved values for the stdio driver's profile bootstrap.
     env["_ARC_PROVIDER"] = provider
     env["_ARC_MODEL"] = model
@@ -554,6 +560,10 @@ class OctosDriver:
         self._session = None
 
     def _log_event(self, method: str, params: dict) -> None:
+        if method == "core/marker":
+            # examples/core-mod: proof that a patched core build is live on
+            # the runner; log() dual-writes so it lands in the report capture.
+            log(f"[core-mod] {params.get('line', '')}")
         try:
             with self.events_log.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps({"method": method, "params": params},
