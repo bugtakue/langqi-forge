@@ -1,9 +1,9 @@
 #!/bin/sh
-# arc.sh — 把任意 agent 送上 ARC-Bench 考场。
+# arc.sh — 把任意 agent 提交到 ARC-Bench 评测。
 #
 # 用法:
-#   sh arc.sh submit [考题] [模型] [agent来源]
-#   sh arc.sh check  [准考证号]         省略时查最近一次提交
+#   sh arc.sh submit [题目] [模型] [agent来源]
+#   sh arc.sh check  [run-id]           省略时查最近一次提交
 #   sh arc.sh pack   [agent来源]        只打包不上传(验证用)
 #
 # agent来源(也可用 ARC_AGENT 环境变量),必填,三种写法:
@@ -127,19 +127,19 @@ case "$cmd" in
     run_id=$(curl -fsS -b "$JAR" \
       -F "submission_id=$snap_id" -F "requirement_id=$TASK" \
       "$BASE/runs" | json_id)
-    [ -n "$run_id" ] || { echo "创建考试失败"; exit 1; }
+    [ -n "$run_id" ] || { echo "创建评测任务失败"; exit 1; }
     echo "[$(date +%H:%M:%S)] run: $run_id"
 
     curl -fsS -b "$JAR" -X POST "$BASE/runs/$run_id/start" >/dev/null
     echo "$run_id" > "$DIR/last-run.txt"
     echo "[$(date +%H:%M:%S)] started: $run_id"
-    echo "过一会儿用  sh $0 check  查成绩"
+    echo "过一会儿用  sh $0 check  查看结果"
     ;;
 
   check)
     login
     RID=${2:-$(cat "$DIR/last-run.txt" 2>/dev/null)}
-    [ -n "$RID" ] || { echo "没有可查的考试,先 submit 或手动给准考证号"; exit 1; }
+    [ -n "$RID" ] || { echo "没有可查的评测,先 submit 或手动给 run-id"; exit 1; }
     curl -fsS -b "$JAR" "$BASE/runs/$RID" | pretty
     ;;
 
