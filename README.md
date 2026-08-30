@@ -1,76 +1,86 @@
-# arc-adapter
+# Factory26 Low-Token Harness
 
-[Octos](https://github.com/octos-org/octos) 的 [ARC-Bench](https://arc-bench.com) 适配包,也是标准参考实现。写自己的 agent 适配包时可以照这个仓库的结构来。
+Factory26 / ARC-Bench 的独立参赛工程。目标不是让更多 Agent 讨论，而是用确定性程序完成机械工作，只把无法定位的实现问题交给模型。
 
-教程: https://arc-bench-tutorial.vercel.app
+当前版本已经完成第一条可运行闭环：
 
-## 适配包契约
+1. 读取并按依赖顺序编译 `requirements.yaml`。
+2. 生成零依赖、可持久化的 `frontend/` 与 `backend/` 地基。
+3. 通过 OpenAI-compatible 网关驱动带受限工具的代码 Agent。
+4. 每批只提供少量需求和已观测相关文件，记录需求到文件的影响图。
+5. 在独立 smoke port 上执行构建、启动和 `/api/health` 检查。
+6. 把 prompts、模型回复、工具调用、事件、需求溯源和 Git 提交全部落盘。
 
-提炼自平台 runner 源码 ([code-philia/arc-bench-website](https://github.com/code-philia/arc-bench-website)) 和 38 轮提交。适配包走平台的通用 agent-runner 路径(`backend/runner/agent-runner/`),不依赖任何 Octos 专属的平台支持。
+## 平台契约
 
-### 调用方式
-
-```
-python main.py <requirement_path> [--output-dir DIR] [--type web] [--web-port N]
-```
-
-| 输入 | 来源 | 说明 |
-|---|---|---|
-| `requirement_path` | argv 或 `ARCBENCH_TASK_DIR` | 需求树目录 |
-| 交付目录 | `--output-dir` 或 `ARCBENCH_TEMPLATE_DIR` | 生成的代码放这里 |
-| 端口 | `--web-port` 或 `ARCBENCH_WEB_PORT`(默认 3000) | 评测时平台访问网站的端口 |
-| 模型通道 | 环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `MODEL` | 平台注入的 OpenAI 兼容端点 |
-
-### 产出要求
-
-评测器在 agent 退出后检查交付目录:
-
-```
-<交付目录>/
-├── frontend/    # npm install && npm run build
-└── backend/     # npm run start,读 PORT 环境变量
+```bash
+python main.py <requirement_path> \
+  --output-dir <generated_project> \
+  --type web \
+  --web-port 3000
 ```
 
-缺任何一个报 `template is incomplete`。之后平台启动 backend、跑 Playwright 测试打分。
+平台注入：
 
-### 事件协议
+- `OPENAI_API_KEY`
+- `OPENAI_BASE_URL`
+- `MODEL`
+- `ARCBENCH_TASK_DIR`
+- `ARCBENCH_TEMPLATE_DIR`
+- `ARCBENCH_WEB_PORT`
 
-平台通过文件观察进度:交付目录 `.arc/` 下的 `runner-events.jsonl`、`traceability/*.json`,加 git commit。`arcbench_agent_runtime/` 已封装,直接调用。
+生成结果固定包含：
 
-## 目录结构
+```text
+generated_project/
+├── frontend/                 # npm install && npm run build
+├── backend/                  # PORT=... npm start
+└── .arc/
+    ├── runner-events.jsonl
+    ├── production-trace.jsonl
+    ├── compiled-plan.json
+    ├── change-impact.json
+    ├── harness-report.json
+    └── traceability/
+```
 
-| 文件 | 职责 | 写自己的 agent 时 |
-|---|---|---|
-| `main.py` | 总控:解析参数、探活模型端点、逐需求节点驱动 agent、收尾检查 | 保留骨架,替换驱动调用 |
-| `octos_stdio.py` | 驱动层:与 Octos 二进制通信 | **换成你的 agent 的驱动代码** |
-| `arcbench_agent_runtime/` | 平台协议库(事件 / git / 溯源) | 不动 |
-| `requirements.txt` | Python 依赖 | 按需增删 |
-| `arc.sh` | 提交脚本:打包、登录、上传、查询 | 通用,不需要改 |
+## 本地验证
 
-## 写自己的 agent 适配包
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m unittest discover -s tests -v
+```
 
-1. Fork 本仓库
-2. 把 `octos_stdio.py` 替换为你的 agent 驱动代码(CLI、SDK、HTTP 都行)
-3. 验证打包: `sh arc.sh pack https://github.com/你的org/你的repo`
-4. 提交: `sh arc.sh submit ticketbooking gpt-5.5 https://github.com/你的org/你的repo`
+不调用模型，只验证提交结构、构建、启动、健康检查和留痕：
 
-## 修改 Octos core
+```bash
+.venv/bin/python main.py path/to/requirements \
+  --output-dir /tmp/factory26-output \
+  --web-port 3301 \
+  --smoke-port 3302 \
+  --dry-run \
+  --strict-exit
+```
 
-适配包不包含 Octos 二进制。评测时平台按 `main.py` 中 `OCTOS_RELEASE_URL` 的值现场下载。fork Octos 改了 core 之后,必须把这个 URL 指向自己的 Release,否则平台下载的是官方版——不报错,但改动不生效。
+## 设计边界
 
-| 改动范围 | 适配包操作 |
-|---|---|
-| core 内部逻辑,对外接口不变 | 只改 `OCTOS_RELEASE_URL` |
-| 新增环境变量 | 胶水层加注入/透传 |
-| 改 `serve --stdio` 协议或 CLI 参数 | 同步改 `octos_stdio.py` |
-| 平台契约(main.py 骨架、arcbench_agent_runtime/) | 不动 |
+- 开发期间永不启动评分端口；所有自检使用单独 smoke port。
+- 模型只能写 `frontend/` 和 `backend/`，不能修改 `.arc/`、Git、评分器或仓库外文件。
+- 影响图只记录真实观察到的“需求→修改文件”关系，不猜隐藏测试。
+- 局部检查不能证明 GUI 功能通过；最终始终执行一次完整构建和启动检查。
+- `harness-report.json` 明确区分“本地可运行”与“ARC GUI 已得分”，禁止把前者包装成后者。
 
-完整示例见 [`examples/core-mod/`](examples/core-mod/)(42 行 diff)。
+## 当前真实基线
 
-## 工程要点
+2026-08-31 在 ARC-Bench `keep` 公开任务上：
 
-- **日志双写**: 平台截断长 stdout,关键日志同时写 stderr
-- **上传上限约 50MB**: 大二进制运行时下载,GitHub 慢走镜像(ghfast.top / gh-proxy.com)
-- **端口 3000 不能碰**: 评测端口,生成期在上面起服务会被 SIGTERM。冒烟测试用独立端口(本包用 3100)
-- **UI 契约**: 输入框用 `type="text"`;每个字段配可见 `<label>`;校验用 JS 输出错误文字,不用 HTML5 `required`;按钮用 `<button>` 带纯文本
-- **评测机是共享的**: 端口占用、profile 冲突等残留状态必然存在,不要依赖本地状态
+- 需求解析：32 / 32 个原子节点成功
+- 提交结构、构建、启动、健康检查：通过
+- 零模型 GUI 测试：0 / 32
+
+这个零分是预期的地板线，说明可启动骨架不会冒充功能成绩。下一里程碑是注入比赛模型后取得首个真实 GUI 通过率。详见 [docs/BASELINE.md](docs/BASELINE.md)。
+
+## 来源与兼容性
+
+项目从 `octos-org/arc-adapter` 的平台契约出发，保留其 `arcbench_agent_runtime/` 协议层，代码 Agent 和编排层已独立实现。上游参考提交：`b0999c95f7875c8d4ff3e58e733fb2c5abc8caf7`。
