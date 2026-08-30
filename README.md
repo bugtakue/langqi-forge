@@ -81,6 +81,16 @@ python3 -m venv .venv
 
 这个零分是预期的地板线，说明可启动骨架不会冒充功能成绩。下一里程碑是注入比赛模型后取得首个真实 GUI 通过率。详见 [docs/BASELINE.md](docs/BASELINE.md)。
 
+公开题迭代时，可将 Playwright JSON 报告压缩成按根因归类的最小修复包：
+
+```bash
+.venv/bin/python -m factory26_harness.feedback playwright-report.json \
+  --impact generated_project/.arc/change-impact.json \
+  --output generated_project/.arc/public-feedback.json
+```
+
+同一定位器、同一断言或同一启动错误只交给模型一次，避免逐条失败重复消耗 Token。隐藏测试不可见时不会伪造这份反馈。
+
 ## 来源与兼容性
 
 项目从 `octos-org/arc-adapter` 的平台契约出发，保留其 `arcbench_agent_runtime/` 协议层，代码 Agent 和编排层已独立实现。上游参考提交：`b0999c95f7875c8d4ff3e58e733fb2c5abc8caf7`。
