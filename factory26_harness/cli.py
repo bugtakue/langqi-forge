@@ -8,6 +8,7 @@ import socket
 import subprocess
 import time
 import uuid
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -424,6 +425,7 @@ def main() -> int:
     nodes_for_agent = []
     transactions: list[dict[str, Any]] = []
     matched_capsules: list[dict[str, Any]] = []
+    planner_executor: ThreadPoolExecutor | None = None
     try:
         transactions = _recover_open_transactions(output_dir, runtime, trace, run_id)
         tree = load_requirement_tree(requirement_path)
@@ -470,6 +472,7 @@ def main() -> int:
         )
 
         deterministic_domain = domain in DETERMINISTIC_DOMAINS
+        planner_future: Future | None = None
         if args.dry_run:
             planner_status = "skipped-dry-run"
             execution_route = (
@@ -480,141 +483,23 @@ def main() -> int:
             route_reason = "dry-run explicitly disables model planning"
         else:
             model = OpenAIChatClient(trace)
-            try:
-                contract = SpecificationPlanner(model, trace).plan(
-                    tree,
-                    nodes,
-                )
-                planner_iterations = contract.iterations
-                planner_contract = contract.as_dict()
-                planner_status = "completed"
-                model_covered_required_capabilities = set(
-                    coverage.required_capabilities
-                ).issubset(contract.capability_tags)
-                kernel_approved = (
-                    deterministic_domain
-                    and coverage.kernel_eligible
-                    and contract.domain == domain
-                    and contract.kernel_eligible
-                    and model_covered_required_capabilities
-                    and not contract.uncovered_requirement_ids
-                )
-                if kernel_approved:
-                    if matched_capsules:
-                        execution_route = (
-                            "planner-approved-capability-memory-kernel"
-                        )
-                        route_reason = (
-                            "the blind planner approved the versioned kernel and a prior "
-                            "falsifiable capability capsule matched; all validation remains enabled"
-                        )
-                    else:
-                        execution_route = "planner-approved-deterministic-kernel"
-                        route_reason = "the planning agent approved the matching versioned domain kernel"
-                elif deterministic_domain and (
-                    coverage.uncovered_requirement_ids
-                    or contract.uncovered_requirement_ids
-                ):
-                    uncovered_ids = {
-                        *coverage.uncovered_requirement_ids,
-                        *contract.uncovered_requirement_ids,
-                    }
-                    nodes_for_agent = [
-                        node
-                        for node in nodes
-                        if node.req_id in uncovered_ids
-                    ]
-                    coding_agent_enabled = True
-                    if contract.domain == domain:
-                        execution_route = "planner-routed-kernel-plus-delta-agent"
-                        route_reason = (
-                            "the versioned kernel covers only part of the compiled requirements; "
-                            "a bounded coding agent receives uncovered nodes only"
-                        )
-                    else:
-                        execution_route = (
-                            "planner-disagreement-kernel-plus-delta-agent"
-                        )
-                        route_reason = (
-                            "the planner disagreed with deterministic domain analysis while local "
-                            "coverage found gaps; the stable kernel is retained and uncovered nodes "
-                            "are still routed to a bounded coding agent"
-                        )
-                elif deterministic_domain:
-                    execution_route = "planner-disagreement-bounded-code-agent"
-                    route_reason = (
-                        "the independent planning contract did not approve the deterministic "
-                        "kernel; all requirements are routed to the bounded coding agent"
-                    )
-                    coding_agent_enabled = True
-                    nodes_for_agent = list(nodes)
-                else:
-                    execution_route = "planner-routed-bounded-code-agent"
-                    route_reason = "the planning agent found a kernel mismatch or uncovered capability"
-                    coding_agent_enabled = True
-                    nodes_for_agent = list(nodes)
-            except Exception as exc:
-                planner_status = "failed-after-retries"
-                trace.record(
-                    "planner_failed",
-                    error=str(exc),
-                    fallback_available=deterministic_domain,
-                )
-                if not deterministic_domain:
-                    raise
-                if coverage.uncovered_requirement_ids:
-                    execution_route = "planner-failure-kernel-plus-delta-agent"
-                    route_reason = (
-                        "model planning failed after retries; the stable kernel is retained and "
-                        "locally proven coverage gaps are still routed to the bounded coding agent"
-                    )
-                    coding_agent_enabled = True
-                    nodes_for_agent = [
-                        node
-                        for node in nodes
-                        if node.req_id in coverage.uncovered_requirement_ids
-                    ]
-                else:
-                    execution_route = "planner-failure-safe-deterministic-kernel"
-                    route_reason = "model planning failed after retries; the fully covered known kernel is retained for availability"
-        plan["execution_route"] = execution_route
-        plan["planner_status"] = planner_status
-        plan["planner_contract"] = planner_contract
-        _write_json(output_dir / ".arc" / "compiled-plan.json", plan)
-        _write_json(
-            output_dir / ".arc" / "planner-contract.json",
-            {
-                "version": 1,
-                "run_id": run_id,
-                "status": planner_status,
-                "contract": planner_contract,
-                "execution_route": execution_route,
-            },
-        )
-        trace.record(
-            "execution_route_selected",
-            domain=domain,
-            execution_route=execution_route,
-            model_invoked=not args.dry_run,
-            reason=route_reason,
-        )
-        trace.record(
-            "prompt_decision",
-            prompt_invocations_completed=model.request_count if model else 0,
-            prompt_invoked=bool(model and model.request_count),
-            prompt_source=(
-                "factory26_harness/planner.py:PLANNER_SYSTEM_PROMPT"
-                if not coding_agent_enabled
-                else "planner prompt followed by bounded implementation prompts"
-            ),
-            reason=route_reason,
-        )
-        trace.record(
-            "human_intervention_checkpoint",
-            intervention_required=False,
-            intervention_count=0,
-            policy="final qualifier execution is autonomous; failures close the gate instead of requesting manual edits",
-        )
+            planner_executor = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="factory26-planner"
+            )
+            planner_future = planner_executor.submit(
+                SpecificationPlanner(model, trace).plan,
+                tree,
+                nodes,
+            )
+            trace.record(
+                "speculative_kernel_materialization_started",
+                domain=domain,
+                planner_running=True,
+                policy=(
+                    "the deterministic scaffold is a reversible base; only an accepted "
+                    "planner contract can promote it to a qualified kernel route"
+                ),
+            )
 
         created = scaffold_workspace(output_dir, domain=domain)
         impact.record_requirement_files(("__foundation__",), created)
@@ -670,6 +555,154 @@ def main() -> int:
                     passed=None,
                 )
             events.mark_design_done(node.req_id, "requirement contract stored")
+
+        log("[verify] running speculative clean build and startup checks")
+        speculative_checks = run_full_checks(output_dir, smoke_port)
+        trace.record(
+            "speculative_validation_completed",
+            planner_running=bool(planner_future and not planner_future.done()),
+            promoted=False,
+            results=[result.as_dict() for result in speculative_checks],
+        )
+
+        if not args.dry_run:
+            try:
+                if planner_future is None:
+                    raise RuntimeError("planner future was not created")
+                contract = planner_future.result()
+                planner_iterations = contract.iterations
+                planner_contract = contract.as_dict()
+                planner_status = "completed"
+                model_covered_required_capabilities = set(
+                    coverage.required_capabilities
+                ).issubset(contract.capability_tags)
+                kernel_approved = (
+                    deterministic_domain
+                    and coverage.kernel_eligible
+                    and contract.domain == domain
+                    and contract.kernel_eligible
+                    and model_covered_required_capabilities
+                    and not contract.uncovered_requirement_ids
+                )
+                if kernel_approved:
+                    if matched_capsules:
+                        execution_route = (
+                            "planner-approved-capability-memory-kernel"
+                        )
+                        route_reason = (
+                            "the coverage-blind planner approved the versioned kernel and a prior "
+                            "falsifiable capability capsule matched; all validation remains enabled"
+                        )
+                    else:
+                        execution_route = "planner-approved-deterministic-kernel"
+                        route_reason = "the planning agent approved the matching versioned domain kernel"
+                elif deterministic_domain and (
+                    coverage.uncovered_requirement_ids
+                    or contract.uncovered_requirement_ids
+                ):
+                    uncovered_ids = {
+                        *coverage.uncovered_requirement_ids,
+                        *contract.uncovered_requirement_ids,
+                    }
+                    nodes_for_agent = [
+                        node
+                        for node in nodes
+                        if node.req_id in uncovered_ids
+                    ]
+                    coding_agent_enabled = True
+                    if contract.domain == domain:
+                        execution_route = "planner-routed-kernel-plus-delta-agent"
+                        route_reason = (
+                            "the versioned kernel covers only part of the compiled requirements; "
+                            "a bounded coding agent receives uncovered nodes only"
+                        )
+                    else:
+                        execution_route = (
+                            "planner-disagreement-kernel-plus-delta-agent"
+                        )
+                        route_reason = (
+                            "the planner disagreed with deterministic domain analysis while local "
+                            "coverage found gaps; the stable kernel is retained and uncovered nodes "
+                            "are still routed to a bounded coding agent"
+                        )
+                elif deterministic_domain:
+                    execution_route = "planner-disagreement-bounded-code-agent"
+                    route_reason = (
+                        "the independent planning contract did not approve the deterministic "
+                        "kernel; all requirements are routed to the bounded coding agent"
+                    )
+                    coding_agent_enabled = True
+                    nodes_for_agent = list(nodes)
+                else:
+                    execution_route = "planner-routed-bounded-code-agent"
+                    route_reason = "the planning agent found a kernel mismatch or uncovered capability"
+                    coding_agent_enabled = True
+                    nodes_for_agent = list(nodes)
+            except Exception as exc:
+                planner_status = "failed-after-one-attempt"
+                trace.record(
+                    "planner_failed",
+                    error=str(exc),
+                    fallback_available=deterministic_domain,
+                )
+                if not deterministic_domain:
+                    raise
+                if coverage.uncovered_requirement_ids:
+                    execution_route = "planner-failure-kernel-plus-delta-agent"
+                    route_reason = (
+                        "model planning failed after one attempt; the stable kernel is retained and "
+                        "locally proven coverage gaps are still routed to the bounded coding agent"
+                    )
+                    coding_agent_enabled = True
+                    nodes_for_agent = [
+                        node
+                        for node in nodes
+                        if node.req_id in coverage.uncovered_requirement_ids
+                    ]
+                else:
+                    execution_route = "planner-failure-safe-deterministic-kernel"
+                    route_reason = "model planning failed after one attempt; the fully covered known kernel is retained for availability"
+            finally:
+                if planner_executor is not None:
+                    planner_executor.shutdown(wait=True, cancel_futures=True)
+        plan["execution_route"] = execution_route
+        plan["planner_status"] = planner_status
+        plan["planner_contract"] = planner_contract
+        _write_json(output_dir / ".arc" / "compiled-plan.json", plan)
+        _write_json(
+            output_dir / ".arc" / "planner-contract.json",
+            {
+                "version": 1,
+                "run_id": run_id,
+                "status": planner_status,
+                "contract": planner_contract,
+                "execution_route": execution_route,
+            },
+        )
+        trace.record(
+            "execution_route_selected",
+            domain=domain,
+            execution_route=execution_route,
+            model_invoked=not args.dry_run,
+            reason=route_reason,
+        )
+        trace.record(
+            "prompt_decision",
+            prompt_invocations_completed=model.request_count if model else 0,
+            prompt_invoked=bool(model and model.request_count),
+            prompt_source=(
+                "factory26_harness/planner.py:PLANNER_SYSTEM_PROMPT"
+                if not coding_agent_enabled
+                else "planner prompt followed by bounded implementation prompts"
+            ),
+            reason=route_reason,
+        )
+        trace.record(
+            "human_intervention_checkpoint",
+            intervention_required=False,
+            intervention_count=0,
+            policy="final qualifier execution is autonomous; failures close the gate instead of requesting manual edits",
+        )
 
         if not coding_agent_enabled:
             for node in nodes:
@@ -794,8 +827,22 @@ def main() -> int:
                             node.req_id, f"implemented in batch {index}"
                         )
 
-        log("[verify] running clean build and startup checks")
-        checks = run_full_checks(output_dir, smoke_port)
+        if coding_agent_enabled:
+            trace.record(
+                "speculative_validation_discarded",
+                reason="bounded coding agent changed or could change the scaffold",
+            )
+            log("[verify] running final clean build and startup checks")
+            checks = run_full_checks(output_dir, smoke_port)
+        else:
+            checks = speculative_checks
+            trace.record(
+                "speculative_validation_promoted",
+                reason=(
+                    "no coding-agent mutation occurred; these become final local checks, "
+                    "while release qualification still depends on the planner and black-box gates"
+                ),
+            )
         for result in checks:
             impact.record_check_files(result.name, result.related_files)
             trace.record("validation_result", tool=result.name, result=result.as_dict())
@@ -944,6 +991,8 @@ def main() -> int:
         )
         return 0 if run_successful or not args.strict_exit else 1
     except Exception as exc:
+        if planner_executor is not None:
+            planner_executor.shutdown(wait=True, cancel_futures=True)
         trace.record("run_failed", error=str(exc))
         events.mark_run_failed(str(exc)[:1000])
         log(f"[fatal] {exc}")

@@ -6,11 +6,13 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from factory26_harness.cli import _transaction_checksum
+from factory26_harness.trace import verify_trace_rows
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
@@ -113,6 +115,15 @@ class _WrongDomainPlannerHandler(_PlannerHandler):
         self.send_header("content-length", str(len(encoded)))
         self.end_headers()
         self.wfile.write(encoded)
+
+
+class _DelayedPlannerHandler(_PlannerHandler):
+    release_response = threading.Event()
+
+    def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
+        if not type(self).release_response.wait(timeout=60):
+            raise TimeoutError("test did not observe speculative validation")
+        super().do_POST()
 
 
 class _MalformedPlannerHandler(_PlannerHandler):
@@ -264,25 +275,68 @@ children:
                     "3993",
                     "--strict-exit",
                 ]
-                completed = subprocess.run(
-                    command,
-                    cwd=REPOSITORY_ROOT,
-                    env=environment,
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                    check=False,
-                )
+                release_response = getattr(handler, "release_response", None)
+                if isinstance(release_response, threading.Event):
+                    release_response.clear()
+                    process = subprocess.Popen(
+                        command,
+                        cwd=REPOSITORY_ROOT,
+                        env=environment,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                    trace_path = output / ".arc" / "production-trace.jsonl"
+                    deadline = time.monotonic() + 60
+                    try:
+                        while time.monotonic() < deadline:
+                            if process.poll() is not None:
+                                break
+                            if trace_path.is_file() and (
+                                '"event": "speculative_validation_completed"'
+                                in trace_path.read_text(encoding="utf-8")
+                            ):
+                                release_response.set()
+                                break
+                            time.sleep(0.02)
+                        self.assertTrue(
+                            release_response.is_set(),
+                            "speculative validation did not finish while the planner was blocked",
+                        )
+                    finally:
+                        release_response.set()
+                    stdout, stderr = process.communicate(timeout=120)
+                    completed = subprocess.CompletedProcess(
+                        command, process.returncode, stdout, stderr
+                    )
+                else:
+                    completed = subprocess.run(
+                        command,
+                        cwd=REPOSITORY_ROOT,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        check=False,
+                    )
                 self.assertEqual(
                     completed.returncode,
                     expected_returncode,
                     completed.stdout + "\n" + completed.stderr,
                 )
-                return json.loads(
+                report = json.loads(
                     (output / ".arc" / "harness-report.json").read_text(
                         encoding="utf-8"
                     )
                 )
+                report["_test_trace_rows"] = [
+                    json.loads(line)
+                    for line in (
+                        output / ".arc" / "production-trace.jsonl"
+                    ).read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+                return report
         finally:
             server.shutdown()
             server.server_close()
@@ -369,6 +423,23 @@ children:
                 check=True,
             ).stdout.splitlines()
             self.assertGreaterEqual(len(log), 2)
+
+    def test_model_wait_overlaps_reversible_kernel_preflight(self) -> None:
+        report = self._run_github_with_planner(_DelayedPlannerHandler)
+        speculative = next(
+            row
+            for row in report["_test_trace_rows"]
+            if row.get("event") == "speculative_validation_completed"
+        )
+        self.assertIs(speculative["payload"]["planner_running"], True)
+        self.assertTrue(
+            verify_trace_rows(
+                report["_test_trace_rows"], require_fully_sealed=True
+            )["valid"]
+        )
+        self.assertEqual(
+            report["execution_route"], "planner-approved-deterministic-kernel"
+        )
 
     def test_sheet_domain_uses_full_template(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -726,7 +797,7 @@ children:
     ) -> None:
         report = self._run_github_with_planner(_MalformedPlannerHandler)
         self.assertTrue(report["run_completed_successfully"])
-        self.assertEqual(report["planner_status"], "failed-after-retries")
+        self.assertEqual(report["planner_status"], "failed-after-one-attempt")
         self.assertEqual(
             report["execution_route"],
             "planner-failure-safe-deterministic-kernel",

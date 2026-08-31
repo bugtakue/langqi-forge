@@ -14,7 +14,12 @@ from .artifacts import canonical_json, sha256_file, verify_run_envelope
 from .capabilities import capability_ids
 from .capability_memory import REQUIRED_PROFILES, verify_capability_capsule
 from .feedback import parse_playwright_json
-from .planner import PLANNER_SYSTEM_PROMPT, PLANNER_TOOL
+from .planner import (
+    PLANNER_SYSTEM_PROMPT,
+    contract_arguments_sha256,
+    normalize_contract_arguments,
+    planner_tool_schema,
+)
 from .trace import verify_trace_rows
 
 
@@ -262,6 +267,33 @@ def _trace_checks(
     tool_arguments = tool_calls[0].get("arguments") if len(tool_calls) == 1 else None
     contract = report.get("planner_contract") or {}
     expected_contract_arguments = {field: contract.get(field) for field in CONTRACT_FIELDS}
+    coverage_requirements = (
+        (report.get("capability_coverage") or {}).get("requirements") or []
+    )
+    known_requirement_ids = {
+        str(item.get("requirement_id") or "")
+        for item in coverage_requirements
+        if isinstance(item, dict) and item.get("requirement_id")
+    }
+    normalized_model_arguments: dict[str, Any] | None = None
+    normalization_error: str | None = None
+    if arguments is not None:
+        try:
+            normalized_contract = normalize_contract_arguments(
+                arguments,
+                known_requirement_ids=known_requirement_ids,
+            ).as_dict()
+            normalized_model_arguments = {
+                field: normalized_contract.get(field) for field in CONTRACT_FIELDS
+            }
+        except (TypeError, ValueError) as exc:
+            normalization_error = str(exc)
+    raw_arguments_sha256 = (
+        contract_arguments_sha256(arguments) if arguments is not None else None
+    )
+    expected_planner_tool = planner_tool_schema(
+        str(report.get("detected_domain") or "generic")
+    )
     validation_payloads = payloads.get("validation_result", [])
     final_validation_by_tool: dict[str, Any] = {}
     for validation in validation_payloads:
@@ -301,13 +333,14 @@ def _trace_checks(
         _check("trace_model_response_once", len(responses) == 1, len(responses), 1),
         _check("trace_model_response_id", bool(response_id), response_id, "non-empty provider response id"),
         _check("trace_planner_messages_complete", len(messages) == 2 and messages[0] == {"role": "system", "content": PLANNER_SYSTEM_PROMPT} and isinstance(messages[1], dict) and messages[1].get("role") == "user" and bool(user_message) and not _contains_truncation(messages), messages, "exact system prompt plus complete user digest"),
-        _check("trace_planner_tool_schema_exact", canonical_json(request_tools) == canonical_json([PLANNER_TOOL]), request_tools, [PLANNER_TOOL]),
+        _check("trace_planner_tool_schema_exact", canonical_json(request_tools) == canonical_json([expected_planner_tool]), request_tools, [expected_planner_tool]),
         _check("trace_planner_tool_forced", request_payload.get("tool_choice") == FORCED_PLANNER_TOOL_CHOICE, request_payload.get("tool_choice"), FORCED_PLANNER_TOOL_CHOICE),
         _check("trace_agent_session_started_once", len(sessions_started) == 1 and sessions_started[0].get("stage") == "specification_planning" and sessions_started[0].get("prompt") == user_message, sessions_started, "one specification-planning session bound to the model prompt"),
         _check("trace_agent_session_completed_once", len(sessions_completed) == 1 and sessions_completed[0].get("stage") == "specification_planning" and canonical_json(sessions_completed[0].get("contract")) == canonical_json(contract), sessions_completed, "one completed specification-planning session bound to the report contract"),
         _check("trace_agent_tool_call_once", len(tool_calls) == 1, len(tool_calls), 1),
-        _check("trace_model_tool_call_exact", arguments is not None and canonical_json(arguments) == canonical_json(expected_contract_arguments), arguments if arguments is not None else raw_calls, expected_contract_arguments),
-        _check("trace_applied_tool_call_exact", len(tool_calls) == 1 and tool_calls[0].get("tool") == "select_build_contract" and tool_calls[0].get("decision_mode") == "tool_call" and canonical_json(tool_arguments) == canonical_json(arguments), tool_calls[0] if len(tool_calls) == 1 else None, {"tool": "select_build_contract", "arguments": arguments, "decision_mode": "tool_call"}),
+        _check("trace_model_tool_call_normalizes_exactly", normalized_model_arguments is not None and canonical_json(normalized_model_arguments) == canonical_json(expected_contract_arguments), {"raw": arguments if arguments is not None else raw_calls, "normalized": normalized_model_arguments, "error": normalization_error}, expected_contract_arguments),
+        _check("trace_model_tool_call_raw_hash", len(tool_calls) == 1 and tool_calls[0].get("raw_arguments_sha256") == raw_arguments_sha256, tool_calls[0].get("raw_arguments_sha256") if len(tool_calls) == 1 else None, raw_arguments_sha256),
+        _check("trace_applied_tool_call_exact", len(tool_calls) == 1 and tool_calls[0].get("tool") == "select_build_contract" and tool_calls[0].get("decision_mode") == "tool_call" and canonical_json(tool_arguments) == canonical_json(expected_contract_arguments), tool_calls[0] if len(tool_calls) == 1 else None, {"tool": "select_build_contract", "arguments": expected_contract_arguments, "decision_mode": "tool_call"}),
         _check("trace_human_checkpoint", len(interventions) == 1 and interventions[0].get("intervention_required") is False and interventions[0].get("intervention_count") == 0, interventions, [{"intervention_required": False, "intervention_count": 0}]),
         _check("trace_validation_layers", len(validation_payloads) >= 3, len(validation_payloads), {"minimum": 3}),
         _check("trace_all_validations_passed", bool(validation_payloads) and all((item.get("result") or {}).get("passed") is True for item in validation_payloads), [item.get("result") for item in validation_payloads], "every recorded validation passed"),

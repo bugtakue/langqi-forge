@@ -5,10 +5,176 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from factory26_harness.qualification import evaluate_generation, evaluate_run
+from factory26_harness.planner import (
+    PLANNER_SYSTEM_PROMPT,
+    contract_arguments_sha256,
+    normalize_contract_arguments,
+    planner_tool_schema,
+)
+from factory26_harness.qualification import (
+    FORCED_PLANNER_TOOL_CHOICE,
+    _trace_checks,
+    evaluate_generation,
+    evaluate_run,
+)
+from factory26_harness.trace import ProductionTrace, reseal_trace_rows
 
 
 class QualificationTests(unittest.TestCase):
+    def test_trace_gate_replays_raw_tool_argument_normalization(self) -> None:
+        run_id = "11111111-1111-4111-8111-111111111111"
+        raw_arguments = {
+            "domain": "github",
+            "kernel_eligible": True,
+            "capability_tags": ["repository_lifecycle"],
+            "risks": ["r" * 140],
+            "validation_focus": ["v" * 140],
+            "rationale": "reason " * 80,
+            "uncovered_requirement_ids": [],
+        }
+        contract = normalize_contract_arguments(
+            raw_arguments, known_requirement_ids={"R1"}
+        ).as_dict()
+        applied_arguments = {
+            key: contract[key]
+            for key in (
+                "domain",
+                "kernel_eligible",
+                "capability_tags",
+                "risks",
+                "validation_focus",
+                "rationale",
+                "uncovered_requirement_ids",
+            )
+        }
+        gateway = {
+            "provenance": "alibaba-cloud-bailian",
+            "endpoint_host": "dashscope.aliyuncs.com",
+            "model": "qwen-plus",
+        }
+        checks = [
+            {"name": name, "passed": True}
+            for name in ("structure", "build", "startup")
+        ]
+        report = {
+            "run_id": run_id,
+            "detected_domain": "github",
+            "planner_contract": contract,
+            "capability_coverage": {
+                "requirements": [{"requirement_id": "R1"}]
+            },
+            "model_gateway": gateway,
+            "checks": checks,
+        }
+        prompt = "candidate contract"
+        message = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "planner-1",
+                    "type": "function",
+                    "function": {
+                        "name": "select_build_contract",
+                        "arguments": json.dumps(raw_arguments),
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            trace_path = Path(temporary) / "production-trace.jsonl"
+            trace = ProductionTrace(trace_path)
+            trace.record("run_started", run_id=run_id)
+            trace.record(
+                "agent_session_started",
+                stage="specification_planning",
+                prompt=prompt,
+            )
+            trace.record(
+                "model_request",
+                endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+                model="qwen-plus",
+                gateway=gateway,
+                payload={
+                    "messages": [
+                        {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "tools": [planner_tool_schema("github")],
+                    "tool_choice": FORCED_PLANNER_TOOL_CHOICE,
+                },
+            )
+            trace.record(
+                "model_response",
+                model="qwen-plus",
+                gateway=gateway,
+                response_id="response-1",
+                message=message,
+            )
+            trace.record(
+                "agent_tool_call",
+                tool="select_build_contract",
+                arguments=applied_arguments,
+                raw_arguments_sha256=contract_arguments_sha256(raw_arguments),
+                decision_mode="tool_call",
+            )
+            trace.record(
+                "agent_session_completed",
+                stage="specification_planning",
+                contract=contract,
+            )
+            trace.record(
+                "human_intervention_checkpoint",
+                intervention_required=False,
+                intervention_count=0,
+            )
+            for result in checks:
+                trace.record("validation_result", tool=result["name"], result=result)
+            trace.record("run_completed", report=report)
+            results = _trace_checks(
+                trace_path,
+                expected_run_id=run_id,
+                expected_public_evaluations=0,
+                report=report,
+                expected_gateway_host="dashscope.aliyuncs.com",
+                expected_gateway_provenance="alibaba-cloud-bailian",
+            )
+            self.assertTrue(
+                all(result["passed"] for result in results),
+                [result for result in results if not result["passed"]],
+            )
+
+            rows = [
+                json.loads(line)
+                for line in trace_path.read_text(encoding="utf-8").splitlines()
+            ]
+            response = next(
+                row for row in rows if row["event"] == "model_response"
+            )
+            function = response["payload"]["message"]["tool_calls"][0]["function"]
+            tampered = json.loads(function["arguments"])
+            tampered["rationale"] += " hidden-tail-tampering"
+            function["arguments"] = json.dumps(tampered)
+            trace_path.write_text(
+                "\n".join(
+                    json.dumps(row, ensure_ascii=False, sort_keys=True)
+                    for row in reseal_trace_rows(rows)
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            tampered_results = _trace_checks(
+                trace_path,
+                expected_run_id=run_id,
+                expected_public_evaluations=0,
+                report=report,
+                expected_gateway_host="dashscope.aliyuncs.com",
+                expected_gateway_provenance="alibaba-cloud-bailian",
+            )
+        by_name = {result["name"]: result for result in tampered_results}
+        self.assertTrue(by_name["trace_model_tool_call_normalizes_exactly"]["passed"])
+        self.assertFalse(by_name["trace_model_tool_call_raw_hash"]["passed"])
+
     def test_accepts_single_planner_call_full_green_run(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

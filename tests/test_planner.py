@@ -6,7 +6,12 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from factory26_harness.planner import SpecificationPlanner, requirement_digest
+from factory26_harness.capabilities import capability_ids
+from factory26_harness.planner import (
+    SpecificationPlanner,
+    contract_arguments_sha256,
+    requirement_digest,
+)
 from factory26_harness.requirements import RequirementNode
 from factory26_harness.trace import ProductionTrace
 
@@ -80,7 +85,7 @@ class PlannerTests(unittest.TestCase):
                 [self.node],
             )
             self.assertEqual(model.calls, 1)
-            self.assertEqual(model.max_tokens, 700)
+            self.assertEqual(model.max_tokens, 512)
             self.assertEqual(model.max_attempts, 1)
             self.assertEqual(model.timeout_seconds, 60)
             self.assertEqual(
@@ -89,6 +94,16 @@ class PlannerTests(unittest.TestCase):
                     "type": "function",
                     "function": {"name": "select_build_contract"},
                 },
+            )
+            capability_schema = model.tools[0]["function"]["parameters"][
+                "properties"
+            ]["capability_tags"]
+            self.assertEqual(
+                capability_schema["items"]["enum"],
+                sorted(capability_ids("github")),
+            )
+            self.assertNotIn(
+                "workbook_lifecycle", capability_schema["items"]["enum"]
             )
             self.assertEqual(contract.domain, "github")
             self.assertEqual(contract.decision_mode, "tool_call")
@@ -117,6 +132,57 @@ class PlannerTests(unittest.TestCase):
                     [self.node],
                 )
 
+    def test_all_fourteen_github_capabilities_are_not_truncated(self) -> None:
+        tags = list(capability_ids("github"))
+        self.assertEqual(len(tags), 14)
+        model = _PlannerModel(
+            {
+                "domain": "github",
+                "kernel_eligible": True,
+                "capability_tags": tags,
+                "risks": ["permissions"],
+                "validation_focus": ["all capability boundaries"],
+                "rationale": "The supplied contract covers the requirement.",
+                "uncovered_requirement_ids": [],
+            }
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            contract = SpecificationPlanner(
+                model, ProductionTrace(Path(directory) / "trace.jsonl")
+            ).plan(self.tree, [self.node])
+        self.assertEqual(contract.capability_tags, tuple(tags))
+
+    def test_applied_contract_is_bounded_and_hashes_raw_arguments(self) -> None:
+        raw = {
+            "domain": "github",
+            "kernel_eligible": True,
+            "capability_tags": ["repository_lifecycle"],
+            "risks": ["r" * 140],
+            "validation_focus": ["v" * 140],
+            "rationale": "reason " * 80,
+            "uncovered_requirement_ids": [],
+        }
+        model = _PlannerModel(raw)
+        with tempfile.TemporaryDirectory() as directory:
+            trace_path = Path(directory) / "trace.jsonl"
+            contract = SpecificationPlanner(
+                model, ProductionTrace(trace_path)
+            ).plan(self.tree, [self.node])
+            rows = [
+                json.loads(line)
+                for line in trace_path.read_text(encoding="utf-8").splitlines()
+            ]
+        applied = next(
+            row["payload"] for row in rows if row["event"] == "agent_tool_call"
+        )
+        self.assertEqual(len(contract.risks[0]), 96)
+        self.assertEqual(len(contract.validation_focus[0]), 96)
+        self.assertEqual(len(contract.rationale), 240)
+        self.assertEqual(applied["arguments"]["rationale"], contract.rationale)
+        self.assertEqual(
+            applied["raw_arguments_sha256"], contract_arguments_sha256(raw)
+        )
+
     def test_requirement_digest_is_bounded(self) -> None:
         huge = RequirementNode(
             req_id="R2",
@@ -132,8 +198,10 @@ class PlannerTests(unittest.TestCase):
         self.assertNotIn("D" * 97, digest)
         self.assertNotIn("deterministic_hint", digest)
         self.assertNotIn("deterministic_coverage", digest)
-        self.assertIn("available_capability_contracts", digest)
+        self.assertIn("candidate_capability_contract", digest)
+        self.assertIn('"candidate_domain":"github"', digest)
         self.assertIn("exclusions", digest)
+        self.assertNotIn("workbook_lifecycle", digest)
 
     def test_non_eligible_contract_must_name_the_uncovered_requirement(self) -> None:
         model = _PlannerModel(
@@ -152,6 +220,30 @@ class PlannerTests(unittest.TestCase):
                 SpecificationPlanner(
                     model, ProductionTrace(Path(directory) / "trace.jsonl")
                 ).plan(self.tree, [self.node])
+
+    def test_contract_requires_auditable_risk_validation_and_rationale(self) -> None:
+        base = {
+            "domain": "github",
+            "kernel_eligible": True,
+            "capability_tags": ["repository_lifecycle"],
+            "risks": ["permissions"],
+            "validation_focus": ["persistence"],
+            "rationale": "Covered.",
+            "uncovered_requirement_ids": [],
+        }
+        for field, replacement in (
+            ("risks", []),
+            ("validation_focus", []),
+            ("rationale", "   "),
+        ):
+            payload = dict(base)
+            payload[field] = replacement
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                with self.assertRaisesRegex(ValueError, "requires|non-empty"):
+                    SpecificationPlanner(
+                        _PlannerModel(payload),
+                        ProductionTrace(Path(directory) / "trace.jsonl"),
+                    ).plan(self.tree, [self.node])
 
 
 if __name__ == "__main__":
