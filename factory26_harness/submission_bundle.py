@@ -25,6 +25,7 @@ EXCLUDED_PACKAGE_FILES = frozenset(
         "factory26_harness/judge_report.py",
         "factory26_harness/public_eval.py",
         "factory26_harness/public_fixtures.py",
+        "factory26_harness/public_contract.py",
         "factory26_harness/public_tasks.py",
         "factory26_harness/qualification.py",
         "factory26_harness/verify_evidence.py",

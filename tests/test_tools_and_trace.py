@@ -12,7 +12,11 @@ from unittest.mock import patch
 from factory26_harness.checks import frontend_build_check, package_policy_check
 from factory26_harness.cli import _safe_smoke_port
 from factory26_harness.impact import ChangeImpactGraph
-from factory26_harness.trace import ProductionTrace, verify_trace_rows
+from factory26_harness.trace import (
+    ProductionTrace,
+    find_unredacted_secrets,
+    verify_trace_rows,
+)
 from factory26_harness.workspace_tools import WorkspaceTools
 
 
@@ -42,13 +46,29 @@ class ToolAndTraceTests(unittest.TestCase):
                 "request",
                 api_key="secret",
                 nested={"Authorization": "Bearer secret"},
-                raw="OPENAI_API_KEY=top-secret-value Bearer abcdefghijklmnop",
+                password="hunter2",
+                headers={"X-API-Key": "header-secret-value"},
+                cookie="session=raw-cookie-value",
+                raw=(
+                    "OPENAI_API_KEY=top-secret-value Bearer abcdefghijklmnop "
+                    "DATABASE_PASSWORD=hunter2 X-API-Key: header-secret-value "
+                    "Cookie: session=raw-cookie-value; Path=/ "
+                    "postgresql://app:db-secret@db.example.test/app"
+                ),
             )
             row = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(row["payload"]["api_key"], "[REDACTED]")
             self.assertEqual(row["payload"]["nested"]["Authorization"], "[REDACTED]")
+            self.assertEqual(row["payload"]["password"], "[REDACTED]")
+            self.assertEqual(row["payload"]["headers"], "[REDACTED]")
+            self.assertEqual(row["payload"]["cookie"], "[REDACTED]")
             self.assertNotIn("top-secret-value", row["payload"]["raw"])
             self.assertNotIn("abcdefghijklmnop", row["payload"]["raw"])
+            self.assertNotIn("hunter2", row["payload"]["raw"])
+            self.assertNotIn("header-secret-value", row["payload"]["raw"])
+            self.assertNotIn("raw-cookie-value", row["payload"]["raw"])
+            self.assertNotIn("db-secret", row["payload"]["raw"])
+            self.assertEqual(find_unredacted_secrets(row), [])
 
     def test_trace_is_hash_chained_and_tampering_is_detected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

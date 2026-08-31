@@ -21,10 +21,22 @@ from .artifacts import (
     verify_run_envelope,
     write_run_envelope,
 )
-from .checks import failures, run_full_checks
+from .checks import SAFE_ENVIRONMENT_KEYS, failures, run_full_checks
 from .capability_memory import forge_capability_capsule, record_counterexample
-from .feedback import parse_playwright_json, repair_packets
+from .feedback import (
+    parse_playwright_json,
+    repair_packets,
+    validate_playwright_report,
+)
 from .impact import ChangeImpactGraph
+from .public_contract import (
+    PLAYWRIGHT_CLI_SHA256,
+    PLAYWRIGHT_RUNTIME_FILE_COUNT,
+    PLAYWRIGHT_RUNTIME_SHA256,
+    PLAYWRIGHT_VERSION,
+    PUBLIC_PLAYWRIGHT_INVENTORY_SHA256,
+    PUBLIC_TEST_COUNTS,
+)
 from .public_fixtures import public_fixture_environment
 from .trace import ProductionTrace
 
@@ -33,7 +45,18 @@ PLAYWRIGHT_PACKAGE = {
     "private": True,
     "version": "0.0.0",
     "type": "module",
-    "devDependencies": {"@playwright/test": "^1.54.0"},
+    "devDependencies": {"@playwright/test": PLAYWRIGHT_VERSION},
+}
+
+PLAYWRIGHT_RUNTIME_ROOTS = (
+    "node_modules/@playwright/test",
+    "node_modules/playwright",
+    "node_modules/playwright-core",
+)
+EVALUATION_ENVIRONMENT_KEYS = SAFE_ENVIRONMENT_KEYS | {
+    "HOME",
+    "USERPROFILE",
+    "XDG_CACHE_HOME",
 }
 
 PLAYWRIGHT_CONFIG = r"""import { defineConfig, devices } from '@playwright/test';
@@ -78,6 +101,89 @@ def _write(path: Path, content: str) -> None:
             temporary_path.unlink(missing_ok=True)
 
 
+def _evaluation_environment(**extra: str) -> dict[str, str]:
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper() in EVALUATION_ENVIRONMENT_KEYS
+    }
+    environment.update(
+        {
+            "CI": "1",
+            "FORCE_COLOR": "0",
+            "NO_COLOR": "1",
+            "NPM_CONFIG_IGNORE_SCRIPTS": "true",
+            "npm_config_ignore_scripts": "true",
+            **extra,
+        }
+    )
+    return environment
+
+
+def _backend_environment(
+    port: int, fixture_environment: dict[str, str]
+) -> dict[str, str]:
+    """Expose fixtures to the app without evaluator paths or control flags."""
+
+    environment = _evaluation_environment(PORT=str(port), HOST="127.0.0.1")
+    environment.update(fixture_environment)
+    return environment
+
+
+def _playwright_runtime_contract(cache_root: Path) -> dict[str, Any]:
+    package_path = (
+        cache_root / "node_modules" / "@playwright" / "test" / "package.json"
+    )
+    cli_path = cache_root / "node_modules" / "@playwright" / "test" / "cli.js"
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Playwright package metadata is unreadable") from exc
+    if package.get("version") != PLAYWRIGHT_VERSION:
+        raise ValueError("Playwright runtime version is not pinned")
+    if not cli_path.is_file() or cli_path.is_symlink():
+        raise ValueError("Playwright CLI is missing or unsafe")
+    cli_sha256 = sha256_file(cli_path)
+    if cli_sha256 != PLAYWRIGHT_CLI_SHA256:
+        raise ValueError("Playwright CLI hash differs from the pinned runtime")
+
+    entries: list[dict[str, Any]] = []
+    for relative_root in PLAYWRIGHT_RUNTIME_ROOTS:
+        root = cache_root / relative_root
+        if not root.is_dir():
+            raise ValueError(f"Playwright runtime package is missing: {relative_root}")
+        for path in sorted(root.rglob("*")):
+            if path.is_symlink():
+                raise ValueError(f"Playwright runtime contains a symlink: {path}")
+            if path.is_file():
+                entries.append(
+                    {
+                        "path": path.relative_to(cache_root).as_posix(),
+                        "bytes": path.stat().st_size,
+                        "sha256": sha256_file(path),
+                    }
+                )
+    runtime_sha256 = hashlib.sha256(
+        json.dumps(
+            entries,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    if (
+        len(entries) != PLAYWRIGHT_RUNTIME_FILE_COUNT
+        or runtime_sha256 != PLAYWRIGHT_RUNTIME_SHA256
+    ):
+        raise ValueError("Playwright runtime tree differs from the pinned release")
+    return {
+        "version": PLAYWRIGHT_VERSION,
+        "cli_sha256": cli_sha256,
+        "runtime_file_count": len(entries),
+        "runtime_sha256": runtime_sha256,
+    }
+
+
 def _reserve_run_label(result_root: Path, label: str) -> None:
     suffixes = (
         "feedback.json",
@@ -101,14 +207,16 @@ def ensure_playwright(cache_root: Path, *, install_browser: bool = False) -> Pat
     cache_root.mkdir(parents=True, exist_ok=True)
     package_path = cache_root / "package.json"
     config_path = cache_root / "playwright.config.mjs"
-    if not package_path.is_file():
-        _write(package_path, json.dumps(PLAYWRIGHT_PACKAGE, indent=2) + "\n")
+    _write(package_path, json.dumps(PLAYWRIGHT_PACKAGE, indent=2) + "\n")
     _write(config_path, PLAYWRIGHT_CONFIG)
-    binary = cache_root / "node_modules" / ".bin" / "playwright"
-    if not binary.is_file():
+    cli = cache_root / "node_modules" / "@playwright" / "test" / "cli.js"
+    try:
+        _playwright_runtime_contract(cache_root)
+    except ValueError:
         completed = subprocess.run(
-            ["npm", "install", "--no-audit", "--no-fund"],
+            ["npm", "install", "--no-audit", "--no-fund", "--ignore-scripts"],
             cwd=cache_root,
+            env=_evaluation_environment(),
             capture_output=True,
             text=True,
             timeout=600,
@@ -119,10 +227,12 @@ def ensure_playwright(cache_root: Path, *, install_browser: bool = False) -> Pat
                 "Playwright npm install failed: "
                 + (completed.stderr or completed.stdout)[-3000:]
             )
+        _playwright_runtime_contract(cache_root)
     if install_browser:
         completed = subprocess.run(
-            [str(binary), "install", "chromium"],
+            ["node", str(cli), "install", "chromium"],
             cwd=cache_root,
+            env=_evaluation_environment(),
             capture_output=True,
             text=True,
             timeout=900,
@@ -133,7 +243,7 @@ def ensure_playwright(cache_root: Path, *, install_browser: bool = False) -> Pat
                 "Playwright Chromium install failed: "
                 + (completed.stderr or completed.stdout)[-3000:]
             )
-    return binary
+    return cli
 
 
 def _wait_ready(port: int, process: subprocess.Popen, timeout: int = 30) -> None:
@@ -205,6 +315,16 @@ def run_public_evaluation(
     task_bundle_before = public_task_bundle_manifest(task_root)
     if task_bundle_before.get("task_id") != task_id:
         raise ValueError("public task id does not match its synchronized manifest")
+    if task_id not in PUBLIC_PLAYWRIGHT_INVENTORY_SHA256:
+        raise ValueError(f"no locked Playwright contract for public task: {task_id}")
+    expected_test_count = int(task_bundle_before.get("expected_test_count") or 0)
+    if expected_test_count != PUBLIC_TEST_COUNTS[task_id]:
+        raise ValueError("public task test count differs from the locked contract")
+    expected_test_files = {
+        str(item.get("path") or "")
+        for item in (task_bundle_before.get("tests") or {}).get("files") or []
+        if isinstance(item, dict) and str(item.get("path") or "").endswith(".spec.ts")
+    }
     application_source_before = application_source_manifest(project_dir)
     check_results = run_full_checks(project_dir, port + 1)
     broken = failures(check_results)
@@ -221,6 +341,7 @@ def run_public_evaluation(
         )
 
     playwright = ensure_playwright(cache_root, install_browser=install_browser)
+    playwright_runtime = _playwright_runtime_contract(cache_root)
     result_root = project_dir / ".arc" / "public-eval"
     result_root.mkdir(parents=True, exist_ok=True)
     harness_report_path = project_dir / ".arc" / "harness-report.json"
@@ -233,8 +354,8 @@ def run_public_evaluation(
         raise ValueError(f"unsafe run label: {label!r}")
     _reserve_run_label(result_root, label)
     backend_log_path = result_root / f"{label}.backend.log"
-    environment = dict(
-        os.environ,
+    fully_parallel_value = fully_parallel if fully_parallel is not None else True
+    environment = _evaluation_environment(
         PORT=str(port),
         E2E_BASE_URL=f"http://127.0.0.1:{port}",
         TARGET_URL=f"http://127.0.0.1:{port}",
@@ -243,13 +364,25 @@ def run_public_evaluation(
         FACTORY26_PUBLIC_EXPECT_TIMEOUT=str(expect_timeout_ms),
         FACTORY26_PUBLIC_WORKERS=str(workers),
         FACTORY26_PUBLIC_FULLY_PARALLEL="1"
-        if (fully_parallel if fully_parallel is not None else True)
+        if fully_parallel_value
         else "0",
     )
-    for name, value in public_fixture_environment(
+    fixture_environment = public_fixture_environment(
         task_id, environment["E2E_BASE_URL"], fixture_profile
-    ).items():
-        environment.setdefault(name, value)
+    )
+    environment.update(fixture_environment)
+    backend_environment = _backend_environment(port, fixture_environment)
+    fixture_contract = public_fixture_environment(
+        task_id, "http://127.0.0.1:<PORT>", fixture_profile
+    )
+    fixture_contract_sha256 = hashlib.sha256(
+        json.dumps(
+            fixture_contract,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
     trace.record(
         "public_evaluation_started",
         source_run_id=source_run_id,
@@ -265,12 +398,14 @@ def run_public_evaluation(
         agent_iterations=0,
         manual_interventions=0,
         tool="playwright.test",
+        playwright_runtime=playwright_runtime,
+        fixture_contract_sha256=fixture_contract_sha256,
     )
     with backend_log_path.open("w", encoding="utf-8") as backend_log:
         process = subprocess.Popen(
             ["npm", "start"],
             cwd=project_dir / "backend",
-            env=environment,
+            env=backend_environment,
             stdout=backend_log,
             stderr=subprocess.STDOUT,
             text=True,
@@ -280,6 +415,7 @@ def run_public_evaluation(
             _wait_ready(port, process)
             started = time.monotonic()
             command = [
+                "node",
                 str(playwright),
                 "test",
                 "--config",
@@ -300,6 +436,20 @@ def run_public_evaluation(
         finally:
             _stop(process)
 
+    try:
+        runtime_after = _playwright_runtime_contract(cache_root)
+    except ValueError as exc:
+        trace.record(
+            "public_evaluation_failed",
+            task_id=task_id,
+            run_label=label,
+            stage="playwright_runtime_mutated",
+            error=str(exc),
+        )
+        raise RuntimeError("Playwright runtime changed during evaluation") from exc
+    if runtime_after != playwright_runtime:
+        raise RuntimeError("Playwright runtime identity changed during evaluation")
+
     report_path = result_root / f"{label}.playwright.json"
     stderr_path = result_root / f"{label}.playwright.stderr.log"
     _write(report_path, completed.stdout)
@@ -317,6 +467,24 @@ def run_public_evaluation(
         raise RuntimeError(
             f"Playwright did not produce JSON: {completed.stderr[-2000:]}"
         ) from exc
+    try:
+        report_contract = validate_playwright_report(
+            payload,
+            expected_test_files=expected_test_files,
+            expected_test_count=expected_test_count,
+            expected_inventory_sha256=PUBLIC_PLAYWRIGHT_INVENTORY_SHA256[task_id],
+            expected_workers=workers,
+            expected_fully_parallel=fully_parallel_value,
+        )
+    except ValueError as exc:
+        trace.record(
+            "public_evaluation_failed",
+            task_id=task_id,
+            run_label=label,
+            stage="playwright_report_contract",
+            error=str(exc),
+        )
+        raise RuntimeError(f"Playwright report contract failed: {exc}") from exc
     stats = payload.get("stats") or {}
     failed = parse_playwright_json(payload)
     application_source_after = application_source_manifest(project_dir)
@@ -366,6 +534,9 @@ def run_public_evaluation(
         ],
         "requirements_sha256": task_bundle_before["requirements_sha256"],
         "playwright_report_sha256": sha256_file(report_path),
+        "playwright_report_contract": report_contract,
+        "playwright_runtime": playwright_runtime,
+        "fixture_contract_sha256": fixture_contract_sha256,
     }
     feedback_path = result_root / f"{label}.feedback.json"
     _write(
@@ -376,6 +547,8 @@ def run_public_evaluation(
         task_id=task_id,
         run_label=label,
         fixture_profile=fixture_profile,
+        workers=workers,
+        fully_parallel=feedback_payload["fully_parallel"],
         exit_code=completed.returncode,
         duration_seconds=feedback_payload["duration_seconds"],
         stats=stats,
@@ -389,6 +562,10 @@ def run_public_evaluation(
         public_task_manifest_sha256=feedback_payload[
             "public_task_manifest_sha256"
         ],
+        playwright_inventory_sha256=report_contract["inventory_sha256"],
+        playwright_report_contract=report_contract,
+        playwright_runtime=playwright_runtime,
+        fixture_contract_sha256=fixture_contract_sha256,
     )
     write_run_envelope(project_dir)
     if completed.returncode != 0 or failed:

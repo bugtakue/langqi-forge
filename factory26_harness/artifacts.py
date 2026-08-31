@@ -215,6 +215,13 @@ def build_run_envelope(project_dir: Path) -> dict[str, Any]:
                     "playwright_sha256": playwright_sha256,
                     "application_source_sha256": feedback.get("application_source_sha256"),
                     "test_bundle_sha256": feedback.get("test_bundle_sha256"),
+                    "playwright_report_contract": feedback.get(
+                        "playwright_report_contract"
+                    ),
+                    "playwright_runtime": feedback.get("playwright_runtime"),
+                    "fixture_contract_sha256": feedback.get(
+                        "fixture_contract_sha256"
+                    ),
                 }
             )
 
@@ -237,6 +244,12 @@ def build_run_envelope(project_dir: Path) -> dict[str, Any]:
             != evaluation["application_source_sha256"]
             or event.get("test_bundle_sha256")
             != evaluation["test_bundle_sha256"]
+            or canonical_json(event.get("playwright_report_contract"))
+            != canonical_json(evaluation["playwright_report_contract"])
+            or canonical_json(event.get("playwright_runtime"))
+            != canonical_json(evaluation["playwright_runtime"])
+            or event.get("fixture_contract_sha256")
+            != evaluation["fixture_contract_sha256"]
         ):
             raise ValueError(
                 f"public evaluation trace bindings do not match {evaluation['run_label']}"

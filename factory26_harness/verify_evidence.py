@@ -15,7 +15,7 @@ from .qualification import (
     evaluate_generation,
     evaluate_run,
 )
-from .trace import reseal_trace_rows, verify_trace_rows
+from .trace import find_unredacted_secrets, reseal_trace_rows, verify_trace_rows
 
 
 EXPECTED_QUALIFICATION_FILES = {
@@ -65,6 +65,11 @@ def _trace(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if verification.get("valid") is not True:
         raise ValueError(
             f"trace integrity failed at row {verification.get('row')}: {path}"
+        )
+    findings = find_unredacted_secrets(rows)
+    if findings:
+        raise ValueError(
+            f"trace contains unredacted secret material at {findings[0]['path']}"
         )
     return rows, verification
 
@@ -268,6 +273,12 @@ def _verify_domain(root: Path, domain: str, trace_export: dict[str, Any]) -> dic
             != feedback.get("application_source_sha256")
             or event.get("test_bundle_sha256")
             != feedback.get("test_bundle_sha256")
+            or canonical_json(event.get("playwright_report_contract"))
+            != canonical_json(feedback.get("playwright_report_contract"))
+            or canonical_json(event.get("playwright_runtime"))
+            != canonical_json(feedback.get("playwright_runtime"))
+            or event.get("fixture_contract_sha256")
+            != feedback.get("fixture_contract_sha256")
         ):
             raise ValueError(f"{domain} public evaluation trace binding failed")
         feedback_by_label[label] = feedback
@@ -422,6 +433,7 @@ def _recompute_qualification(root: Path, qualification: dict[str, Any]) -> None:
             expected_requirement_sha256=PUBLIC_REQUIREMENT_SHA256[domain],
             trace_path=root / domain / "production-trace.jsonl",
             expected_public_evaluations=expected_evaluations,
+            expected_domain=domain,
             allowed_models=allowed_models,
             expected_gateway_host=expected_gateway_host,
             expected_gateway_provenance=expected_gateway_provenance,
@@ -459,6 +471,7 @@ def _recompute_qualification(root: Path, qualification: dict[str, Any]) -> None:
             ).get("sha256"),
             expected_test_bundle_sha256=PUBLIC_TEST_BUNDLE_SHA256[domain],
             expected_requirement_sha256=PUBLIC_REQUIREMENT_SHA256[domain],
+            expected_task_id=domain,
             require_bound_evidence=True,
         )
         _require_recomputed_checks(

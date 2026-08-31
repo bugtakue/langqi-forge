@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import math
@@ -107,9 +108,104 @@ def _evaluation_summary(
                 "raw_report_sha256": str(
                     feedback.get("playwright_report_sha256") or ""
                 ),
+                "inventory_sha256": str(
+                    (feedback.get("playwright_report_contract") or {}).get(
+                        "inventory_sha256"
+                    )
+                    or ""
+                ),
+                "playwright_version": str(
+                    (feedback.get("playwright_runtime") or {}).get("version")
+                    or "unbound"
+                ),
             }
         )
     return sorted(summaries, key=lambda item: item["label"])
+
+
+def _first_event_payload(
+    rows: list[dict[str, Any]], event: str
+) -> dict[str, Any]:
+    for row in rows:
+        if row.get("event") == event and isinstance(row.get("payload"), dict):
+            return row["payload"]
+    return {}
+
+
+def _proof_timeline(
+    rows: list[dict[str, Any]],
+    report: dict[str, Any],
+    evaluations: list[dict[str, Any]],
+    capsule: dict[str, Any] | None,
+) -> list[dict[str, str]]:
+    compiled = (_first_event_payload(rows, "requirements_compiled").get("plan") or {})
+    request = _first_event_payload(rows, "model_request")
+    request_payload = request.get("payload") or {}
+    messages = request_payload.get("messages") or []
+    user_prompt = (
+        messages[1].get("content")
+        if len(messages) == 2 and isinstance(messages[1], dict)
+        else ""
+    )
+    prompt_sha256 = (
+        hashlib.sha256(user_prompt.encode("utf-8")).hexdigest()
+        if isinstance(user_prompt, str) and user_prompt
+        else "offline"
+    )
+    tool_call = _first_event_payload(rows, "agent_tool_call")
+    route = _first_event_payload(rows, "execution_route_selected")
+    scaffold = _first_event_payload(rows, "deterministic_scaffold")
+    validations = [
+        row.get("payload") or {}
+        for row in rows
+        if row.get("event") == "validation_result"
+    ]
+    green_validations = sum(
+        1 for item in validations if (item.get("result") or {}).get("passed") is True
+    )
+    gui_tests = sum(int(item.get("expected") or 0) for item in evaluations)
+    green_gui = sum(int(item.get("passed") or 0) for item in evaluations)
+    application_source = report.get("application_source") or {}
+    return [
+        {
+            "step": "01 INPUT",
+            "headline": f"{int(compiled.get('requirement_count') or 0)} atomic requirements",
+            "detail": f"{len(compiled.get('batches') or [])} dependency batches · req {_short_hash(str(compiled.get('requirement_sha256') or ''))}",
+        },
+        {
+            "step": "02 MODEL",
+            "headline": (
+                f"{report.get('planner_iterations', 0)} forced planner tool call"
+                if request
+                else "offline preflight; no model claim"
+            ),
+            "detail": f"prompt {_short_hash(prompt_sha256)} · tool {tool_call.get('tool') or 'not invoked'}",
+        },
+        {
+            "step": "03 ROUTE",
+            "headline": str(route.get("execution_route") or report.get("execution_route") or "unknown"),
+            "detail": f"{len((report.get('capability_coverage') or {}).get('required_capabilities') or [])} closed-world capabilities · uncovered {len((report.get('capability_coverage') or {}).get('uncovered_requirement_ids') or [])}",
+        },
+        {
+            "step": "04 BUILD",
+            "headline": f"{int(application_source.get('file_count') or len(scaffold.get('created_files') or []))} source files",
+            "detail": f"{int(report.get('coding_agent_iterations') or 0)} coding turns · source {_short_hash(str(application_source.get('sha256') or ''))}",
+        },
+        {
+            "step": "05 FALSIFY",
+            "headline": f"{green_gui} / {gui_tests} locked GUI",
+            "detail": f"{green_validations}/{len(validations)} local checks · {len(evaluations)} immutable profiles",
+        },
+        {
+            "step": "06 SEAL",
+            "headline": f"{len(rows)} hash-chained events",
+            "detail": (
+                f"manual {int(report.get('manual_interventions') or 0)} · capsule {_short_hash(str(capsule.get('capsule_id') or ''))}"
+                if capsule
+                else f"manual {int(report.get('manual_interventions') or 0)} · capsule gate closed"
+            ),
+        },
+    ]
 
 
 def domain_summary(project_dir: Path, domain: str) -> dict[str, Any]:
@@ -180,6 +276,9 @@ def domain_summary(project_dir: Path, domain: str) -> dict[str, Any]:
                 event: events[event] for event in IMPORTANT_EVENTS if events[event]
             },
         },
+        "proof_timeline": _proof_timeline(
+            rows, report, evaluations, capsule
+        ),
         "claim_boundary": str(report.get("claim_boundary") or ""),
     }
 
@@ -319,6 +418,8 @@ def _domain_card(domain: dict[str, Any]) -> str:
         f"<td data-label=\"Score\">{item['passed']} / {item['expected']}</td>"
         f"<td data-label=\"Workers\">{item['workers']}</td>"
         f"<td data-label=\"Wall\">{item['duration_seconds']:.3f}s</td>"
+        f"<td data-label=\"Proof\"><span class=\"run-name\"><strong>PW {_escape(item.get('playwright_version', 'unbound'))}</strong>"
+        f"<small>inventory {_escape(_short_hash(item.get('inventory_sha256', '')))}</small></span></td>"
         f"<td data-label=\"Gate\"><span class=\"status {'ok' if item['green'] else 'bad'}\">"
         f"{'GREEN' if item['green'] else 'FAILED'}</span></td>"
         "</tr>"
@@ -330,6 +431,14 @@ def _domain_card(domain: dict[str, Any]) -> str:
     events = "".join(
         f"<li><span>{_escape(event)}</span><strong>{count}</strong></li>"
         for event, count in domain["trace"]["important_events"].items()
+    )
+    proof = "".join(
+        "<li>"
+        f"<span>{_escape(item['step'])}</span>"
+        f"<strong>{_escape(item['headline'])}</strong>"
+        f"<small>{_escape(item['detail'])}</small>"
+        "</li>"
+        for item in domain.get("proof_timeline") or []
     )
     capsule = domain.get("capsule")
     capsule_text = (
@@ -370,9 +479,11 @@ def _domain_card(domain: dict[str, Any]) -> str:
         <div><dt>Model</dt><dd>{_escape(domain['model'])}</dd></div>
         <div><dt>Tokens</dt><dd>{domain['prompt_tokens']} in / {domain['completion_tokens']} out</dd></div>
       </dl>
+      <h3>90-second audit path</h3>
+      <ol class="proof">{proof}</ol>
       <h3>Locked GUI evaluations</h3>
-      <div class="eval-table"><table><thead><tr><th>Run</th><th>Score</th><th>Workers</th><th>Wall</th><th>Gate</th></tr></thead>
-      <tbody>{evaluations or '<tr><td colspan="5">No bound GUI evaluation</td></tr>'}</tbody></table></div>
+      <div class="eval-table"><table><thead><tr><th>Run</th><th>Score</th><th>Workers</th><th>Wall</th><th>Proof</th><th>Gate</th></tr></thead>
+      <tbody>{evaluations or '<tr><td colspan="6">No bound GUI evaluation</td></tr>'}</tbody></table></div>
       <div class="split">
         <div><h3>Closed-world capabilities</h3><ul class="chips">{capabilities}</ul></div>
         <div><h3>Sealed trace</h3><ul class="events">{events}</ul></div>
@@ -413,12 +524,13 @@ main{{max-width:1240px;margin:auto;padding:32px 24px 64px}} header{{display:flex
 .pipeline{{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin:0 0 22px}} .pipeline div{{background:var(--white);padding:13px}} .pipeline b{{display:block;color:var(--navy)}} .pipeline span{{font-size:11px;color:var(--muted)}}
 .domains{{display:grid;grid-template-columns:1fr 1fr;gap:18px}} .domain-card{{background:var(--white);border:1px solid var(--line);padding:20px;min-width:0}} .domain-head{{display:flex;justify-content:space-between;gap:16px;align-items:start}} .eyebrow{{font:700 10px/1 ui-monospace,monospace;color:var(--muted);margin:0 0 7px}} h2{{font-size:24px;margin:0}} h3{{font-size:12px;text-transform:uppercase;margin:20px 0 8px;color:var(--navy)}}
 .facts{{display:grid;grid-template-columns:1fr 1fr;margin:18px 0 0;border-top:1px solid var(--line);border-left:1px solid var(--line)}} .facts div{{padding:10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0}} dt{{font-size:10px;color:var(--muted);text-transform:uppercase}} dd{{margin:3px 0 0;font-weight:650;overflow-wrap:anywhere}}
+.proof{{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;list-style:none;padding:1px;margin:0;background:var(--line)}} .proof li{{display:flex;flex-direction:column;gap:3px;background:#fbfcfb;padding:10px;min-width:0}} .proof span{{font:700 9px/1 ui-monospace,monospace;color:var(--navy)}} .proof strong{{font-size:11px;overflow-wrap:anywhere}} .proof small{{font:9px/1.4 ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}}
 table{{width:100%;border-collapse:collapse;font-size:12px}} th,td{{text-align:left;padding:8px;border-bottom:1px solid var(--line)}} th{{color:var(--muted);font-size:10px;text-transform:uppercase}} .run-name small{{display:block;color:var(--muted);font-size:10px}} .eval-table{{min-width:0;max-width:100%}}
 .split{{display:grid;grid-template-columns:1fr 1fr;gap:16px}} ul{{list-style:none;padding:0;margin:0}} .chips{{display:flex;gap:5px;flex-wrap:wrap}} .chips li{{border:1px solid #b7c6bf;background:#f3faf6;padding:3px 6px;font:10px/1.3 ui-monospace,monospace}} .events li{{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);font:10px/1.7 ui-monospace,monospace;gap:8px}} .events span{{overflow-wrap:anywhere}}
 .capsule{{margin-top:18px;padding:11px;background:#f0f4f6;border-left:3px solid var(--navy)}} .capsule strong{{display:block;font-size:11px}} code{{font-size:10px;overflow-wrap:anywhere}} .hash{{font:10px/1.5 ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere;margin:14px 0 0}}
 .boundary{{margin-top:20px;border:1px solid var(--amber);padding:14px;background:#fff8ed;color:#633600}}
 @media(max-width:900px){{.domains{{grid-template-columns:1fr}}.metrics{{grid-template-columns:1fr 1fr}}.pipeline{{grid-template-columns:1fr 1fr 1fr}}}}
-@media(max-width:560px){{main{{padding:20px 12px 40px}}header{{align-items:start;flex-direction:column}}h1{{font-size:28px}}.metrics,.facts,.split{{grid-template-columns:1fr}}.pipeline{{grid-template-columns:1fr 1fr}}.metric{{border-bottom:1px solid #3c4441}}.eval-table thead{{display:none}}.eval-table table,.eval-table tbody,.eval-table tr,.eval-table td{{display:block;width:100%}}.eval-table tr{{border:1px solid var(--line);padding:4px 8px;margin-bottom:8px}}.eval-table td{{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;text-align:right;border-bottom:1px dotted var(--line);overflow-wrap:anywhere}}.eval-table td:last-child{{border-bottom:0}}.eval-table td::before{{content:attr(data-label);color:var(--muted);font-size:10px;text-transform:uppercase;text-align:left}}.run-name{{text-align:right;min-width:0}}}}
+@media(max-width:560px){{main{{padding:20px 12px 40px}}header{{align-items:start;flex-direction:column}}h1{{font-size:28px}}.metrics,.facts,.split{{grid-template-columns:1fr}}.proof{{grid-template-columns:1fr 1fr}}.pipeline{{grid-template-columns:1fr 1fr}}.metric{{border-bottom:1px solid #3c4441}}.eval-table thead{{display:none}}.eval-table table,.eval-table tbody,.eval-table tr,.eval-table td{{display:block;width:100%}}.eval-table tr{{border:1px solid var(--line);padding:4px 8px;margin-bottom:8px}}.eval-table td{{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;text-align:right;border-bottom:1px dotted var(--line);overflow-wrap:anywhere}}.eval-table td:last-child{{border-bottom:0}}.eval-table td::before{{content:attr(data-label);color:var(--muted);font-size:10px;text-transform:uppercase;text-align:left}}.run-name{{text-align:right;min-width:0}}}}
 </style>
 </head>
 <body><main>

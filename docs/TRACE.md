@@ -16,9 +16,9 @@
 
 - `execution_route_selected` 记录模型决策如何改变内核/增量 Agent 路由。
 - `validation_result` 的最后一组结果必须与 `harness-report.json` 完全一致。
-- `public_evaluation_completed` 同时绑定 compact feedback、原始 Playwright JSON、应用源码和测试包。
+- `public_evaluation_completed` 同时绑定 compact feedback、原始 Playwright JSON、逐项 spec inventory、应用源码、测试包、固定夹具和 Playwright 运行时树。
 - `run_completed` 内嵌的 report 必须与文件字节语义一致。
-- 名称含 `api_key`、`authorization`、`secret`、`access_token` 的字段在写盘前递归替换为 `[REDACTED]`；已知密钥形式也会从自由文本中脱敏。
+- 名称含 `api_key`、`authorization`、`secret`、`access_token`、`password`、`cookie`、`session`、`header`、`connection_string` 等字段在写盘前递归替换为 `[REDACTED]`；Bearer/Basic、云密钥、JWT、Cookie header 和带密码连接串等形式也会从自由文本中脱敏。资格门、证据导出和独立验证均 fail-closed 复扫。
 
 ## 运行封口
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
+from collections import Counter
 from dataclasses import asdict, dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 from .impact import ChangeImpactGraph
@@ -35,6 +37,164 @@ def _walk_suites(suites: Iterable[dict[str, Any]]) -> Iterable[dict[str, Any]]:
             continue
         yield suite
         yield from _walk_suites(suite.get("suites") or [])
+
+
+def validate_playwright_report(
+    payload: dict[str, Any],
+    *,
+    expected_test_files: set[str] | None,
+    expected_test_count: int,
+    expected_inventory_sha256: str,
+    expected_workers: int | None = None,
+    expected_fully_parallel: bool | None = None,
+) -> dict[str, Any]:
+    """Validate the enumerated raw result set, not only Playwright's counters."""
+
+    if not isinstance(payload, dict):
+        raise ValueError("Playwright report must be an object")
+    suites = payload.get("suites")
+    if not isinstance(suites, list) or not suites:
+        raise ValueError("Playwright report has no suites")
+    root_errors = payload.get("errors") or []
+    if not isinstance(root_errors, list) or root_errors:
+        raise ValueError("Playwright report contains root-level errors")
+
+    inventory: list[dict[str, Any]] = []
+    observed_statuses: Counter[str] = Counter()
+    observed_files: set[str] = set()
+    observed_ids: set[str] = set()
+    for suite in _walk_suites(suites):
+        suite_file = str(suite.get("file") or "")
+        specs = suite.get("specs") or []
+        if not isinstance(specs, list):
+            raise ValueError("Playwright suite specs must be an array")
+        for spec in specs:
+            if not isinstance(spec, dict):
+                raise ValueError("Playwright report contains a non-object spec")
+            test_id = str(spec.get("id") or "").strip()
+            title = str(spec.get("title") or "").strip()
+            file_path = str(spec.get("file") or suite_file).strip()
+            safe_file = PurePosixPath(file_path)
+            if (
+                not test_id
+                or not title
+                or not file_path
+                or safe_file.is_absolute()
+                or ".." in safe_file.parts
+            ):
+                raise ValueError("Playwright report contains an unsafe test identity")
+            tests = spec.get("tests") or []
+            if not isinstance(tests, list) or len(tests) != 1:
+                raise ValueError(
+                    "Playwright report requires exactly one configured project per spec"
+                )
+            test = tests[0]
+            if not isinstance(test, dict):
+                raise ValueError("Playwright report contains a non-object test")
+            project_id = str(test.get("projectId") or "").strip()
+            project_name = str(test.get("projectName") or "").strip()
+            if (
+                test.get("expectedStatus") != "passed"
+                or not project_id
+                or not project_name
+            ):
+                raise ValueError("Playwright test project or expected status is invalid")
+            status = str(test.get("status") or "").strip()
+            if status not in {"expected", "unexpected", "skipped", "flaky"}:
+                raise ValueError(f"unsupported Playwright test status: {status!r}")
+            results = test.get("results") or []
+            if not isinstance(results, list) or len(results) != 1:
+                raise ValueError(
+                    "Playwright report must contain one non-retried result per test"
+                )
+            result = results[0]
+            if not isinstance(result, dict) or result.get("retry") != 0:
+                raise ValueError("Playwright report contains an invalid retry result")
+            result_status = str(result.get("status") or "").strip()
+            if result_status not in {
+                "passed",
+                "failed",
+                "timedOut",
+                "interrupted",
+                "skipped",
+            }:
+                raise ValueError(
+                    f"unsupported Playwright result status: {result_status!r}"
+                )
+            if status == "expected" and (
+                result_status != "passed"
+                or spec.get("ok") is not True
+                or (result.get("errors") or [])
+            ):
+                raise ValueError("Playwright expected result is not a clean pass")
+            if status == "unexpected" and result_status == "passed":
+                raise ValueError("Playwright unexpected result cannot be passed")
+            if status == "skipped" and result_status != "skipped":
+                raise ValueError("Playwright skipped status does not match its result")
+            if test_id in observed_ids:
+                raise ValueError(f"duplicate Playwright test id: {test_id}")
+            observed_ids.add(test_id)
+            observed_files.add(safe_file.as_posix())
+            observed_statuses[status] += 1
+            inventory.append(
+                {
+                    "id": test_id,
+                    "title": title,
+                    "file": safe_file.as_posix(),
+                    "line": int(spec.get("line") or 0),
+                    "column": int(spec.get("column") or 0),
+                    "project_id": project_id,
+                    "project_name": project_name,
+                }
+            )
+
+    if len(inventory) != expected_test_count:
+        raise ValueError(
+            f"Playwright report enumerates {len(inventory)} tests, expected {expected_test_count}"
+        )
+    if expected_test_files is not None and observed_files != expected_test_files:
+        raise ValueError(
+            "Playwright report file set differs from the locked test manifest"
+        )
+    inventory.sort(key=lambda item: (item["file"], item["id"], item["project_id"]))
+    inventory_sha256 = hashlib.sha256(
+        json.dumps(
+            inventory,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    if inventory_sha256 != expected_inventory_sha256:
+        raise ValueError("Playwright test inventory hash is not the locked inventory")
+
+    stats = payload.get("stats") or {}
+    if not isinstance(stats, dict):
+        raise ValueError("Playwright report stats must be an object")
+    expected_stats = {
+        "expected": observed_statuses["expected"],
+        "unexpected": observed_statuses["unexpected"],
+        "skipped": observed_statuses["skipped"],
+        "flaky": observed_statuses["flaky"],
+    }
+    if any(stats.get(name) != count for name, count in expected_stats.items()):
+        raise ValueError("Playwright stats do not match enumerated test results")
+    config = payload.get("config") or {}
+    if not isinstance(config, dict):
+        raise ValueError("Playwright report config must be an object")
+    if expected_workers is not None and config.get("workers") != expected_workers:
+        raise ValueError("Playwright report worker count differs from the invocation")
+    if (
+        expected_fully_parallel is not None
+        and config.get("fullyParallel") is not expected_fully_parallel
+    ):
+        raise ValueError("Playwright parallel mode differs from the invocation")
+    return {
+        "test_count": len(inventory),
+        "test_file_count": len(observed_files),
+        "inventory_sha256": inventory_sha256,
+        "status_counts": expected_stats,
+    }
 
 
 def _error_text(result: dict[str, Any]) -> str:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -13,24 +14,27 @@ from urllib.parse import urlsplit
 from .artifacts import canonical_json, sha256_file, verify_run_envelope
 from .capabilities import capability_ids
 from .capability_memory import REQUIRED_PROFILES, verify_capability_capsule
-from .feedback import parse_playwright_json
+from .feedback import parse_playwright_json, validate_playwright_report
 from .planner import (
     PLANNER_SYSTEM_PROMPT,
     contract_arguments_sha256,
     normalize_contract_arguments,
     planner_tool_schema,
 )
-from .trace import verify_trace_rows
+from .public_contract import (
+    PLAYWRIGHT_CLI_SHA256,
+    PLAYWRIGHT_RUNTIME_FILE_COUNT,
+    PLAYWRIGHT_RUNTIME_SHA256,
+    PLAYWRIGHT_VERSION,
+    PUBLIC_PLANNER_USER_PROMPT_SHA256,
+    PUBLIC_PLAYWRIGHT_INVENTORY_SHA256,
+    PUBLIC_REQUIREMENT_SHA256,
+    PUBLIC_TEST_BUNDLE_SHA256,
+    PUBLIC_TEST_COUNTS,
+)
+from .public_fixtures import public_fixture_environment
+from .trace import find_unredacted_secrets, verify_trace_rows
 
-
-PUBLIC_REQUIREMENT_SHA256 = {
-    "github": "a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959",
-    "sheet": "9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494",
-}
-PUBLIC_TEST_BUNDLE_SHA256 = {
-    "github": "7ee72cbedf9c21c6be087867512c2a6259c16f4cdbf0969f46203c7f3d07ed77",
-    "sheet": "afec335ed4d442795b344cd6b67f27bdc28583ed0b5ca13876e5acb3a4778f43",
-}
 BAILIAN_EVIDENCE_MODELS = (
     "qwen-plus",
     "qwen-max",
@@ -96,6 +100,22 @@ def _contains_truncation(value: Any) -> bool:
     return isinstance(value, str) and "[TRUNCATED sha256=" in value
 
 
+def _playwright_runtime_contract() -> dict[str, Any]:
+    return {
+        "version": PLAYWRIGHT_VERSION,
+        "cli_sha256": PLAYWRIGHT_CLI_SHA256,
+        "runtime_file_count": PLAYWRIGHT_RUNTIME_FILE_COUNT,
+        "runtime_sha256": PLAYWRIGHT_RUNTIME_SHA256,
+    }
+
+
+def _fixture_contract_sha256(task_id: str, profile: str) -> str:
+    contract = public_fixture_environment(
+        task_id, "http://127.0.0.1:<PORT>", profile
+    )
+    return hashlib.sha256(canonical_json(contract)).hexdigest()
+
+
 def evaluate_run(
     path: Path,
     *,
@@ -107,6 +127,7 @@ def evaluate_run(
     expected_application_source_sha256: str | None = None,
     expected_test_bundle_sha256: str | None = None,
     expected_requirement_sha256: str | None = None,
+    expected_task_id: str | None = None,
     require_bound_evidence: bool = False,
 ) -> dict[str, Any]:
     payload = _load(path)
@@ -163,6 +184,10 @@ def evaluate_run(
         ),
     ]
     if require_bound_evidence:
+        if expected_task_id not in PUBLIC_TEST_COUNTS:
+            raise ValueError(
+                "expected_task_id is required for bound public evaluation evidence"
+            )
         label = str(payload.get("run_label") or "")
         raw_path = path.parent / f"{label}.playwright.json"
         try:
@@ -170,13 +195,31 @@ def evaluate_run(
             raw_failures = parse_playwright_json(raw)
             raw_stats = raw.get("stats") or {}
             raw_sha256 = _digest(raw_path)
+            raw_contract = validate_playwright_report(
+                raw,
+                expected_test_files=None,
+                expected_test_count=PUBLIC_TEST_COUNTS[expected_task_id],
+                expected_inventory_sha256=PUBLIC_PLAYWRIGHT_INVENTORY_SHA256[
+                    expected_task_id
+                ],
+                expected_workers=int(payload.get("workers") or 0),
+                expected_fully_parallel=True,
+            )
+            expected_runtime = _playwright_runtime_contract()
+            expected_fixture_sha256 = _fixture_contract_sha256(
+                expected_task_id, expected_profile
+            )
             checks.extend(
                 [
                     _check("feedback_version", payload.get("version") == 2, payload.get("version"), 2),
+                    _check("public_task_id", payload.get("task_id") == expected_task_id, payload.get("task_id"), expected_task_id),
                     _check("raw_playwright_report_present", True, str(raw_path), "present JSON report"),
                     _check("raw_playwright_report_sha256", payload.get("playwright_report_sha256") == raw_sha256, payload.get("playwright_report_sha256"), raw_sha256),
                     _check("raw_stats_match_feedback", canonical_json(raw_stats) == canonical_json(stats), stats, raw_stats),
                     _check("raw_failure_count", payload.get("failure_count") == len(raw_failures) == 0, payload.get("failure_count"), 0),
+                    _check("raw_playwright_inventory", canonical_json(payload.get("playwright_report_contract")) == canonical_json(raw_contract), payload.get("playwright_report_contract"), raw_contract),
+                    _check("pinned_playwright_runtime", canonical_json(payload.get("playwright_runtime")) == canonical_json(expected_runtime), payload.get("playwright_runtime"), expected_runtime),
+                    _check("fixture_contract", payload.get("fixture_contract_sha256") == expected_fixture_sha256, payload.get("fixture_contract_sha256"), expected_fixture_sha256),
                     _check("application_source_binding", payload.get("application_source_sha256") == expected_application_source_sha256, payload.get("application_source_sha256"), expected_application_source_sha256),
                     _check("locked_test_bundle", payload.get("test_bundle_sha256") == expected_test_bundle_sha256, payload.get("test_bundle_sha256"), expected_test_bundle_sha256),
                     _check("public_requirement_binding", payload.get("requirements_sha256") == expected_requirement_sha256, payload.get("requirements_sha256"), expected_requirement_sha256),
@@ -231,6 +274,7 @@ def _trace_checks(
     report: dict[str, Any],
     expected_gateway_host: str | None,
     expected_gateway_provenance: str | None,
+    expected_user_message_sha256: str | None = None,
 ) -> list[dict[str, Any]]:
     try:
         rows = [
@@ -243,6 +287,7 @@ def _trace_checks(
 
     events = [str(row.get("event") or "") for row in rows]
     trace_integrity = verify_trace_rows(rows, require_fully_sealed=True)
+    trace_secret_findings = find_unredacted_secrets(rows)
     sequences = [row.get("sequence") for row in rows]
     payloads: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
@@ -323,9 +368,15 @@ def _trace_checks(
         }
     )
     user_message = messages[1].get("content") if len(messages) == 2 and isinstance(messages[1], dict) else None
+    user_message_sha256 = (
+        hashlib.sha256(user_message.encode("utf-8")).hexdigest()
+        if isinstance(user_message, str)
+        else None
+    )
     checks = [
         _check("trace_readable", True, True, True),
         _check("trace_integrity_fully_sealed", trace_integrity.get("valid") is True, trace_integrity, {"valid": True, "sealed_rows": len(rows)}),
+        _check("trace_no_unredacted_secrets", not trace_secret_findings, trace_secret_findings, []),
         _check("trace_sequence_contiguous", sequences == list(range(1, len(rows) + 1)), sequences, f"1..{len(rows)}"),
         _check("trace_run_started_once", len(starts) == 1, len(starts), 1),
         _check("trace_run_id_binding", len(starts) == 1 and starts[0].get("run_id") == expected_run_id, starts[0].get("run_id") if len(starts) == 1 else None, expected_run_id),
@@ -333,6 +384,7 @@ def _trace_checks(
         _check("trace_model_response_once", len(responses) == 1, len(responses), 1),
         _check("trace_model_response_id", bool(response_id), response_id, "non-empty provider response id"),
         _check("trace_planner_messages_complete", len(messages) == 2 and messages[0] == {"role": "system", "content": PLANNER_SYSTEM_PROMPT} and isinstance(messages[1], dict) and messages[1].get("role") == "user" and bool(user_message) and not _contains_truncation(messages), messages, "exact system prompt plus complete user digest"),
+        _check("trace_planner_user_prompt_locked", expected_user_message_sha256 is None or user_message_sha256 == expected_user_message_sha256, user_message_sha256, expected_user_message_sha256 or "not pinned"),
         _check("trace_planner_tool_schema_exact", canonical_json(request_tools) == canonical_json([expected_planner_tool]), request_tools, [expected_planner_tool]),
         _check("trace_planner_tool_forced", request_payload.get("tool_choice") == FORCED_PLANNER_TOOL_CHOICE, request_payload.get("tool_choice"), FORCED_PLANNER_TOOL_CHOICE),
         _check("trace_agent_session_started_once", len(sessions_started) == 1 and sessions_started[0].get("stage") == "specification_planning" and sessions_started[0].get("prompt") == user_message, sessions_started, "one specification-planning session bound to the model prompt"),
@@ -486,6 +538,8 @@ def evaluate_generation(
     if require_bound_artifacts:
         if expected_domain is None:
             raise ValueError("expected_domain is required for bound artifact qualification")
+        if expected_domain not in PUBLIC_PLANNER_USER_PROMPT_SHA256:
+            raise ValueError("expected_domain has no locked planner prompt contract")
         checks.extend(
             _artifact_checks(
                 path,
@@ -503,6 +557,11 @@ def evaluate_generation(
                 report=payload,
                 expected_gateway_host=expected_gateway_host,
                 expected_gateway_provenance=expected_gateway_provenance,
+                expected_user_message_sha256=(
+                    PUBLIC_PLANNER_USER_PROMPT_SHA256.get(expected_domain or "")
+                    if expected_domain
+                    else None
+                ),
             )
         )
     return {
@@ -567,6 +626,7 @@ def qualify(
             expected_application_source_sha256=github_source,
             expected_test_bundle_sha256=PUBLIC_TEST_BUNDLE_SHA256["github"],
             expected_requirement_sha256=PUBLIC_REQUIREMENT_SHA256["github"],
+            expected_task_id="github",
             require_bound_evidence=True,
         ),
         "github_adversarial": evaluate_run(
@@ -578,6 +638,7 @@ def qualify(
             expected_application_source_sha256=github_source,
             expected_test_bundle_sha256=PUBLIC_TEST_BUNDLE_SHA256["github"],
             expected_requirement_sha256=PUBLIC_REQUIREMENT_SHA256["github"],
+            expected_task_id="github",
             require_bound_evidence=True,
         ),
         "sheet_baseline": evaluate_run(
@@ -589,6 +650,7 @@ def qualify(
             expected_application_source_sha256=sheet_source,
             expected_test_bundle_sha256=PUBLIC_TEST_BUNDLE_SHA256["sheet"],
             expected_requirement_sha256=PUBLIC_REQUIREMENT_SHA256["sheet"],
+            expected_task_id="sheet",
             require_bound_evidence=True,
         ),
     }

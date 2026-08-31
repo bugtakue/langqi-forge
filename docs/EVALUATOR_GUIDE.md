@@ -30,6 +30,8 @@
 - [`verify_evidence.py`](../factory26_harness/verify_evidence.py) 只使用导出包内文件，第三次重算核心检查和脱敏轨迹。
 - [`judge_report.py`](../factory26_harness/judge_report.py) 只是只读展示层；无关或伪造的资格 JSON 无法让它显示 `QUALIFIED`。
 
+资格门不接受“`expected=101/102`”这类统计自报：它逐项复核 spec ID、文件、project、result/retry、固定 inventory SHA、Playwright 1.62.1 运行时树、夹具 SHA 和由原始需求编译出的 Planner Prompt SHA。证据中如仍有 password/cookie/session/header/JWT/连接字符串等未脱敏材料，即使哈希链被重封也会被拒绝。
+
 ## 2:40–3:00：声明边界
 
 仓库当前的 [`evidence/final`](../evidence/final/README.md) 是 2026-08-31 用阿里云百炼 `qwen-plus` 生成的历史 v1 生产证据，对应当时锁定提交；它不冒充当前 v2 候选的最终证据。当前 v2 已在干净提交上顺序通过 304/304 本地黑盒，但在新的双域百炼轨迹、v2 资格门和独立验证器全部通过前，只称 `LOCAL CANDIDATE`。

@@ -9,14 +9,48 @@ from pathlib import Path
 from typing import Any
 
 
-_SENSITIVE_PARTS = ("api_key", "apikey", "authorization", "access_token", "secret")
+_SENSITIVE_PARTS = (
+    "api_key",
+    "apikey",
+    "authorization",
+    "access_token",
+    "secret",
+    "password",
+    "passwd",
+    "credential",
+    "cookie",
+    "session",
+    "private_key",
+    "client_secret",
+    "access_key",
+    "connection_string",
+    "database_url",
+    "dsn",
+    "header",
+)
 _SECRET_TEXT_PATTERNS = (
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/=]{12,}"),
+    re.compile(r"(?i)\bBasic\s+[A-Za-z0-9+/=]{8,}"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}"),
     re.compile(
-        r"(?i)\b(?:OPENAI_API_KEY|DASHSCOPE_API_KEY|API_KEY|ACCESS_TOKEN)\s*=\s*[^\s\"']+"
+        r"(?i)\b(?:OPENAI_API_KEY|DASHSCOPE_API_KEY|API_KEY|ACCESS_TOKEN|"
+        r"PASSWORD|DATABASE_PASSWORD|PASSWD|CLIENT_SECRET|ACCESS_KEY|PRIVATE_KEY|DATABASE_URL|"
+        r"CONNECTION_STRING|DSN|X-API-KEY)\b\s*[:=]\s*"
+        r"(?:\"[^\"\r\n]+\"|'[^'\r\n]+'|[^\s,;]+)"
     ),
-    re.compile(r"\b(?:gh[opsu]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})\b"),
+    re.compile(r"(?i)\b(?:Cookie|Set-Cookie)\s*:\s*[^\r\n]+"),
+    re.compile(
+        r"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss|"
+        r"amqp|amqps)://[^\s/@:]+:[^\s/@]+@[^\s]+"
+    ),
+    re.compile(
+        r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\."
+        r"[A-Za-z0-9_-]{8,}\b"
+    ),
+    re.compile(
+        r"\b(?:gh[opsu]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
+        r"LTAI[A-Za-z0-9]{12,})\b"
+    ),
     re.compile(
         r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"
     ),
@@ -37,9 +71,44 @@ def _redact_text(value: str) -> str:
     return redacted
 
 
+def _sensitive_key(key: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", "_", key.lower()).strip("_")
+    return any(part in normalized for part in _SENSITIVE_PARTS)
+
+
+def find_unredacted_secrets(value: Any) -> list[dict[str, str]]:
+    """Return locations and rule classes without echoing secret values."""
+
+    findings: list[dict[str, str]] = []
+
+    def walk(current: Any, path: str, key: str = "") -> None:
+        if key and _sensitive_key(key) and current != "[REDACTED]":
+            findings.append({"path": path, "reason": "sensitive-key"})
+            return
+        if isinstance(current, dict):
+            for child_key, child_value in current.items():
+                rendered_key = str(child_key)
+                child_path = f"{path}.{rendered_key}" if path else rendered_key
+                walk(child_value, child_path, rendered_key)
+            return
+        if isinstance(current, (list, tuple)):
+            for index, child_value in enumerate(current):
+                walk(child_value, f"{path}[{index}]")
+            return
+        if isinstance(current, str) and current != "[REDACTED]":
+            for index, pattern in enumerate(_SECRET_TEXT_PATTERNS):
+                if pattern.search(current):
+                    findings.append(
+                        {"path": path or "$", "reason": f"text-rule-{index + 1}"}
+                    )
+                    break
+
+    walk(value, "$")
+    return findings
+
+
 def _redact(value: Any, key: str = "") -> Any:
-    lowered = key.lower()
-    if any(part in lowered for part in _SENSITIVE_PARTS):
+    if _sensitive_key(key):
         return "[REDACTED]"
     if isinstance(value, dict):
         return {str(child_key): _redact(child_value, str(child_key)) for child_key, child_value in value.items()}

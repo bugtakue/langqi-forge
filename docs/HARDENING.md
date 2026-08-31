@@ -9,7 +9,7 @@
 | GitHub 最新 dry-run 制品基准 | 101 / 101 | 0 / 0 / 0 | 4 workers，完全并发 |
 | 同一制品改名对抗 | 101 / 101 | 0 / 0 / 0 | 4 workers，完全并发 |
 | Spreadsheet 最新 dry-run 制品基准 | 102 / 102 | 0 / 0 / 0 | 4 workers，完全并发 |
-| Python 全仓测试 | 108 / 108 | — | 含证据篡改、路径逃逸、胶囊、Planner 时间预算与并行预构建、原始 tool-call 规范化绑定、最小比赛包、评委报告、竞品 runner 和实时违规终止合同 |
+| Python 全仓测试 | 112 / 112 | — | 含证据篡改、统计型伪报告、运行时替换、环境注入、轨迹密钥夹带、路径逃逸、胶囊、Planner 时间预算与并行预构建、原始 tool-call 规范化绑定、最小比赛包、评委报告、竞品 runner 和实时违规终止合同 |
 | Node 内核与认证合同 | 22 / 22 | — | 含确定性随机总账/BOM 性质测试 |
 
 2026-09-01 在干净提交 `ae293d7` 上完成了新的顺序离线冻结：GitHub baseline 11.113s、GitHub adversarial 10.843s、Spreadsheet baseline 19.327s，全部 4 workers、无 unexpected / skipped / flaky。这些是本地候选证据，不是模型生产证据。最终数字必须在实现冻结后从干净 commit 通过百炼顺序重跑，并由 v2 资格门与独立验证器一起验收。企业 GUI 另通过 GitHub 8 个页面与 Spreadsheet 5 个工作区的端到端操作。
@@ -56,6 +56,9 @@
 - 持久化：坏 JSON 原文件保持不变并拒绝启动；不会静默初始化为空状态。
 - 证据：生产 trace、GitHub audit 和 Spreadsheet compute events 均验连续序列、哈希链接与内容哈希；后两者额外绑定完整业务状态根。
 - 证据封口：源码文件树、Prompt/tool call、report、原始 Playwright JSON、测试包、反例和能力胶囊逐层交叉绑定。
+- 评测器防伪造：不信任 Playwright `stats`自报；必须枚举每个 spec/project/result，匹配锁定 inventory SHA、单次无重试结果、4 workers/完全并行和 Playwright 1.62.1 完整运行时树。运行前后均验运行时，应用进程不获得评测目录与评测控制变量。
+- 环境与轨迹防泄露：生成应用、npm 和 Playwright 只获得明示白名单变量；宿主的 OpenAI/百炼密钥、`NODE_OPTIONS` 和旧 E2E 覆盖不会继承。轨迹写盘会处理 password/cookie/session/header/连接串/JWT 等密钥形态，证据导出和独立验证再扫一次，即使重新封链也不会放行。
+- Prompt 原文绑定：资格门直接重算 trace 内 user message SHA，必须命中由锁定公开需求编译出的双域 Prompt，不再只核对生成者自报的 requirement SHA。
 - 证据反重跑：公开评测 label 不可覆盖；同名结果已存在时直接拒绝。
 - 证据独立复核：导出前重算资格门；导出后再重算核心检查、胶囊语义与脱敏轨迹转换。
 - 变异测试：20 个针对平衡、公式、BOM、日期化到货、幂等、关账、工作流、职责分离、审计、状态根和合并门禁的关键变异体全部被现有测试杀死。

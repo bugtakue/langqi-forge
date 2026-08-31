@@ -50,6 +50,8 @@ def _domain(name: str) -> dict:
                 "duration_seconds": 2.5,
                 "green": True,
                 "raw_report_sha256": "a" * 64,
+                "inventory_sha256": "d" * 64,
+                "playwright_version": "1.62.1",
             }
         ],
         "capsule": {
@@ -62,6 +64,13 @@ def _domain(name: str) -> dict:
             "head": "c" * 64,
             "important_events": {"model_request": 1, "run_completed": 1},
         },
+        "proof_timeline": [
+            {
+                "step": "01 INPUT",
+                "headline": "10 atomic requirements",
+                "detail": "prompt <script>alert(2)</script>",
+            }
+        ],
         "claim_boundary": "bounded",
     }
 
@@ -89,9 +98,12 @@ class JudgeReportTests(unittest.TestCase):
         self.assertIn("20 / 20", rendered)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered)
         self.assertNotIn("<script>alert(1)</script>", rendered)
+        self.assertNotIn("<script>alert(2)</script>", rendered)
         self.assertNotIn("https://", rendered)
         self.assertIn("Content-Security-Policy", rendered)
         self.assertIn('data-label="Score"', rendered)
+        self.assertIn("90-second audit path", rendered)
+        self.assertIn("PW 1.62.1", rendered)
 
     def test_output_refuses_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

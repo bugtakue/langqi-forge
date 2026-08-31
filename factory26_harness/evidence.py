@@ -10,7 +10,7 @@ from typing import Any
 
 from .artifacts import canonical_json, read_json_object, verify_run_envelope
 from .qualification import qualify
-from .trace import reseal_trace_rows, verify_trace_rows
+from .trace import find_unredacted_secrets, reseal_trace_rows, verify_trace_rows
 
 RUN_FILES = {
     "github": (
@@ -71,6 +71,13 @@ def _export_trace(
     if not verification["valid"]:
         raise ValueError(
             f"trace integrity failed at row {verification.get('row')}: {source}"
+        )
+    secret_findings = find_unredacted_secrets(rows)
+    if secret_findings:
+        first = secret_findings[0]
+        raise ValueError(
+            "trace contains unredacted secret material at "
+            f"{first['path']} ({first['reason']})"
         )
     source_sha256 = _sha256(source)
     source_head = verification["head"]

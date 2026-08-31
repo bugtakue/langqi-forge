@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -138,6 +139,9 @@ class QualificationTests(unittest.TestCase):
                 report=report,
                 expected_gateway_host="dashscope.aliyuncs.com",
                 expected_gateway_provenance="alibaba-cloud-bailian",
+                expected_user_message_sha256=hashlib.sha256(
+                    prompt.encode("utf-8")
+                ).hexdigest(),
             )
             self.assertTrue(
                 all(result["passed"] for result in results),
@@ -155,6 +159,8 @@ class QualificationTests(unittest.TestCase):
             tampered = json.loads(function["arguments"])
             tampered["rationale"] += " hidden-tail-tampering"
             function["arguments"] = json.dumps(tampered)
+            request = next(row for row in rows if row["event"] == "model_request")
+            request["payload"]["payload"]["messages"][1]["content"] += " tampered"
             trace_path.write_text(
                 "\n".join(
                     json.dumps(row, ensure_ascii=False, sort_keys=True)
@@ -170,8 +176,12 @@ class QualificationTests(unittest.TestCase):
                 report=report,
                 expected_gateway_host="dashscope.aliyuncs.com",
                 expected_gateway_provenance="alibaba-cloud-bailian",
+                expected_user_message_sha256=hashlib.sha256(
+                    prompt.encode("utf-8")
+                ).hexdigest(),
             )
         by_name = {result["name"]: result for result in tampered_results}
+        self.assertFalse(by_name["trace_planner_user_prompt_locked"]["passed"])
         self.assertTrue(by_name["trace_model_tool_call_normalizes_exactly"]["passed"])
         self.assertFalse(by_name["trace_model_tool_call_raw_hash"]["passed"])
 
@@ -341,6 +351,7 @@ class QualificationTests(unittest.TestCase):
                 expected_tests=101,
                 expected_profile="baseline",
                 max_duration_seconds=20,
+                expected_task_id="github",
                 require_bound_evidence=True,
             )
             self.assertFalse(result["passed"])

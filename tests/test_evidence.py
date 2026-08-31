@@ -6,7 +6,11 @@ import unittest
 from pathlib import Path
 
 from factory26_harness.evidence import _export_trace, _sanitize, export_evidence
-from factory26_harness.trace import ProductionTrace, verify_trace_rows
+from factory26_harness.trace import (
+    ProductionTrace,
+    reseal_trace_rows,
+    verify_trace_rows,
+)
 
 
 class EvidenceTests(unittest.TestCase):
@@ -68,6 +72,29 @@ class EvidenceTests(unittest.TestCase):
             self.assertEqual(
                 rows[0]["payload"]["output"], "<generated-project>/frontend"
             )
+
+    def test_trace_export_rejects_resealed_unredacted_secrets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.jsonl"
+            destination = root / "destination.jsonl"
+            rows = reseal_trace_rows(
+                [
+                    {
+                        "sequence": 1,
+                        "event": "forged",
+                        "payload": {
+                            "raw": "DATABASE_PASSWORD=hunter2",
+                        },
+                    }
+                ]
+            )
+            source.write_text(
+                "".join(json.dumps(row) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "unredacted secret"):
+                _export_trace(source, destination, ())
 
     def test_evidence_export_rejects_a_failed_qualification_before_copying(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
