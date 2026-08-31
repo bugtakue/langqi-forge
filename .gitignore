@@ -3,4 +3,6 @@ __pycache__/
 .venv/
 workspace/
 .ruff_cache/
+.cache/
+factory26_harness/templates/*/frontend/dist/
 .DS_Store

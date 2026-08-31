@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from factory26_harness.requirements import batches, flatten_atomic, load_requirement_tree
+from factory26_harness.requirements import batches, detect_domain, flatten_atomic, load_requirement_tree
 
 
 class RequirementCompilerTests(unittest.TestCase):
@@ -40,6 +40,11 @@ class RequirementCompilerTests(unittest.TestCase):
             )
             nodes = flatten_atomic(load_requirement_tree(root))
             self.assertEqual([[node.req_id for node in group] for group in batches(nodes, 2)], [["one", "two"], ["three"]])
+
+    def test_detects_competition_domains(self) -> None:
+        self.assertEqual(detect_domain({"id": "ROOT", "name": "Online Spreadsheet Data Workspace"}), "sheet")
+        self.assertEqual(detect_domain({"id": "ROOT", "name": "GitHub Collaboration Platform"}), "github")
+        self.assertEqual(detect_domain({"id": "ROOT", "name": "Notes"}), "generic")
 
 
 if __name__ == "__main__":

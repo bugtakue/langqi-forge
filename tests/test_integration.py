@@ -80,6 +80,55 @@ children:
             ).stdout.splitlines()
             self.assertGreaterEqual(len(log), 2)
 
+    def test_sheet_domain_uses_full_template(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            requirements = temporary / "requirements"
+            output = temporary / "output"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: sheet-app
+name: Online Spreadsheet Data Workspace
+type: FOLDER
+children:
+  - id: edit-cell
+    name: Edit a spreadsheet cell
+    type: ATOMIC
+    description: A user can edit a cell and keep the value after refresh.
+""",
+                encoding="utf-8",
+            )
+            command = [
+                sys.executable,
+                str(REPOSITORY_ROOT / "main.py"),
+                str(requirements),
+                "--output-dir",
+                str(output),
+                "--web-port",
+                "3990",
+                "--smoke-port",
+                "3991",
+                "--dry-run",
+                "--strict-exit",
+            ]
+            completed = subprocess.run(
+                command,
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + "\n" + completed.stderr)
+            frontend = (output / "frontend" / "src" / "app.js").read_text(encoding="utf-8")
+            backend = (output / "backend" / "server.mjs").read_text(encoding="utf-8")
+            self.assertIn("Pivot table editor", frontend)
+            self.assertIn("/api/workbooks", backend)
+            plan = json.loads((output / ".arc" / "compiled-plan.json").read_text(encoding="utf-8"))
+            self.assertEqual(plan["detected_domain"], "sheet")
+            report = json.loads((output / ".arc" / "harness-report.json").read_text(encoding="utf-8"))
+            self.assertTrue(report["all_local_checks_passed"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,7 @@ from .agent import CodingAgent
 from .checks import CheckResult, failures, run_full_checks
 from .impact import ChangeImpactGraph
 from .model import OpenAIChatClient
-from .requirements import batches, flatten_atomic, load_requirement_tree, plan_payload
+from .requirements import batches, detect_domain, flatten_atomic, load_requirement_tree, plan_payload
 from .scaffold import scaffold_workspace
 from .trace import ProductionTrace
 from .workspace_tools import WorkspaceTools
@@ -151,12 +151,14 @@ def main() -> int:
     try:
         tree = load_requirement_tree(requirement_path)
         nodes = flatten_atomic(tree)
+        domain = detect_domain(tree)
         runtime.traceability.store_requirement_tree(tree)
         plan = plan_payload(nodes, args.batch_size)
+        plan["detected_domain"] = domain
         _write_json(output_dir / ".arc" / "compiled-plan.json", plan)
         trace.record("requirements_compiled", plan=plan)
 
-        created = scaffold_workspace(output_dir)
+        created = scaffold_workspace(output_dir, domain=domain)
         impact.record_requirement_files(("__foundation__",), created)
         trace.record("deterministic_scaffold", created_files=created)
         runtime.git.ensure_repo()

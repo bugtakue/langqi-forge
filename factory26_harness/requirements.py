@@ -159,3 +159,14 @@ def plan_payload(nodes: list[RequirementNode], batch_size: int) -> dict[str, Any
             for index, group in enumerate(groups, 1)
         ],
     }
+
+
+def detect_domain(tree: dict[str, Any]) -> str:
+    root_text = " ".join(
+        str(tree.get(key) or "") for key in ("id", "name", "title", "description")
+    ).lower()
+    if any(token in root_text for token in ("spreadsheet", "workbook", "worksheet", "online sheet")):
+        return "sheet"
+    if any(token in root_text for token in ("github", "repository", "pull request", "code collaboration")):
+        return "github"
+    return "generic"

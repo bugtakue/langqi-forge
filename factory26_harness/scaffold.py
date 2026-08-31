@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 
@@ -230,7 +231,28 @@ def _write_missing(path: Path, content: str) -> bool:
     return True
 
 
-def scaffold_workspace(root: Path) -> list[str]:
+def _copy_template(root: Path, domain: str) -> list[str]:
+    template_root = Path(__file__).resolve().parent / "templates" / domain
+    if not template_root.is_dir():
+        return []
+    created: list[str] = []
+    for source in sorted(template_root.rglob("*")):
+        if not source.is_file():
+            continue
+        relative = source.relative_to(template_root)
+        destination = root / relative
+        if destination.exists():
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        created.append(str(relative))
+    return created
+
+
+def scaffold_workspace(root: Path, domain: str = "generic") -> list[str]:
+    templated = _copy_template(root, domain)
+    if templated:
+        return templated
     files = {
         root / "frontend" / "package.json": json.dumps(FRONTEND_PACKAGE, indent=2) + "\n",
         root / "frontend" / "build.mjs": BUILD_SCRIPT,
