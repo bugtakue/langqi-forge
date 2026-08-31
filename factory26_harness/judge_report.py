@@ -252,7 +252,7 @@ def _qualification_summary(
     return {
         "supplied": True,
         "passed": payload["passed"],
-        "path": str(resolved),
+        "path": resolved.name,
         "sha256": sha256_file(resolved),
     }
 
@@ -338,12 +338,29 @@ def _domain_card(domain: dict[str, Any]) -> str:
         if capsule
         else "Not forged: required profiles are not all green or evidence is incomplete."
     )
-    mode = "OFFLINE CANDIDATE" if domain["dry_run"] else "MODEL-BACKED RUN"
+    evaluations_green = bool(domain["evaluations"]) and all(
+        item["green"] for item in domain["evaluations"]
+    )
+    model_run_green = (
+        not domain["dry_run"]
+        and domain["planner_status"] == "completed"
+        and domain["local_checks_green"]
+        and evaluations_green
+    )
+    if domain["dry_run"]:
+        mode = "OFFLINE CANDIDATE"
+        planner_status_class = "warn"
+    elif model_run_green:
+        mode = "MODEL-BACKED RUN"
+        planner_status_class = "ok"
+    else:
+        mode = "MODEL RUN · GATE CLOSED"
+        planner_status_class = "bad"
     return f"""
     <section class="domain-card">
       <div class="domain-head">
         <div><p class="eyebrow">{_escape(mode)}</p><h2>{_escape(domain['domain'].upper())}</h2></div>
-        <span class="status {'warn' if domain['dry_run'] else 'ok'}">{_escape(domain['planner_status'])}</span>
+        <span class="status {planner_status_class}">{_escape(domain['planner_status'])}</span>
       </div>
       <dl class="facts">
         <div><dt>Route</dt><dd>{_escape(domain['route'])}</dd></div>
@@ -384,6 +401,7 @@ def render_report(data: dict[str, Any]) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
 <title>{_escape(data['title'])} · Judge Report</title>
 <style>
 :root{{--ink:#151918;--muted:#68716d;--line:#d9dfdc;--paper:#f5f7f5;--white:#fff;--green:#087f5b;--amber:#a35b00;--red:#b42318;--navy:#153b50}}

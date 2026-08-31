@@ -90,6 +90,8 @@ class JudgeReportTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered)
         self.assertNotIn("<script>alert(1)</script>", rendered)
         self.assertNotIn("https://", rendered)
+        self.assertIn("Content-Security-Policy", rendered)
+        self.assertIn('data-label="Score"', rendered)
 
     def test_output_refuses_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -99,6 +101,34 @@ class JudgeReportTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "already exists"):
                 _safe_output(path)
             self.assertEqual(path.read_text(encoding="utf-8"), "preserve")
+
+    def test_model_failure_is_visibly_gate_closed(self) -> None:
+        failed = _domain("github")
+        failed["planner_status"] = "failed"
+        data = {
+            "title": "Langqi Forge",
+            "qualification": {
+                "supplied": False,
+                "passed": False,
+                "path": None,
+                "sha256": None,
+            },
+            "domains": [failed],
+            "totals": {
+                "requirements": 10,
+                "expected_tests": 10,
+                "passed_tests": 10,
+                "all_evaluations_green": True,
+                "manual_interventions": 0,
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "dry_run": False,
+            },
+            "claim_boundary": "No hidden-test guarantee.",
+        }
+        rendered = render_report(data)
+        self.assertIn("MODEL RUN · GATE CLOSED", rendered)
+        self.assertIn('class="status bad">failed', rendered)
 
     def test_qualification_must_recompute_from_the_same_projects(self) -> None:
         payload = {
@@ -120,6 +150,13 @@ class JudgeReportTests(unittest.TestCase):
             root = Path(directory)
             path = root / "qualification.json"
             path.write_text(json.dumps(payload), encoding="utf-8")
+            with patch(
+                "factory26_harness.judge_report.qualify",
+                return_value=payload,
+            ):
+                summary = _qualification_summary(path, root / "github", root / "sheet")
+            self.assertEqual(summary["path"], "qualification.json")
+            self.assertEqual(len(summary["sha256"]), 64)
             with patch(
                 "factory26_harness.judge_report.qualify",
                 return_value={**payload, "passed": False},
