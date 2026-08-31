@@ -21,7 +21,7 @@ Langqi Forge 的目标不是“再包一层 Claude Code”，而是让软件工�
 | 层级 | 状态 | 能证明什么 |
 |---|---|---|
 | 2026-08-31 历史生产基线 | 真实调用阿里云百炼 `qwen-plus`；GitHub 101/101 + 改名对抗 101/101 + Spreadsheet 102/102 | 旧提交 `c93949a`在固定公开题上 304/304；见 [`evidence/final/`](evidence/final/README.md) |
-| 当前 v2 强化候选 | Python 85/85、Node 22/22；最新双域 dry-run 制品仍为 304/304 | 新身份边界、并发事务、封口轨迹、原始 GUI 报告、能力胶囊和独立验证器通过本地回归 |
+| 当前 v2 强化候选 | Python 90/90、Node 22/22；最新双域 dry-run 制品仍为 304/304 | 新身份边界、并发事务、封口轨迹、原始 GUI 报告、能力胶囊和独立验证器通过本地回归 |
 | v2 最终生产证据 | 待本次实现冻结后生成 | 必须从干净 commit 通过真实模型网关、三次顺序 GUI、v2 资格门和独立证据验证器 |
 
 上述结果只适用于已锁定哈希的公开任务，不等于隐藏题必过、Top 20 或获奖保证。
@@ -127,7 +127,7 @@ python main.py <requirement_path> \
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest -q
+.venv/bin/python -m unittest discover -s tests -v
 node --test tests/*.test.mjs
 ```
 

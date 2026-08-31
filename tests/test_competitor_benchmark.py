@@ -4,16 +4,23 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from benchmarks.run_claude_code import (
     ROOT,
     ensure_fresh_output,
+    protocol_violations as claude_protocol_violations,
     requirement_digest,
     trace_metrics,
 )
-from benchmarks.run_codex import trace_metrics as codex_trace_metrics
+from benchmarks.run_codex import (
+    monitor_codex,
+    protocol_violations as codex_protocol_violations,
+    trace_metrics as codex_trace_metrics,
+    validate_codex_version,
+)
 
 
 class CompetitorBenchmarkTests(unittest.TestCase):
@@ -105,6 +112,75 @@ class CompetitorBenchmarkTests(unittest.TestCase):
             self.assertEqual(metrics["thread_id"], "thread-1")
             self.assertEqual(metrics["usage"]["input_tokens"], 20)
             self.assertEqual(metrics["terminal_error"], "fixture failure")
+
+    def test_codex_protocol_rejects_external_tool_events(self) -> None:
+        violation = codex_protocol_violations(
+            {
+                "type": "item.completed",
+                "item": {"type": "mcp_tool_call", "tool": "list_mcp_resources"},
+            }
+        )
+        self.assertTrue(violation)
+        self.assertEqual(
+            codex_protocol_violations(
+                {"type": "item.completed", "item": {"type": "command_execution"}}
+            ),
+            [],
+        )
+
+    def test_codex_version_gate_rejects_incompatible_client(self) -> None:
+        self.assertEqual(validate_codex_version("codex-cli 0.151.0"), (0, 151, 0))
+        with self.assertRaisesRegex(ValueError, r"0.151.0\+"):
+            validate_codex_version("codex-cli 0.137.0")
+
+    def test_codex_monitor_terminates_on_live_protocol_violation(self) -> None:
+        fixture = (
+            "import json,time; "
+            "print(json.dumps({'type':'item.started','item':{'type':'web_search'}}), "
+            "flush=True); time.sleep(30)"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            process = subprocess.Popen(
+                [sys.executable, "-c", fixture],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                start_new_session=True,
+            )
+            started = time.monotonic()
+            status, returncode, violations = monitor_codex(
+                process,
+                prompt="",
+                trace_path=Path(directory) / "trace.jsonl",
+                timeout_seconds=10,
+            )
+            self.assertEqual(status, "protocol_violation")
+            self.assertIsNotNone(returncode)
+            self.assertTrue(violations)
+            self.assertLess(time.monotonic() - started, 3)
+
+    def test_claude_protocol_rejects_tools_outside_cli_allowlist(self) -> None:
+        self.assertEqual(
+            claude_protocol_violations(
+                {
+                    "type": "assistant",
+                    "message": {"content": [{"type": "tool_use", "name": "Bash"}]},
+                }
+            ),
+            [],
+        )
+        self.assertEqual(
+            claude_protocol_violations(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [{"type": "tool_use", "name": "mcp__browser__open"}]
+                    },
+                }
+            ),
+            ["forbidden_tool:mcp__browser__open"],
+        )
 
 
 if __name__ == "__main__":

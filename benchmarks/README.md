@@ -15,9 +15,9 @@ Langqi Forge 可以使用自己的版本化能力内核和可证伪能力胶囊�
 ### 不可变协议
 
 1. 输入只复制公开 `requirements/`，不把测试源码放进 Agent 工作目录。
-2. 输出目录必须不存在或为空；Agent 只能在其中生成 `frontend/` 和 `backend/`。
-3. 记录 CLI 版本、模型、effort、墙钟和完整调用参数。
-4. 禁用个人规则、skills、MCP、网络搜索、会话续写和持久记忆。
+2. 输出目录必须不存在或为空；runner 把只读输入放在 `control/`，Agent 从真正空白的 `workspace/` 起跑，只在其中生成 `frontend/` 和 `backend/`。
+3. 记录 CLI 版本、可执行文件哈希、Harness 提交/清洁度、模型、effort、墙钟和完整调用参数。
+4. 禁用个人规则、skills、MCP、Apps、插件、浏览器、多 Agent、网络搜索、会话续写和持久记忆。Codex 用显式配置移除工具，并实时审计 JSONL；一旦出现违禁事件就立即终止整场。Claude Code 用空 MCP 配置与六项本地工具白名单，并审计完整 stream-JSON。
 5. 保留原始 JSON/stream-json、stderr 和最后消息；失败或超时不重跑挑最好结果。
 6. 生成后使用与 Langqi Forge 相同的 `factory26_harness.public_eval`、4 workers、文件内完全并发和相同 fixture profile。
 7. 报告 pass、unexpected、skipped、flaky、生成时间、GUI 时间、Token 与可得成本；无法取得的指标写 `unknown`，不推算。
@@ -35,15 +35,25 @@ claude auth status
 .venv/bin/python -m factory26_harness.public_tasks github sheet
 ```
 
+当前证据固定使用 Codex CLI `0.151.0`。`0.137.0` 已无法解析当前模型目录，runner 会 fail closed。隔离安装到已忽略的 `.cache/`，不改用户全局 Codex：
+
+```bash
+npm install --prefix .cache/benchmark-tools/codex-0.151.0 \
+  --registry=https://registry.npmjs.org --no-audit --no-fund \
+  @openai/codex@0.151.0
+```
+
 Codex：
 
 ```bash
 .venv/bin/python benchmarks/run_codex.py github \
   --output-dir /tmp/codex-github-run \
+  --codex .cache/benchmark-tools/codex-0.151.0/node_modules/.bin/codex \
   --model gpt-5.4 --effort high --timeout-seconds 1800
 
 .venv/bin/python benchmarks/run_codex.py sheet \
   --output-dir /tmp/codex-sheet-run \
+  --codex .cache/benchmark-tools/codex-0.151.0/node_modules/.bin/codex \
   --model gpt-5.4 --effort high --timeout-seconds 1800
 ```
 
@@ -62,13 +72,13 @@ Claude Code：
 然后为每个成功生成的制品执行相同 GUI：
 
 ```bash
-.venv/bin/python -m factory26_harness.public_eval github <project> \
+.venv/bin/python -m factory26_harness.public_eval github <run>/workspace \
   --port <unique-port> --workers 4 --strict-exit
 
-.venv/bin/python -m factory26_harness.public_eval github <project> \
+.venv/bin/python -m factory26_harness.public_eval github <run>/workspace \
   --port <another-port> --workers 4 --fixture-profile adversarial --strict-exit
 
-.venv/bin/python -m factory26_harness.public_eval sheet <project> \
+.venv/bin/python -m factory26_harness.public_eval sheet <run>/workspace \
   --port <unique-port> --workers 4 --strict-exit
 ```
 
