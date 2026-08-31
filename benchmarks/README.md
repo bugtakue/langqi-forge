@@ -12,6 +12,8 @@ Langqi Forge 可以使用自己的版本化能力内核和可证伪能力胶囊�
 
 `run_codex.py` 与 `run_claude_code.py` 用同一份 prompt 模板、同一份只读需求、空输出目录、零人工、固定墙钟和同一外部评分器，专门比较两个通用代码 Agent 从零构建的能力。默认的 `checkpointed-v3` 会先要求可启动骨架，再以最多两文件的增量编辑扩展；首轮原始提示仍保留为 `unbounded-v2`。
 
+[`generalization/`](generalization/README.md) 是另一条严格分开的证据通道：它不比较 Codex/Claude，而是用第三个未缓存产品域验证 Langqi Forge 自身是否真的进入 bounded coding-agent 路径并通过隐藏黑盒。该结果不得并入官方 304 分。
+
 ### 不可变协议
 
 1. 输入只复制公开 `requirements/`，不把测试源码放进 Agent 工作目录。

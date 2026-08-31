@@ -1,0 +1,77 @@
+id: GENERALIZATION-ROOT
+name: Operational Change Control Workspace
+type: FOLDER
+dependencies: []
+description: >
+  Build a small web application for recording operational changes, enforcing
+  independent approval, and preserving every successful state after refresh.
+  This is an unseen generic domain outside both announced replication products.
+  Mutations must be atomic; invalid actions display
+  a visible error and leave the last successful state unchanged.
+children:
+- id: REQ-GEN-1
+  name: Submit and review change requests
+  type: ATOMIC
+  dependencies: []
+  description: >
+    The page heading is "Change Control". A form contains text boxes labelled
+    "Requester" and "Change summary", a combobox labelled "Risk" with Low,
+    Medium, and High options, and a button named "Submit change". Requester and
+    summary are trimmed and required; an invalid submission displays
+    "Requester and summary are required" and creates nothing. A successful
+    submission creates a persistent request with status Pending. Every request
+    is rendered as an article whose accessible name is its change summary and
+    visibly shows requester, risk, and status. The form accepts arbitrary
+    values rather than a fixed demonstration record.
+  scenarios:
+  - name: Submit a valid change
+    steps:
+    - keyword: GIVEN
+      content: The workspace is open and has no request with the new summary.
+    - keyword: WHEN
+      content: A user enters a requester, summary, and risk and submits the form.
+    - keyword: THEN
+      content: A Pending request article appears and remains after refresh.
+  - name: Reject a blank change
+    steps:
+    - keyword: WHEN
+      content: A user submits blank or whitespace-only requester and summary fields.
+    - keyword: THEN
+      content: The exact validation message is shown and no request is created.
+- id: REQ-GEN-2
+  name: Independent approval before execution
+  type: ATOMIC
+  dependencies:
+  - REQ-GEN-1
+  description: >
+    Each Pending request article contains a text box labelled "Reviewer", an
+    "Approve" button, and an "Execute" button. Execute is disabled until the
+    request is approved. Approval trims and requires the reviewer. The reviewer
+    must differ from the requester using case-insensitive comparison; otherwise
+    display "Reviewer must differ from requester", keep the request Pending,
+    and do not persist a reviewer. A valid independent approval changes status
+    to Approved, visibly records "Approved by: <reviewer>", and enables Execute.
+    Clicking Execute changes status to Executed. Approved and Executed states
+    remain correct after refresh and cannot be moved backwards by repeating an
+    old action.
+  scenarios:
+  - name: Enforce separation of duties
+    steps:
+    - keyword: GIVEN
+      content: A Pending request was submitted by Alice.
+    - keyword: WHEN
+      content: Alice attempts to approve it using any letter case.
+    - keyword: THEN
+      content: Approval is rejected and the request remains Pending.
+    - keyword: WHEN
+      content: Bob approves the same request.
+    - keyword: THEN
+      content: The request becomes Approved and Execute becomes enabled.
+  - name: Execute and reopen
+    steps:
+    - keyword: GIVEN
+      content: A request is Approved by an independent reviewer.
+    - keyword: WHEN
+      content: The user clicks Execute and refreshes the page.
+    - keyword: THEN
+      content: The request remains Executed with its requester, risk, and reviewer intact.
