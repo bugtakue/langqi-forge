@@ -21,6 +21,7 @@ EXCLUDED_PARTS = frozenset({"__pycache__", ".git", ".venv", "dist"})
 EXCLUDED_PACKAGE_FILES = frozenset(
     {
         "factory26_harness/evidence.py",
+        "factory26_harness/feedback.py",
         "factory26_harness/judge_report.py",
         "factory26_harness/public_eval.py",
         "factory26_harness/public_fixtures.py",
