@@ -1,0 +1,71 @@
+:root {
+  color: #1f2328;
+  background: #f6f8fa;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+.site-header {
+  min-height: 64px;
+  padding: 12px max(20px, calc((100vw - 1180px) / 2));
+  background: #24292f;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.brand { color: white; font-weight: 800; letter-spacing: -.02em; white-space: nowrap; }
+.brand:hover { text-decoration: none; }
+.global-search { flex: 1; max-width: 520px; }
+.global-search input { width: 100%; color: white; background: #0d1117; border-color: #57606a; }
+.header-actions { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+.header-actions a { color: white; }
+.account-wrap { position: relative; }
+.account-button { border: 1px solid #57606a; border-radius: 6px; color: white; background: #24292f; padding: 7px 10px; }
+.account-menu { position: absolute; right: 0; top: 42px; z-index: 5; min-width: 210px; background: white; color: #24292f; border: 1px solid #d0d7de; border-radius: 7px; box-shadow: 0 8px 24px #140f0f26; padding: 8px; }
+.account-menu a { color: #24292f; display: block; padding: 8px; border-radius: 4px; }
+.page { width: min(1180px, calc(100% - 32px)); margin: 32px auto 72px; }
+.narrow { max-width: 520px; }
+.panel { background: white; border: 1px solid #d0d7de; border-radius: 8px; padding: 24px; }
+.stack { display: grid; gap: 16px; }
+.form-row { display: grid; gap: 7px; }
+label, .label { font-weight: 650; }
+input, textarea, select { min-height: 40px; width: 100%; border: 1px solid #8c959f; border-radius: 6px; background: white; color: #1f2328; padding: 8px 11px; }
+textarea { min-height: 120px; resize: vertical; }
+input:focus, textarea:focus, select:focus { outline: 2px solid #0969da55; border-color: #0969da; }
+.checkbox-row { display: flex; align-items: center; gap: 9px; }
+.checkbox-row input { min-height: 0; width: auto; }
+.btn { display: inline-flex; align-items: center; justify-content: center; width: auto; min-height: 40px; border: 1px solid #1a7f37; border-radius: 6px; padding: 8px 16px; background: #1f883d; color: white; font-weight: 650; }
+.btn.secondary { background: #f6f8fa; color: #24292f; border-color: #d0d7de; }
+.btn.danger { background: #cf222e; border-color: #a40e26; }
+.muted { color: #57606a; }
+.error, .success { border-radius: 6px; padding: 10px 12px; }
+.error { color: #a40e26; background: #ffebe9; border: 1px solid #ff8182; }
+.success { color: #116329; background: #dafbe1; border: 1px solid #4ac26b; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.card { background: white; border: 1px solid #d0d7de; border-radius: 8px; padding: 18px; }
+.card h2, .card h3 { margin-top: 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 18px 0; }
+.toolbar input, .toolbar select { width: auto; min-width: 220px; }
+.repo-meta { display: flex; gap: 8px; align-items: center; color: #57606a; font-size: 14px; }
+.badge { display: inline-flex; border: 1px solid #afb8c1; border-radius: 999px; padding: 2px 8px; font-size: 12px; color: #57606a; }
+.split { display: grid; grid-template-columns: 220px 1fr; gap: 24px; }
+.side-nav { display: grid; align-content: start; gap: 4px; }
+.side-nav a { padding: 9px 10px; border-radius: 5px; color: #24292f; }
+.side-nav a:hover { background: #eaeef2; text-decoration: none; }
+table { width: 100%; border-collapse: collapse; background: white; }
+th, td { border-bottom: 1px solid #d8dee4; text-align: left; padding: 11px; }
+.tabs { display: flex; gap: 18px; border-bottom: 1px solid #d0d7de; margin-bottom: 20px; }
+.tabs a { color: #24292f; padding: 10px 2px; }
+code, pre { font-family: "SFMono-Regular", Consolas, monospace; }
+pre { overflow: auto; background: #f6f8fa; padding: 16px; border-radius: 6px; }
+@media (max-width: 720px) {
+  .site-header { flex-wrap: wrap; }
+  .global-search { order: 3; flex-basis: 100%; max-width: none; }
+  .split { grid-template-columns: 1fr; }
+}

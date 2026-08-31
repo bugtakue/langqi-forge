@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import signal
 import subprocess
 import time
@@ -14,6 +15,7 @@ from typing import Any
 from .checks import failures, run_full_checks
 from .feedback import parse_playwright_json, repair_packets
 from .impact import ChangeImpactGraph
+from .public_fixtures import public_fixture_environment
 
 
 PLAYWRIGHT_PACKAGE = {
@@ -30,7 +32,7 @@ export default defineConfig({
   testDir: process.env.FACTORY26_PUBLIC_TEST_DIR,
   timeout: Number(process.env.FACTORY26_PUBLIC_TEST_TIMEOUT || 30000),
   expect: { timeout: Number(process.env.FACTORY26_PUBLIC_EXPECT_TIMEOUT || 5000) },
-  fullyParallel: true,
+  fullyParallel: process.env.FACTORY26_PUBLIC_FULLY_PARALLEL === '1',
   workers: Number(process.env.FACTORY26_PUBLIC_WORKERS || 4),
   retries: 0,
   reporter: 'json',
@@ -129,6 +131,9 @@ def run_public_evaluation(
     expect_timeout_ms: int = 5_000,
     install_browser: bool = False,
     grep: str | None = None,
+    fixture_profile: str = "baseline",
+    fully_parallel: bool | None = None,
+    run_label: str | None = None,
 ) -> dict[str, Any]:
     project_dir = project_dir.resolve()
     cache_root = cache_root.resolve()
@@ -143,7 +148,10 @@ def run_public_evaluation(
     playwright = ensure_playwright(cache_root, install_browser=install_browser)
     result_root = project_dir / ".arc" / "public-eval"
     result_root.mkdir(parents=True, exist_ok=True)
-    backend_log_path = result_root / f"{task_id}.backend.log"
+    label = run_label or (task_id if fixture_profile == "baseline" else f"{task_id}.{fixture_profile}")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", label):
+        raise ValueError(f"unsafe run label: {label!r}")
+    backend_log_path = result_root / f"{label}.backend.log"
     environment = dict(
         os.environ,
         PORT=str(port),
@@ -153,7 +161,14 @@ def run_public_evaluation(
         FACTORY26_PUBLIC_TEST_TIMEOUT=str(timeout_ms),
         FACTORY26_PUBLIC_EXPECT_TIMEOUT=str(expect_timeout_ms),
         FACTORY26_PUBLIC_WORKERS=str(workers),
+        FACTORY26_PUBLIC_FULLY_PARALLEL="1"
+        if (fully_parallel if fully_parallel is not None else True)
+        else "0",
     )
+    for name, value in public_fixture_environment(
+        task_id, environment["E2E_BASE_URL"], fixture_profile
+    ).items():
+        environment.setdefault(name, value)
     with backend_log_path.open("w", encoding="utf-8") as backend_log:
         process = subprocess.Popen(
             ["npm", "start"],
@@ -183,8 +198,8 @@ def run_public_evaluation(
         finally:
             _stop(process)
 
-    report_path = result_root / f"{task_id}.playwright.json"
-    stderr_path = result_root / f"{task_id}.playwright.stderr.log"
+    report_path = result_root / f"{label}.playwright.json"
+    stderr_path = result_root / f"{label}.playwright.stderr.log"
     _write(report_path, completed.stdout)
     _write(stderr_path, completed.stderr)
     try:
@@ -198,6 +213,9 @@ def run_public_evaluation(
     feedback_payload = {
         "version": 1,
         "task_id": task_id,
+        "run_label": label,
+        "fixture_profile": fixture_profile,
+        "fully_parallel": environment["FACTORY26_PUBLIC_FULLY_PARALLEL"] == "1",
         "grep": grep,
         "exit_code": completed.returncode,
         "duration_seconds": round(duration, 3),
@@ -206,7 +224,7 @@ def run_public_evaluation(
         "repair_packets": packets,
     }
     _write(
-        result_root / f"{task_id}.feedback.json",
+        result_root / f"{label}.feedback.json",
         json.dumps(feedback_payload, ensure_ascii=False, indent=2) + "\n",
     )
     return feedback_payload
@@ -223,6 +241,19 @@ def main() -> int:
     parser.add_argument("--expect-timeout", type=int, default=5_000)
     parser.add_argument("--install-browser", action="store_true")
     parser.add_argument("--grep", help="Only run tests whose title matches this regular expression")
+    parser.add_argument(
+        "--fixture-profile",
+        choices=("baseline", "adversarial"),
+        default="baseline",
+        help="Use the baseline fixtures or a deterministic renamed/mutated GitHub world",
+    )
+    parser.add_argument(
+        "--fully-parallel",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Override task-specific Playwright intra-file parallelism",
+    )
+    parser.add_argument("--run-label", help="Safe filename label for retaining repeated evaluation runs")
     parser.add_argument("--strict-exit", action="store_true")
     args = parser.parse_args()
     result = run_public_evaluation(
@@ -235,6 +266,9 @@ def main() -> int:
         expect_timeout_ms=args.expect_timeout,
         install_browser=args.install_browser,
         grep=args.grep,
+        fixture_profile=args.fixture_profile,
+        fully_parallel=args.fully_parallel,
+        run_label=args.run_label,
     )
     stats = result["stats"]
     print(

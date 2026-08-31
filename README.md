@@ -1,15 +1,16 @@
-# Factory26 Low-Token Harness
+# Langqi Forge — Factory26 Low-Token Harness
 
-Factory26 / ARC-Bench 的独立参赛工程。目标不是让更多 Agent 讨论，而是用确定性程序完成机械工作，只把无法定位的实现问题交给模型。
+Factory26 / ARC-Bench 的独立参赛工程。它把规格编译成可运行软件：稳定能力走确定性领域内核，未知能力才进入受限代码 Agent 与定点修复环。目标不是堆更多 Agent，而是在 GUI 通过率、Token 与完成时间三项指标之间取得可复现的优势。
 
-当前版本已经完成第一条可运行闭环：
+当前闭环：
 
 1. 读取并按依赖顺序编译 `requirements.yaml`。
-2. 识别题目领域：未知题生成零依赖通用地基，Spreadsheet 题生成完整、可持久化的数据工作区。
-3. 通过 OpenAI-compatible 网关驱动带受限工具的代码 Agent。
-4. 每批只提供少量需求和已观测相关文件，记录需求到文件的影响图。
-5. 在独立 smoke port 上执行构建、启动和 `/api/health` 检查。
-6. 把 prompts、模型回复、工具调用、事件、需求溯源和 Git 提交全部落盘。
+2. 识别题目领域：GitHub 与 Spreadsheet 走零 Token 可持久化内核，未知题生成通用地基。
+3. 未被领域内核覆盖的需求才通过 OpenAI-compatible 网关交给带受限工具的代码 Agent。
+4. 每批只提供少量需求和已观测相关文件，记录需求到文件的影响图并聚类 GUI 失败。
+5. 在独立 smoke port 上执行构建、启动和 `/api/health` 检查，不占用评分端口。
+6. 把 prompts、模型回复、工具调用、Agent 迭代、人工干预点、需求溯源和 Git 提交全部落盘。
+7. 最后由 fail-closed 资格门同时检查双域 GUI、对抗夹具、并发、时间、跳过项与 Token。
 
 ## 平台契约
 
@@ -74,15 +75,32 @@ python3 -m venv .venv
 对生成项目执行公开 GUI 测试并自动形成失败聚类：
 
 ```bash
-.venv/bin/python -m factory26_harness.public_eval sheet /tmp/factory26-output \
+.venv/bin/python -m factory26_harness.public_eval github /tmp/factory26-github \
   --port 3401 \
   --install-browser \
+  --strict-exit
+
+# 同一制品进入改名、换值、完全并发的对抗世界
+.venv/bin/python -m factory26_harness.public_eval github /tmp/factory26-github \
+  --port 3411 \
+  --fixture-profile adversarial \
   --strict-exit
 ```
 
 原始 Playwright JSON、后端日志和最小修复包写入生成项目的 `.arc/public-eval/`。
 首次运行可保留 `--install-browser`；浏览器已安装后可省略。定点回归可加
 `--grep 'REQ-3-1-2|REQ-4-1-1'`，但发布前必须去掉 `--grep` 再跑完整题包。
+
+双域制品均跑完后执行独立资格门：
+
+```bash
+.venv/bin/python -m factory26_harness.qualification \
+  --github-project /tmp/factory26-github \
+  --sheet-project /tmp/factory26-sheet \
+  --output qualification.json
+```
+
+门禁会拒绝任何 unexpected、skipped、flaky、非全并发运行、测试计数漂移、超时、非零 Token 或本地构建失败。
 
 ## 设计边界
 
@@ -96,14 +114,18 @@ python3 -m venv .venv
 
 2026-08-31 的可复现公开基线：
 
-- 通用骨架在 `keep`：0 / 32；这是未知领域的诚实地板线。
-- Spreadsheet 专用模板在 `sheet`：102 / 102，unexpected / skipped / flaky 均为 0。
-- 完整 GUI 运行：12 workers，19.841 秒。
-- 生成阶段：本地构建、启动、健康检查全部通过；prompt / completion Token 均为 0。
-- 固定输入：24 个模块、102 个测试，需求 SHA-256 为
-  `9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494`。
+| 赛题 / 世界 | 模块 | GUI | unexpected / skipped / flaky | GUI 时间 | 生成 Token |
+|---|---:|---:|---:|---:|---:|
+| GitHub 基准 | 47 | 101 / 101 | 0 / 0 / 0 | 9.515 秒 | 0 / 0 |
+| GitHub 对抗改名 | 47 | 101 / 101 | 0 / 0 / 0 | 9.536 秒 | 0 / 0 |
+| Spreadsheet 基准 | 24 | 102 / 102 | 0 / 0 / 0 | 19.420 秒 | 0 / 0 |
 
-这只证明公开 Spreadsheet 题通过，不代表隐藏题、GitHub 题或最终排名。GitHub 题已可同步和执行，当前仍走通用/模型路径，尚无可报告的公开 GUI 成绩。详见 [docs/BASELINE.md](docs/BASELINE.md)。
+三次运行均启用文件内完全并发；GitHub 另有 12 workers 连续稳定性运行。生成阶段的构建、启动与健康检查全部通过。固定需求 SHA-256：
+
+- GitHub：`a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959`
+- Spreadsheet：`9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494`
+
+这只证明同步到上述哈希的公开题通过，不代表隐藏测试、最终排名或获奖。耗时也会随机器负载变化。完整证据、演进和声明边界见 [docs/BASELINE.md](docs/BASELINE.md)。
 
 公开题迭代时，可将 Playwright JSON 报告压缩成按根因归类的最小修复包：
 
