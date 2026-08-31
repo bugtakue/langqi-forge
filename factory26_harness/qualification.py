@@ -35,6 +35,7 @@ def evaluate_run(
     expected_profile: str,
     max_duration_seconds: float,
     expected_source_run_id: str | None = None,
+    minimum_workers: int = 4,
 ) -> dict[str, Any]:
     payload = _load(path)
     stats = payload.get("stats") or {}
@@ -59,6 +60,13 @@ def evaluate_run(
             payload.get("fully_parallel"),
             True,
         ),
+        _check(
+            "minimum_workers",
+            int(payload.get("workers") or 0) >= minimum_workers,
+            payload.get("workers"),
+            {"minimum": minimum_workers},
+        ),
+        _check("unfiltered", payload.get("grep") is None, payload.get("grep"), None),
         _check(
             "expected_tests",
             stats.get("expected") == expected_tests,
@@ -93,6 +101,8 @@ def evaluate_generation(
     expected_requirement_sha256: str | None = None,
     max_prompt_tokens: int = 6_000,
     max_completion_tokens: int = 1_000,
+    trace_path: Path | None = None,
+    expected_public_evaluations: int = 0,
 ) -> dict[str, Any]:
     payload = _load(path)
     usage = payload.get("model_usage") or {}
@@ -157,6 +167,24 @@ def evaluate_generation(
             "tool_call",
         ),
         _check(
+            "planner_capabilities_present",
+            bool(contract.get("capability_tags")),
+            contract.get("capability_tags"),
+            "one or more versioned capabilities",
+        ),
+        _check(
+            "planner_risks_present",
+            bool(contract.get("risks")),
+            contract.get("risks"),
+            "one or more bounded risks",
+        ),
+        _check(
+            "planner_validation_focus_present",
+            bool(contract.get("validation_focus")),
+            contract.get("validation_focus"),
+            "one or more validation priorities",
+        ),
+        _check(
             "model_request_count",
             usage.get("request_count") == 1,
             usage.get("request_count"),
@@ -199,6 +227,14 @@ def evaluate_generation(
             0,
         ),
     ]
+    if trace_path is not None:
+        checks.extend(
+            _trace_checks(
+                trace_path,
+                expected_run_id=str(payload.get("run_id") or ""),
+                expected_public_evaluations=expected_public_evaluations,
+            )
+        )
     return {
         "path": str(path),
         "sha256": _digest(path),
@@ -213,6 +249,122 @@ def _valid_run_id(value: Any) -> bool:
     except (ValueError, TypeError, AttributeError):
         return False
     return True
+
+
+def _trace_checks(
+    path: Path,
+    *,
+    expected_run_id: str,
+    expected_public_evaluations: int,
+) -> list[dict[str, Any]]:
+    try:
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    except (OSError, json.JSONDecodeError) as exc:
+        return [
+            _check("trace_readable", False, str(exc), "valid JSONL production trace")
+        ]
+
+    events = [str(row.get("event") or "") for row in rows]
+    sequences = [row.get("sequence") for row in rows]
+    payloads: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        payloads.setdefault(str(row.get("event") or ""), []).append(
+            row.get("payload") or {}
+        )
+    requests = payloads.get("model_request", [])
+    responses = payloads.get("model_response", [])
+    tool_calls = payloads.get("agent_tool_call", [])
+    interventions = payloads.get("human_intervention_checkpoint", [])
+    starts = payloads.get("run_started", [])
+    completions = payloads.get("run_completed", [])
+    request_payload = (requests[0].get("payload") or {}) if len(requests) == 1 else {}
+    request_tools = request_payload.get("tools") or []
+    request_tool_names = [
+        item.get("function", {}).get("name")
+        for item in request_tools
+        if isinstance(item, dict)
+    ]
+    response_id = responses[0].get("response_id") if len(responses) == 1 else ""
+    forbidden = sorted(
+        {
+            event
+            for event in events
+            if event
+            in {
+                "run_failed",
+                "planner_failed",
+                "agent_session_stalled",
+                "agent_session_exhausted",
+                "public_evaluation_failed",
+            }
+        }
+    )
+    return [
+        _check("trace_readable", True, True, True),
+        _check(
+            "trace_sequence_contiguous",
+            sequences == list(range(1, len(rows) + 1)),
+            sequences,
+            f"1..{len(rows)}",
+        ),
+        _check("trace_run_started_once", len(starts) == 1, len(starts), 1),
+        _check(
+            "trace_run_id_binding",
+            len(starts) == 1 and starts[0].get("run_id") == expected_run_id,
+            starts[0].get("run_id") if len(starts) == 1 else None,
+            expected_run_id,
+        ),
+        _check("trace_model_request_once", len(requests) == 1, len(requests), 1),
+        _check("trace_model_response_once", len(responses) == 1, len(responses), 1),
+        _check(
+            "trace_model_response_id",
+            bool(response_id),
+            response_id,
+            "non-empty provider response id",
+        ),
+        _check(
+            "trace_planner_tool_schema",
+            request_tool_names == ["select_build_contract"],
+            request_tool_names,
+            ["select_build_contract"],
+        ),
+        _check("trace_agent_tool_call_once", len(tool_calls) == 1, len(tool_calls), 1),
+        _check(
+            "trace_agent_tool_call",
+            len(tool_calls) == 1
+            and tool_calls[0].get("tool") == "select_build_contract"
+            and tool_calls[0].get("decision_mode") == "tool_call",
+            tool_calls[0] if len(tool_calls) == 1 else None,
+            {"tool": "select_build_contract", "decision_mode": "tool_call"},
+        ),
+        _check(
+            "trace_human_checkpoint",
+            len(interventions) == 1
+            and interventions[0].get("intervention_required") is False
+            and interventions[0].get("intervention_count") == 0,
+            interventions,
+            [{"intervention_required": False, "intervention_count": 0}],
+        ),
+        _check(
+            "trace_validation_layers",
+            len(payloads.get("validation_result", [])) >= 3,
+            len(payloads.get("validation_result", [])),
+            {"minimum": 3},
+        ),
+        _check("trace_run_completed_once", len(completions) == 1, len(completions), 1),
+        _check(
+            "trace_public_evaluations",
+            len(payloads.get("public_evaluation_completed", []))
+            == expected_public_evaluations,
+            len(payloads.get("public_evaluation_completed", [])),
+            expected_public_evaluations,
+        ),
+        _check("trace_no_failure_events", not forbidden, forbidden, []),
+    ]
 
 
 def qualify(
@@ -233,11 +385,15 @@ def qualify(
             github_root / ".arc" / "harness-report.json",
             expected_requirements=47,
             expected_requirement_sha256=PUBLIC_REQUIREMENT_SHA256["github"],
+            trace_path=github_root / ".arc" / "production-trace.jsonl",
+            expected_public_evaluations=2,
         ),
         "sheet_generation": evaluate_generation(
             sheet_root / ".arc" / "harness-report.json",
             expected_requirements=24,
             expected_requirement_sha256=PUBLIC_REQUIREMENT_SHA256["sheet"],
+            trace_path=sheet_root / ".arc" / "production-trace.jsonl",
+            expected_public_evaluations=1,
         ),
         "github_baseline": evaluate_run(
             github_root / ".arc" / "public-eval" / "github.feedback.json",

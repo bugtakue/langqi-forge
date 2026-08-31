@@ -294,6 +294,7 @@ def run_public_evaluation(
         "run_label": label,
         "fixture_profile": fixture_profile,
         "fully_parallel": environment["FACTORY26_PUBLIC_FULLY_PARALLEL"] == "1",
+        "workers": workers,
         "grep": grep,
         "exit_code": completed.returncode,
         "duration_seconds": round(duration, 3),

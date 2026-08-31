@@ -19,6 +19,8 @@ class QualificationTests(unittest.TestCase):
                         "exit_code": 0,
                         "fixture_profile": "adversarial",
                         "fully_parallel": True,
+                        "workers": 4,
+                        "grep": None,
                         "duration_seconds": 9.5,
                         "stats": {
                             "expected": 101,
@@ -42,7 +44,12 @@ class QualificationTests(unittest.TestCase):
                         "requirement_sha256": "fixture-digest",
                         "execution_route": "planner-approved-deterministic-kernel",
                         "planner_status": "completed",
-                        "planner_contract": {"decision_mode": "tool_call"},
+                        "planner_contract": {
+                            "decision_mode": "tool_call",
+                            "capability_tags": ["repository_lifecycle"],
+                            "risks": ["permissions"],
+                            "validation_focus": ["persistence"],
+                        },
                         "planner_iterations": 1,
                         "coding_agent_iterations": 0,
                         "manual_interventions": 0,
@@ -82,6 +89,8 @@ class QualificationTests(unittest.TestCase):
                         "exit_code": 0,
                         "fixture_profile": "baseline",
                         "fully_parallel": True,
+                        "workers": 1,
+                        "grep": "only one test",
                         "duration_seconds": 31,
                         "stats": {
                             "expected": 100,
