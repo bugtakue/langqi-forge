@@ -10,9 +10,13 @@ from typing import Any, Iterable
 from .impact import ChangeImpactGraph
 
 
-REQ_ID_PATTERN = re.compile(r"\bREQ-[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*\b")
+REQ_ID_PATTERN = re.compile(r"\bREQ-[A-Za-z0-9]+(?:[-.][A-Za-z0-9]+)*\b")
 LOCATOR_PATTERN = re.compile(r"(?:Locator:|waiting for)\s*([^\n]+)", re.IGNORECASE)
 ERROR_PATTERN = re.compile(r"(?:Error:|AssertionError:)\s*([^\n]+)", re.IGNORECASE)
+INFRASTRUCTURE_PATTERN = re.compile(
+    r"browser\.newcontext|protocol error|test ended|while setting up|browser (?:closed|disconnected)|worker process exited",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -60,6 +64,14 @@ def failure_signature(error: str) -> str:
     return "other:" + re.sub(r"\d+", "#", first_line.lower())[:220]
 
 
+def failure_classification(error: str) -> str:
+    if INFRASTRUCTURE_PATTERN.search(error):
+        return "evaluator_infrastructure"
+    if LOCATOR_PATTERN.search(error) or ERROR_PATTERN.search(error):
+        return "product_behavior"
+    return "unclassified_contract_failure"
+
+
 def parse_playwright_json(payload: dict[str, Any]) -> list[PlaywrightFailure]:
     failures: list[PlaywrightFailure] = []
     for suite in _walk_suites(payload.get("suites") or []):
@@ -99,9 +111,21 @@ def repair_packets(
     packets = []
     for signature, members in grouped.items():
         requirement_ids = sorted({member.requirement_id for member in members if member.requirement_id})
+        classifications = {
+            failure_classification(member.error) for member in members
+        }
+        classification = (
+            "evaluator_infrastructure"
+            if classifications == {"evaluator_infrastructure"}
+            else "product_behavior"
+            if "product_behavior" in classifications
+            else "unclassified_contract_failure"
+        )
         packets.append(
             {
                 "signature": signature,
+                "classification": classification,
+                "repair_allowed": classification == "product_behavior",
                 "failure_count": len(members),
                 "requirement_ids": requirement_ids,
                 "related_files": impact.files_for_requirements(requirement_ids),

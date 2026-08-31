@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from factory26_harness.evidence import _export_trace, _sanitize
+from factory26_harness.evidence import _export_trace, _sanitize, export_evidence
 from factory26_harness.trace import ProductionTrace, verify_trace_rows
 
 
@@ -49,7 +49,7 @@ class EvidenceTests(unittest.TestCase):
             trace = ProductionTrace(source)
             trace.record("build", output="/tmp/private-run/frontend")
             trace.record("finish", passed=True)
-            count = _export_trace(
+            metadata = _export_trace(
                 source,
                 destination,
                 (("/tmp/private-run", "<generated-project>"),),
@@ -58,11 +58,31 @@ class EvidenceTests(unittest.TestCase):
                 json.loads(line)
                 for line in destination.read_text(encoding="utf-8").splitlines()
             ]
-            self.assertEqual(count, 2)
-            self.assertTrue(verify_trace_rows(rows)["valid"])
+            self.assertEqual(metadata["rows"], 2)
+            self.assertEqual(
+                metadata["transformation"],
+                "deterministic-path-redaction-and-reseal-v2",
+            )
+            self.assertEqual(metadata["sanitized_sha256"], __import__("hashlib").sha256(destination.read_bytes()).hexdigest())
+            self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
             self.assertEqual(
                 rows[0]["payload"]["output"], "<generated-project>/frontend"
             )
+
+    def test_evidence_export_rejects_a_failed_qualification_before_copying(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            qualification = root / "qualification.json"
+            qualification.write_text(
+                json.dumps({"passed": False, "evidence": {}}), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "failed qualification"):
+                export_evidence(
+                    root / "github",
+                    root / "sheet",
+                    qualification,
+                    root / "export",
+                )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
-# Final public evidence
+# Historical v1 public evidence
 
-这是一组从干净 Harness commit `c93949ae525c47aa7be3eeb259a9b5550216020b` 产生的最终公开证据。两次生成都真实调用阿里云百炼 `qwen-plus`，不是本地协议模拟器；密钥未写入任何文件。
+这是一组从干净 Harness commit `c93949ae525c47aa7be3eeb259a9b5550216020b` 产生的 v1 历史公开证据。两次生成都真实调用阿里云百炼 `qwen-plus`，不是本地协议模拟器；密钥未写入任何文件。
+
+> 这份证据只绑定旧 commit，不冒充当前 v2 强化代码的生产证据。v2 必须在实现冻结后从新的干净 commit 重新生成、评测、封口并独立验证。
 
 ## 结果
 

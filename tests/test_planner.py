@@ -16,11 +16,12 @@ class _PlannerModel:
         self.arguments = arguments
         self.calls = 0
 
-    def complete(self, messages, tools, *, max_tokens=None):
+    def complete(self, messages, tools, *, max_tokens=None, tool_choice=None):
         self.calls += 1
         self.messages = messages
         self.tools = tools
         self.max_tokens = max_tokens
+        self.tool_choice = tool_choice
         return SimpleNamespace(
             content="",
             tool_calls=(
@@ -66,10 +67,16 @@ class PlannerTests(unittest.TestCase):
             contract = SpecificationPlanner(model, ProductionTrace(trace_path)).plan(
                 self.tree,
                 [self.node],
-                deterministic_hint="github",
             )
             self.assertEqual(model.calls, 1)
             self.assertEqual(model.max_tokens, 700)
+            self.assertEqual(
+                model.tool_choice,
+                {
+                    "type": "function",
+                    "function": {"name": "select_build_contract"},
+                },
+            )
             self.assertEqual(contract.domain, "github")
             self.assertEqual(contract.decision_mode, "tool_call")
             trace = trace_path.read_text(encoding="utf-8")
@@ -95,7 +102,6 @@ class PlannerTests(unittest.TestCase):
                 ).plan(
                     self.tree,
                     [self.node],
-                    deterministic_hint="github",
                 )
 
     def test_requirement_digest_is_bounded(self) -> None:
@@ -108,9 +114,31 @@ class PlannerTests(unittest.TestCase):
             visual_reference=(),
             raw={},
         )
-        digest = requirement_digest(self.tree, [huge], deterministic_hint="github")
-        self.assertLess(len(digest), 2_000)
+        digest = requirement_digest(self.tree, [huge])
+        self.assertLess(len(digest), 20_000)
         self.assertNotIn("D" * 97, digest)
+        self.assertNotIn("deterministic_hint", digest)
+        self.assertNotIn("deterministic_coverage", digest)
+        self.assertIn("available_capability_contracts", digest)
+        self.assertIn("exclusions", digest)
+
+    def test_non_eligible_contract_must_name_the_uncovered_requirement(self) -> None:
+        model = _PlannerModel(
+            {
+                "domain": "github",
+                "kernel_eligible": False,
+                "capability_tags": [],
+                "risks": ["unknown behavior"],
+                "validation_focus": ["counterexample"],
+                "rationale": "Not covered.",
+                "uncovered_requirement_ids": [],
+            }
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "must identify uncovered"):
+                SpecificationPlanner(
+                    model, ProductionTrace(Path(directory) / "trace.jsonl")
+                ).plan(self.tree, [self.node])
 
 
 if __name__ == "__main__":

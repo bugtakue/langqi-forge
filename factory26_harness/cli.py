@@ -4,8 +4,8 @@ import argparse
 import hashlib
 import json
 import os
+import socket
 import subprocess
-import sys
 import time
 import uuid
 from pathlib import Path
@@ -14,7 +14,13 @@ from typing import Any
 from arcbench_agent_runtime import AgentRuntime
 
 from .agent import CodingAgent
-from .capabilities import CoverageAnalysis, analyze_coverage
+from .artifacts import application_source_manifest, write_run_envelope
+from .capabilities import (
+    CoverageAnalysis,
+    analyze_coverage,
+    generated_implementation_files,
+)
+from .capability_memory import match_capability_capsule, verify_capability_capsule
 from .checks import CheckResult, failures, run_full_checks
 from .impact import ChangeImpactGraph
 from .model import OpenAIChatClient
@@ -37,7 +43,6 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1]
 
 def log(message: str) -> None:
     print(message, flush=True)
-    print(message, file=sys.stderr, flush=True)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -79,14 +84,21 @@ def _parse_args() -> argparse.Namespace:
         default=int(os.environ.get("FACTORY26_REPAIR_ROUNDS", "2")),
     )
     parser.add_argument(
+        "--capability-capsule",
+        action="append",
+        default=[],
+        help="Verified prior capability capsule to consult as provisional warm-start evidence",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Build and validate the deterministic baseline without a model",
     )
     parser.add_argument(
         "--strict-exit",
-        action="store_true",
-        help="Return non-zero for local validation failures",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Return non-zero for local validation failures (default: enabled)",
     )
     return parser.parse_args()
 
@@ -103,7 +115,22 @@ def _output_dir(args: argparse.Namespace) -> Path:
 
 
 def _safe_smoke_port(smoke_port: int, grading_port: int) -> int:
-    return smoke_port + 1 if smoke_port == grading_port else smoke_port
+    if not 1_024 <= smoke_port <= 65_535:
+        raise ValueError("smoke port must be between 1024 and 65535")
+    for offset in range(128):
+        candidate = smoke_port + offset
+        if candidate > 65_535:
+            candidate = 1_024 + (candidate - 65_536)
+        if candidate == grading_port:
+            continue
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                probe.bind(("127.0.0.1", candidate))
+            except OSError:
+                continue
+        return candidate
+    raise RuntimeError("no available smoke port found in the bounded search window")
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -266,6 +293,8 @@ def _report(
     source_identity: dict[str, Any],
     coverage: CoverageAnalysis | None,
     transactions: list[dict[str, Any]],
+    application_source: dict[str, Any],
+    capability_memory: list[dict[str, Any]],
 ) -> dict[str, Any]:
     current_transactions = [
         item
@@ -273,13 +302,14 @@ def _report(
         if item.get("run_id") == run_id or item.get("recovery_run_id") == run_id
     ]
     return {
-        "version": 1,
+        "version": 2,
         "strategy": "one-planner-call-then-deterministic-kernel-or-targeted-repair",
         "run_id": run_id,
         "source_identity": source_identity,
         "duration_seconds": round(time.monotonic() - started, 3),
         "requirement_count": len(nodes),
         "requirement_sha256": requirement_sha256,
+        "application_source": application_source,
         "dry_run": dry_run,
         "detected_domain": domain,
         "execution_route": execution_route,
@@ -294,6 +324,15 @@ def _report(
         "all_local_checks_passed": all(result.passed for result in checks),
         "run_completed_successfully": all(result.passed for result in checks)
         and not agent_failures,
+        "behavioral_validation": {
+            "state": "pending_black_box_evidence",
+            "local_checks_are_behavioral_proof": False,
+            "required_next_evidence": (
+                "locked public Playwright evaluation"
+                if domain in DETERMINISTIC_DOMAINS
+                else "independent black-box acceptance contract"
+            ),
+        },
         "model_usage": {
             "prompt_tokens": model.total_prompt_tokens if model else 0,
             "completion_tokens": model.total_completion_tokens if model else 0,
@@ -302,6 +341,10 @@ def _report(
         },
         "model_gateway": model.gateway_evidence() if model else None,
         "capability_coverage": coverage.as_dict() if coverage else None,
+        "capability_memory": {
+            "matched_capsules": capability_memory,
+            "reuse_skipped_revalidation": False,
+        },
         "transaction_safety": {
             "batch_count": len(current_transactions),
             "committed": sum(
@@ -368,6 +411,7 @@ def main() -> int:
     coverage: CoverageAnalysis | None = None
     nodes_for_agent = []
     transactions: list[dict[str, Any]] = []
+    matched_capsules: list[dict[str, Any]] = []
     try:
         transactions = _recover_open_transactions(output_dir, runtime, trace, run_id)
         tree = load_requirement_tree(requirement_path)
@@ -375,16 +419,43 @@ def main() -> int:
         nodes = flatten_atomic(tree)
         domain = detect_domain(tree)
         coverage = analyze_coverage(nodes, domain)
+        capsule_paths = [
+            *args.capability_capsule,
+            *[
+                item.strip()
+                for item in os.environ.get("FACTORY26_CAPABILITY_CAPSULES", "").split(",")
+                if item.strip()
+            ],
+        ]
+        for capsule_value in capsule_paths:
+            capsule_path = Path(capsule_value).expanduser().resolve()
+            capsule = verify_capability_capsule(capsule_path)
+            match = match_capability_capsule(capsule, coverage)
+            if match["matched"]:
+                match["capsule_file_sha256"] = hashlib.sha256(
+                    capsule_path.read_bytes()
+                ).hexdigest()
+                matched_capsules.append(match)
         runtime.traceability.store_requirement_tree(tree)
         plan = plan_payload(nodes, args.batch_size)
         plan["detected_domain"] = domain
         plan["requirement_sha256"] = requirement_sha256
         plan["run_id"] = run_id
         plan["capability_coverage"] = coverage.as_dict()
+        plan["capability_memory"] = {
+            "matched_capsules": matched_capsules,
+            "reuse_skipped_revalidation": False,
+        }
         _write_json(output_dir / ".arc" / "compiled-plan.json", plan)
         _write_json(output_dir / ".arc" / "capability-coverage.json", coverage.as_dict())
         trace.record("requirements_compiled", plan=plan)
         trace.record("capability_coverage_analyzed", coverage=coverage.as_dict())
+        trace.record(
+            "capability_memory_consulted",
+            supplied_capsules=len(capsule_paths),
+            matched_capsules=matched_capsules,
+            reuse_skipped_revalidation=False,
+        )
 
         deterministic_domain = domain in DETERMINISTIC_DOMAINS
         if args.dry_run:
@@ -401,8 +472,6 @@ def main() -> int:
                 contract = SpecificationPlanner(model, trace).plan(
                     tree,
                     nodes,
-                    deterministic_hint=domain,
-                    coverage=coverage,
                 )
                 planner_iterations = contract.iterations
                 planner_contract = contract.as_dict()
@@ -419,8 +488,17 @@ def main() -> int:
                     and not contract.uncovered_requirement_ids
                 )
                 if kernel_approved:
-                    execution_route = "planner-approved-deterministic-kernel"
-                    route_reason = "the planning agent approved the matching versioned domain kernel"
+                    if matched_capsules:
+                        execution_route = (
+                            "planner-approved-capability-memory-kernel"
+                        )
+                        route_reason = (
+                            "the blind planner approved the versioned kernel and a prior "
+                            "falsifiable capability capsule matched; all validation remains enabled"
+                        )
+                    else:
+                        execution_route = "planner-approved-deterministic-kernel"
+                        route_reason = "the planning agent approved the matching versioned domain kernel"
                 elif deterministic_domain and (
                     coverage.uncovered_requirement_ids
                     or contract.uncovered_requirement_ids
@@ -451,11 +529,13 @@ def main() -> int:
                             "are still routed to a bounded coding agent"
                         )
                 elif deterministic_domain:
-                    execution_route = "planner-disagreement-safe-deterministic-kernel"
+                    execution_route = "planner-disagreement-bounded-code-agent"
                     route_reason = (
-                        "the planning contract disagreed with the deterministic classifier; "
-                        "the stable kernel is retained without opening an unbounded coding loop"
+                        "the independent planning contract did not approve the deterministic "
+                        "kernel; all requirements are routed to the bounded coding agent"
                     )
+                    coding_agent_enabled = True
+                    nodes_for_agent = list(nodes)
                 else:
                     execution_route = "planner-routed-bounded-code-agent"
                     route_reason = "the planning agent found a kernel mismatch or uncovered capability"
@@ -526,6 +606,14 @@ def main() -> int:
 
         created = scaffold_workspace(output_dir, domain=domain)
         impact.record_requirement_files(("__foundation__",), created)
+        for requirement_coverage in coverage.requirements:
+            implementation_files = generated_implementation_files(
+                domain, requirement_coverage.capabilities
+            )
+            if implementation_files:
+                impact.record_requirement_files(
+                    (requirement_coverage.requirement_id,), implementation_files
+                )
         trace.record(
             "deterministic_scaffold", tool="scaffold_workspace", created_files=created
         )
@@ -781,19 +869,27 @@ def main() -> int:
         local_passed = all(result.passed for result in checks)
         run_successful = local_passed and not agent_failures
         for node in nodes:
-            if local_passed and node.req_id not in agent_failures:
-                events.mark_test_passed(
-                    node.req_id, "packaging, build, startup and health checks passed"
-                )
-            else:
+            if not local_passed or node.req_id in agent_failures:
                 events.mark_test_failed(
                     node.req_id, "local contract checks or implementation batch failed"
                 )
+        if run_successful:
+            trace.record(
+                "behavioral_validation_pending",
+                requirement_ids=[node.req_id for node in nodes],
+                local_checks_are_behavioral_proof=False,
+                required_next_evidence=(
+                    "locked public Playwright evaluation"
+                    if domain in DETERMINISTIC_DOMAINS
+                    else "independent black-box acceptance contract"
+                ),
+            )
         _write_transaction_ledger(
             output_dir / ".arc" / "transaction-ledger.json", transactions
         )
         runtime.git.commit("chore: final deterministic validation")
 
+        application_source = application_source_manifest(output_dir)
         report = _report(
             started=started,
             nodes=nodes,
@@ -813,9 +909,12 @@ def main() -> int:
             source_identity=source_identity,
             coverage=coverage,
             transactions=transactions,
+            application_source=application_source,
+            capability_memory=matched_capsules,
         )
         _write_json(output_dir / ".arc" / "harness-report.json", report)
         trace.record("run_completed", report=report)
+        write_run_envelope(output_dir)
         events.mark_run_completed(
             "local contract checks passed"
             if run_successful

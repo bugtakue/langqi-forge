@@ -287,7 +287,12 @@ function auditView(ctx, org) {
     ctx.root.querySelector("#enterprise-message").innerHTML = result.item.valid ? `<div class="success">Chain verified: ${result.item.count} event(s), head ${ctx.escapeHtml(result.item.headHash.slice(0, 12))}…</div>` : `<div class="error">Audit chain failed at event ${result.item.brokenAt}.</div>`;
   });
   ctx.root.querySelector('[data-action="export-audit"]').addEventListener("click", async () => {
-    const response = await fetch(`/api/audit/export.csv?organization=${encodeURIComponent(org.name)}`, { headers: { "x-langqi-world": ctx.worldId(), "x-langqi-user": ctx.currentUser() } });
+    const response = await fetch(`/api/audit/export.csv?organization=${encodeURIComponent(org.name)}`, {
+      headers: {
+        "x-langqi-world": ctx.worldId(),
+        authorization: `Bearer ${ctx.sessionToken()}`,
+      },
+    });
     if (!response.ok) {
       ctx.root.querySelector("#enterprise-message").innerHTML = '<div class="error">Audit export was denied.</div>';
       return;

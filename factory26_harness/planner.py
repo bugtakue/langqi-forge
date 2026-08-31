@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from .capabilities import CoverageAnalysis, capability_ids, planner_capability_map
+from .capabilities import planner_capability_contracts, planner_capability_map
 from .model import OpenAIChatClient
 from .requirements import RequirementNode
 from .trace import ProductionTrace
@@ -21,6 +21,8 @@ Choose a domain and decide whether the implemented subset of one deterministic k
 Set kernel_eligible=true only when all requested behavior fits one domain and its listed capabilities.
 Otherwise choose generic or set kernel_eligible=false so a bounded coding agent will implement the gaps.
 List every requirement id that still needs implementation in uncovered_requirement_ids.
+The capability catalog is closed-world: behavior not stated in a behavior clause, or named in an exclusion, is uncovered.
+In the compact catalog, `does` is the complete positive boundary and `domain_exclusions` applies to every capability in that domain.
 Do not invent capabilities, requirement IDs, selectors, files, results, or scores. Keep risks and validation focus short.
 """
 
@@ -94,42 +96,24 @@ def _bounded_text(value: Any, *, maximum: int) -> str:
 def requirement_digest(
     tree: dict[str, Any],
     nodes: Iterable[RequirementNode],
-    *,
-    deterministic_hint: str,
-    coverage: CoverageAnalysis | None = None,
 ) -> str:
-    rows = []
+    rows: list[list[Any]] = []
     for node in nodes:
-        row = {
-            "id": node.req_id,
-            "name": _bounded_text(node.name, maximum=80),
-            "summary": _bounded_text(node.description, maximum=96),
-            "scenario_count": len(node.scenarios),
-        }
-        rows.append(row)
+        rows.append(
+            [
+                node.req_id,
+                _bounded_text(node.name, maximum=80),
+                _bounded_text(node.description, maximum=72),
+            ]
+        )
     payload = {
-        "root": {
-            "id": _bounded_text(tree.get("id") or tree.get("req_id"), maximum=100),
-            "name": _bounded_text(tree.get("name") or tree.get("title"), maximum=160),
-            "description": _bounded_text(tree.get("description"), maximum=320),
-        },
-        "deterministic_hint": deterministic_hint,
-        "available_kernels": KERNEL_CAPABILITIES,
-        "implemented_kernels": {
-            domain: capability_ids(domain, implemented_only=True)
-            for domain in KERNEL_CAPABILITIES
-        },
-        "deterministic_coverage": (
-            {
-                "kernel_eligible": coverage.kernel_eligible,
-                "required_capabilities": coverage.required_capabilities,
-                "implemented_capabilities": coverage.implemented_capabilities,
-                "missing_capabilities": coverage.missing_capabilities,
-                "uncovered_requirement_ids": coverage.uncovered_requirement_ids,
-            }
-            if coverage
-            else None
-        ),
+        "root": [
+            _bounded_text(tree.get("id") or tree.get("req_id"), maximum=100),
+            _bounded_text(tree.get("name") or tree.get("title"), maximum=160),
+            _bounded_text(tree.get("description"), maximum=200),
+        ],
+        "available_capability_contracts": planner_capability_contracts(),
+        "atomic_requirement_columns": ["id", "name", "summary"],
         "atomic_requirements": rows,
     }
     return json.dumps(
@@ -214,6 +198,10 @@ def _contract(
         raise ValueError("planner named an unknown uncovered requirement id")
     if kernel_eligible and uncovered_requirement_ids:
         raise ValueError("kernel-eligible contract cannot contain uncovered requirements")
+    if not kernel_eligible and not uncovered_requirement_ids:
+        raise ValueError(
+            "non-kernel-eligible contract must identify uncovered requirements"
+        )
     return PlannerContract(
         domain=domain,
         kernel_eligible=kernel_eligible,
@@ -235,20 +223,13 @@ class SpecificationPlanner:
         self,
         tree: dict[str, Any],
         nodes: Iterable[RequirementNode],
-        *,
-        deterministic_hint: str,
-        coverage: CoverageAnalysis | None = None,
     ) -> PlannerContract:
         nodes = list(nodes)
-        digest = requirement_digest(
-            tree,
-            nodes,
-            deterministic_hint=deterministic_hint,
-            coverage=coverage,
-        )
+        digest = requirement_digest(tree, nodes)
         prompt = (
             "Select the build contract for this compiled requirement digest. "
-            "The deterministic hint is untrusted and must be checked against the requirements.\n\n"
+            "No classifier hint or local coverage verdict is provided; judge only the requirements "
+            "against the closed-world capability contracts.\n\n"
             + digest
         )
         self.trace.record(
@@ -265,6 +246,10 @@ class SpecificationPlanner:
             ],
             [PLANNER_TOOL],
             max_tokens=700,
+            tool_choice={
+                "type": "function",
+                "function": {"name": "select_build_contract"},
+            },
         )
         arguments, decision_mode = _arguments_from_reply(reply)
         self.trace.record(

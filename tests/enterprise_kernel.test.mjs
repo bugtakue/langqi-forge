@@ -345,6 +345,10 @@ test("SAML gates SCIM and row/field policies filter without mutating input", () 
     { type: "scim.provision", payload: { organization: "acme", userName: "managed", email: "managed@example.test" } },
     { actor: "owner" },
   ).ok, true);
+  const managedAccount = state.accounts.find((account) => account.username === "managed");
+  assert.equal(Object.hasOwn(managedAccount, "password"), false);
+  assert.match(managedAccount.passwordHash, /^pbkdf2-sha256\$/);
+  assert.equal(managedAccount.credentialStatus, "managed");
 
   assert.equal(executeEnterpriseCommand(
     state,

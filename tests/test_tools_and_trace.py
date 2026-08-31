@@ -3,18 +3,27 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import socket
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from factory26_harness.checks import frontend_build_check, package_policy_check
+from factory26_harness.cli import _safe_smoke_port
 from factory26_harness.impact import ChangeImpactGraph
 from factory26_harness.trace import ProductionTrace, verify_trace_rows
 from factory26_harness.workspace_tools import WorkspaceTools
 
 
 class ToolAndTraceTests(unittest.TestCase):
+    def test_smoke_port_selection_skips_occupied_and_grading_ports(self) -> None:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
+            occupied.bind(("127.0.0.1", 0))
+            start = occupied.getsockname()[1]
+            selected = _safe_smoke_port(start, start + 1)
+        self.assertNotIn(selected, {start, start + 1})
+
     def test_writes_are_scoped_and_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -54,6 +63,26 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertEqual(rows[1]["previous_hash"], rows[0]["hash"])
             rows[0]["payload"]["value"] = 99
             self.assertFalse(verify_trace_rows(rows)["valid"])
+
+    def test_release_verification_rejects_unsealed_and_mixed_traces(self) -> None:
+        legacy = [{"sequence": 1, "event": "legacy", "payload": {}}]
+        self.assertTrue(verify_trace_rows(legacy)["valid"])
+        strict = verify_trace_rows(legacy, require_fully_sealed=True)
+        self.assertFalse(strict["valid"])
+        self.assertEqual(strict["reason"], "unsealed trace row")
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "trace.jsonl"
+            path.write_text(json.dumps(legacy[0]) + "\n", encoding="utf-8")
+            ProductionTrace(path).record("sealed", value=1)
+            rows = [
+                json.loads(line)
+                for line in path.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertTrue(verify_trace_rows(rows)["valid"])
+            self.assertFalse(
+                verify_trace_rows(rows, require_fully_sealed=True)["valid"]
+            )
 
     def test_existing_file_overwrite_requires_matching_hash(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

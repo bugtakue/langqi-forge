@@ -56,6 +56,71 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(len(packets), 1)
         self.assertEqual(packets[0]["failure_count"], 2)
         self.assertEqual(packets[0]["related_files"], ["frontend/src/app.js"])
+        self.assertEqual(packets[0]["classification"], "product_behavior")
+        self.assertTrue(packets[0]["repair_allowed"])
+
+    def test_hyphenated_requirement_id_is_not_truncated(self) -> None:
+        payload = {
+            "suites": [
+                {
+                    "file": "REQ-1-1-3-password-recovery.spec.ts",
+                    "specs": [
+                        {
+                            "id": "case",
+                            "title": "REQ-1-1-3 resets a password",
+                            "tests": [
+                                {
+                                    "results": [
+                                        {
+                                            "status": "failed",
+                                            "errors": [{"message": "Error: reset failed"}],
+                                        }
+                                    ]
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        failures = parse_playwright_json(payload)
+        self.assertEqual(failures[0].requirement_id, "REQ-1-1-3")
+
+    def test_browser_setup_failures_are_not_sent_to_the_code_repair_agent(self) -> None:
+        payload = {
+            "suites": [
+                {
+                    "file": "REQ-2-3-access.spec.ts",
+                    "specs": [
+                        {
+                            "id": "infra",
+                            "title": "REQ-2-3 access",
+                            "tests": [
+                                {
+                                    "results": [
+                                        {
+                                            "status": "failed",
+                                            "errors": [
+                                                {
+                                                    "message": "Error: browser.newContext: Test ended while setting up acceptDownloads"
+                                                }
+                                            ],
+                                        }
+                                    ]
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        failures = parse_playwright_json(payload)
+        with tempfile.TemporaryDirectory() as directory:
+            packets = repair_packets(
+                failures, ChangeImpactGraph(Path(directory) / "impact.json")
+            )
+        self.assertEqual(packets[0]["classification"], "evaluator_infrastructure")
+        self.assertFalse(packets[0]["repair_allowed"])
 
 
 if __name__ == "__main__":

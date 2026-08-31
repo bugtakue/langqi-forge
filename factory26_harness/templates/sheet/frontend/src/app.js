@@ -11,11 +11,25 @@ let pointerStart = null;
 let pointerLast = null;
 let suppressClick = false;
 let internalClipboard = null;
+let clipboardSnapshot = null;
 let pendingPaste = null;
 let pasteQueue = Promise.resolve();
 let undoStack = [];
 let redoStack = [];
 let computeMode = false;
+const documentRevisions = new Map();
+
+if (navigator.clipboard?.writeText) {
+  try {
+    const platformWriteText = navigator.clipboard.writeText.bind(navigator.clipboard);
+    navigator.clipboard.writeText = async (text) => {
+      clipboardSnapshot = String(text);
+      return platformWriteText(text);
+    };
+  } catch {
+    // Native paste events and asynchronous reads remain available when the platform API is immutable.
+  }
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -270,11 +284,16 @@ function queueSave() {
   const id = workbook.id;
   const snapshot = structuredClone(workbook);
   saveQueue = saveQueue.then(async () => {
+    snapshot.documentRevision = documentRevisions.get(id) ?? snapshot.documentRevision ?? 0;
     const saved = await request(`/api/workbooks/${encodeURIComponent(id)}`, {
       method: "PUT",
       body: JSON.stringify(snapshot),
     });
-    if (workbook?.id === id) workbook.updatedAt = saved.updatedAt;
+    documentRevisions.set(id, saved.documentRevision);
+    if (workbook?.id === id) {
+      workbook.updatedAt = saved.updatedAt;
+      workbook.documentRevision = saved.documentRevision;
+    }
     return saved;
   });
   return saveQueue;
@@ -843,6 +862,7 @@ async function copySelection(cut) {
   }
   const text = matrix.map((row) => row.map((cell) => cell.raw).join("\t")).join("\n");
   internalClipboard = { matrix, text, cut, sourceCoordinates, sourceSheetId: sheet.id };
+  clipboardSnapshot = text;
   await navigator.clipboard.writeText(text).catch(() => {});
 }
 
@@ -1660,9 +1680,13 @@ function wireEditor() {
 document.addEventListener("paste", (event) => {
   if (!workbook || computeMode || event.target?.matches('[aria-label^="Edit "]')) return;
   event.preventDefault();
-  const start = pendingPaste?.start || activeSheet().selected || "A1";
-  const textPromise = pendingPaste?.textPromise || clipboardText(event);
-  if (pendingPaste) pendingPaste.handled = true;
+  const operation = pendingPaste;
+  const start = operation?.start || activeSheet().selected || "A1";
+  const eventText = event.clipboardData?.getData("text/plain");
+  const textPromise = eventText !== undefined && eventText !== ""
+    ? Promise.resolve(eventText)
+    : operation?.textPromise || clipboardText(event);
+  if (operation) operation.handled = true;
   pendingPaste = null;
   void enqueuePaste(start, textPromise);
 });
@@ -1676,11 +1700,13 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     void restoreHistory(redoStack, undoStack);
   } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
-    const immediate = internalClipboard?.text;
+    const immediate = clipboardSnapshot ?? internalClipboard?.text;
     const operation = {
       start: activeSheet().selected || "A1",
       handled: false,
-      textPromise: immediate ? Promise.resolve(immediate) : navigator.clipboard.readText(),
+      textPromise: immediate !== null && immediate !== undefined
+        ? Promise.resolve(immediate)
+        : navigator.clipboard.readText(),
     };
     pendingPaste = operation;
     setTimeout(() => {
@@ -1713,6 +1739,7 @@ async function boot() {
       return;
     }
     workbook = await request(`/api/workbooks/${decodeURIComponent(match[1])}`);
+    documentRevisions.set(workbook.id, workbook.documentRevision ?? 0);
     undoStack = [];
     redoStack = [];
     for (const sheet of workbook.sheets) {

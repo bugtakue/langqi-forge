@@ -79,12 +79,21 @@ def reseal_trace_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sealed
 
 
-def verify_trace_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def verify_trace_rows(
+    rows: list[dict[str, Any]], *, require_fully_sealed: bool = False
+) -> dict[str, Any]:
     previous_hash = "GENESIS"
     sealed_rows = 0
     sealed_started = False
     for index, row in enumerate(rows, 1):
         if row.get("trace_version") != 2:
+            if require_fully_sealed:
+                return {
+                    "valid": False,
+                    "row": index,
+                    "reason": "unsealed trace row",
+                    "sealed_rows": sealed_rows,
+                }
             if sealed_started:
                 return {
                     "valid": False,
@@ -113,6 +122,13 @@ def verify_trace_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "sealed_rows": sealed_rows,
             }
         previous_hash = expected
+    if require_fully_sealed and sealed_rows != len(rows):
+        return {
+            "valid": False,
+            "row": sealed_rows + 1,
+            "reason": "trace is not fully sealed",
+            "sealed_rows": sealed_rows,
+        }
     return {
         "valid": True,
         "rows": len(rows),

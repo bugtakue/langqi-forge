@@ -14,7 +14,15 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from .artifacts import (
+    application_source_manifest,
+    public_task_bundle_manifest,
+    sha256_file,
+    verify_run_envelope,
+    write_run_envelope,
+)
 from .checks import failures, run_full_checks
+from .capability_memory import forge_capability_capsule, record_counterexample
 from .feedback import parse_playwright_json, repair_packets
 from .impact import ChangeImpactGraph
 from .public_fixtures import public_fixture_environment
@@ -68,6 +76,25 @@ def _write(path: Path, content: str) -> None:
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
+
+
+def _reserve_run_label(result_root: Path, label: str) -> None:
+    suffixes = (
+        "feedback.json",
+        "playwright.json",
+        "playwright.stderr.log",
+        "backend.log",
+    )
+    collisions = [
+        result_root / f"{label}.{suffix}"
+        for suffix in suffixes
+        if (result_root / f"{label}.{suffix}").exists()
+    ]
+    if collisions:
+        names = ", ".join(path.name for path in collisions)
+        raise FileExistsError(
+            f"public evaluation label is immutable and already exists: {names}"
+        )
 
 
 def ensure_playwright(cache_root: Path, *, install_browser: bool = False) -> Path:
@@ -164,7 +191,9 @@ def run_public_evaluation(
     project_dir = project_dir.resolve()
     cache_root = cache_root.resolve()
     trace = ProductionTrace(project_dir / ".arc" / "production-trace.jsonl")
-    tests_dir = cache_root / task_id / "tests"
+    verify_run_envelope(project_dir)
+    task_root = cache_root / task_id
+    tests_dir = task_root / "tests"
     if not tests_dir.is_dir():
         trace.record(
             "public_evaluation_failed",
@@ -173,6 +202,10 @@ def run_public_evaluation(
             error="public task is not synchronized",
         )
         raise FileNotFoundError(f"public task is not synchronized: {tests_dir}")
+    task_bundle_before = public_task_bundle_manifest(task_root)
+    if task_bundle_before.get("task_id") != task_id:
+        raise ValueError("public task id does not match its synchronized manifest")
+    application_source_before = application_source_manifest(project_dir)
     check_results = run_full_checks(project_dir, port + 1)
     broken = failures(check_results)
     if broken:
@@ -198,6 +231,7 @@ def run_public_evaluation(
     )
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", label):
         raise ValueError(f"unsafe run label: {label!r}")
+    _reserve_run_label(result_root, label)
     backend_log_path = result_root / f"{label}.backend.log"
     environment = dict(
         os.environ,
@@ -285,10 +319,32 @@ def run_public_evaluation(
         ) from exc
     stats = payload.get("stats") or {}
     failed = parse_playwright_json(payload)
+    application_source_after = application_source_manifest(project_dir)
+    task_bundle_after = public_task_bundle_manifest(task_root)
+    if application_source_after != application_source_before:
+        trace.record(
+            "public_evaluation_failed",
+            task_id=task_id,
+            run_label=label,
+            stage="application_source_mutated",
+            application_source_before=application_source_before["sha256"],
+            application_source_after=application_source_after["sha256"],
+        )
+        raise RuntimeError("public evaluation mutated the generated application source")
+    if task_bundle_after != task_bundle_before:
+        trace.record(
+            "public_evaluation_failed",
+            task_id=task_id,
+            run_label=label,
+            stage="test_bundle_mutated",
+            test_bundle_before=task_bundle_before["tests"]["sha256"],
+            test_bundle_after=task_bundle_after["tests"]["sha256"],
+        )
+        raise RuntimeError("public evaluation mutated the synchronized test bundle")
     impact = ChangeImpactGraph(project_dir / ".arc" / "change-impact.json")
     packets = repair_packets(failed, impact)
     feedback_payload = {
-        "version": 1,
+        "version": 2,
         "source_run_id": source_run_id,
         "task_id": task_id,
         "run_label": label,
@@ -301,6 +357,15 @@ def run_public_evaluation(
         "stats": stats,
         "failure_count": len(failed),
         "repair_packets": packets,
+        "application_source_sha256": application_source_before["sha256"],
+        "application_source_file_count": application_source_before["file_count"],
+        "test_bundle_sha256": task_bundle_before["tests"]["sha256"],
+        "test_bundle_file_count": task_bundle_before["tests"]["file_count"],
+        "public_task_manifest_sha256": task_bundle_before[
+            "task_manifest_sha256"
+        ],
+        "requirements_sha256": task_bundle_before["requirements_sha256"],
+        "playwright_report_sha256": sha256_file(report_path),
     }
     feedback_path = result_root / f"{label}.feedback.json"
     _write(
@@ -318,7 +383,34 @@ def run_public_evaluation(
         repair_packet_count=len(packets),
         evidence_file=f".arc/public-eval/{label}.feedback.json",
         evidence_sha256=hashlib.sha256(feedback_path.read_bytes()).hexdigest(),
+        playwright_report_sha256=feedback_payload["playwright_report_sha256"],
+        application_source_sha256=feedback_payload["application_source_sha256"],
+        test_bundle_sha256=feedback_payload["test_bundle_sha256"],
+        public_task_manifest_sha256=feedback_payload[
+            "public_task_manifest_sha256"
+        ],
     )
+    write_run_envelope(project_dir)
+    if completed.returncode != 0 or failed:
+        counterexample_path, counterexample = record_counterexample(
+            project_dir,
+            feedback=feedback_payload,
+            repair_packets=packets,
+        )
+        counterexample_sha256 = sha256_file(counterexample_path)
+        trace.record(
+            "counterexample_observed",
+            run_label=label,
+            counterexample_sha256=counterexample_sha256,
+            failure_count=counterexample["failure_count"],
+            cluster_count=counterexample["cluster_count"],
+            prompt_invocations=0,
+            agent_iterations=0,
+            manual_interventions=0,
+        )
+        write_run_envelope(project_dir)
+    else:
+        forge_capability_capsule(project_dir)
     return feedback_payload
 
 
@@ -352,7 +444,12 @@ def main() -> int:
     parser.add_argument(
         "--run-label", help="Safe filename label for retaining repeated evaluation runs"
     )
-    parser.add_argument("--strict-exit", action="store_true")
+    parser.add_argument(
+        "--strict-exit",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Return non-zero when the public test command fails (default: enabled)",
+    )
     args = parser.parse_args()
     result = run_public_evaluation(
         args.task_id,

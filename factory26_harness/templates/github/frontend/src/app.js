@@ -4,6 +4,7 @@ const root = document.querySelector("#app");
 let state = null;
 let accountMenuOpen = false;
 let resetEmail = "";
+let resetToken = "";
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -21,6 +22,15 @@ function currentUser() {
   return localStorage.getItem("langqi-forge-session") || "";
 }
 
+function sessionToken() {
+  return localStorage.getItem("langqi-forge-token") || "";
+}
+
+function clearLocalSession() {
+  localStorage.removeItem("langqi-forge-session");
+  localStorage.removeItem("langqi-forge-token");
+}
+
 function worldId() {
   let value = localStorage.getItem("langqi-forge-world");
   if (!value) {
@@ -31,17 +41,19 @@ function worldId() {
 }
 
 async function request(path, options = {}) {
+  const token = sessionToken();
   const response = await fetch(path, {
     ...options,
     headers: {
       "content-type": "application/json",
       "x-langqi-world": worldId(),
-      "x-langqi-user": currentUser(),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
   });
   const payload = await response.json();
   if (!response.ok && !payload?.code) throw new Error(payload?.error || `Request failed: ${response.status}`);
+  if (path === "/api/state" && currentUser() && payload?.viewer !== currentUser()) clearLocalSession();
   return payload;
 }
 
@@ -186,6 +198,8 @@ function loginView() {
       return;
     }
     localStorage.setItem("langqi-forge-session", result.item.username);
+    localStorage.setItem("langqi-forge-token", result.sessionToken);
+    state = await request("/api/state");
     navigate("/");
   });
 }
@@ -211,9 +225,9 @@ function signupView() {
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
     const errors = [];
-    if (!/^[A-Za-z0-9][A-Za-z0-9-]{2,38}$/.test(data.username || "")) errors.push("Username format is invalid.");
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email || "")) errors.push("Email format is invalid.");
-    if (String(data.password || "").length < 10 || data.password !== data.confirm) errors.push("Password is invalid or passwords are not consistent.");
+    if (!/^(?=.{1,39}$)[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(data.username || "").trim())) errors.push("Username format is invalid.");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(data.email || "").trim()) || String(data.email || "").trim().length > 254) errors.push("Email format is invalid.");
+    if (String(data.password || "").length < 12 || String(data.password || "").length > 128 || /\s/.test(data.password || "") || !/[A-Z]/.test(data.password || "") || !/[a-z]/.test(data.password || "") || !/[0-9]/.test(data.password || "") || !/[^A-Za-z0-9]/.test(data.password || "") || data.password !== data.confirm) errors.push("Password is invalid or passwords are not consistent.");
     if (!data.terms) errors.push("Agree to terms is required.");
     const message = root.querySelector("#form-message");
     if (errors.length) {
@@ -224,6 +238,8 @@ function signupView() {
       username: data.username,
       email: data.email,
       password: data.password,
+      confirm: data.confirm,
+      terms: Boolean(data.terms),
     });
     if (!result.ok) {
       message.innerHTML = `<div class="error">${
@@ -246,9 +262,11 @@ function forgotPasswordView() {
         </form>
       </section>
     `, true);
-    root.querySelector('[data-form="forgot"]').addEventListener("submit", (event) => {
+    root.querySelector('[data-form="forgot"]').addEventListener("submit", async (event) => {
       event.preventDefault();
       resetEmail = String(new FormData(event.currentTarget).get("email") || "");
+      const result = await command("account.recovery.begin", { email: resetEmail });
+      resetToken = result.resetToken;
       render();
     });
     return;
@@ -274,12 +292,22 @@ function forgotPasswordView() {
       message.innerHTML = '<div class="error">Invalid or incorrect verification code.</div>';
       return;
     }
-    if (String(data.password || "").length < 10 || data.password !== data.confirm) {
+    if (String(data.password || "").length < 12 || data.password !== data.confirm) {
       message.innerHTML = '<div class="error">Password is invalid or passwords do not match.</div>';
       return;
     }
-    await command("account.password", { email: resetEmail, password: data.password });
+    const result = await command("account.password", {
+      resetToken,
+      code: data.code,
+      password: data.password,
+      confirm: data.confirm,
+    });
+    if (!result.ok) {
+      message.innerHTML = '<div class="error">Password reset failed or the recovery context expired.</div>';
+      return;
+    }
     resetEmail = "";
+    resetToken = "";
     layout(`<section class="panel stack"><h1>Reset complete</h1><div class="success">Password has been updated.</div><p>${link("/login", "Sign in")}</p></section>`, true);
   });
 }
@@ -317,23 +345,24 @@ function passwordSettingsView() {
     const message = root.querySelector("#form-message");
     if (!data.current) {
       message.innerHTML = '<div class="error">Current password is required.</div>';
-      localStorage.removeItem("langqi-forge-session");
+      clearLocalSession();
       return;
     }
     if (data.password !== data.confirm) {
       message.innerHTML = '<div class="error">Passwords do not match and must be consistent.</div>';
-      localStorage.removeItem("langqi-forge-session");
+      clearLocalSession();
       return;
     }
     const result = await command("account.password", {
       username: currentUser(),
       currentPassword: data.current,
       password: data.password,
+      confirm: data.confirm,
     });
     message.innerHTML = result.ok
       ? '<div class="success">Password has been updated.</div>'
       : '<div class="error">Current password is incorrect or invalid.</div>';
-    localStorage.removeItem("langqi-forge-session");
+    clearLocalSession();
   });
 }
 
@@ -349,8 +378,9 @@ function logoutView() {
       <button class="btn danger" type="button" data-action="confirm-sign-out">Confirm sign out</button>
     </section>
   `, true);
-  root.querySelector('[data-action="confirm-sign-out"]').addEventListener("click", () => {
-    localStorage.removeItem("langqi-forge-session");
+  root.querySelector('[data-action="confirm-sign-out"]').addEventListener("click", async () => {
+    await command("session.destroy", {});
+    clearLocalSession();
     navigate("/");
   });
 }
@@ -635,7 +665,7 @@ function canViewRepository(repo) {
   if (repo.visibility === "public") return true;
   const user = currentUser();
   if (!user) return false;
-  if (repo.owner === user) return true;
+  if (repo.owner === user || (repo.administrators || []).includes(user)) return true;
   const org = state.organizations.find((entry) => entry.name === repo.owner);
   if (org?.owner === user) return true;
   return repo.accesses.some((access) => access.subject === user);
@@ -644,7 +674,7 @@ function canViewRepository(repo) {
 function canAdminRepository(repo) {
   const user = currentUser();
   if (!user) return false;
-  if (repo.owner === user) return true;
+  if (repo.owner === user || (repo.administrators || []).includes(user)) return true;
   const org = state.organizations.find((entry) => entry.name === repo.owner);
   if (org?.owner === user) return true;
   return repo.accesses.some((access) => access.subject === user && access.role === "admin");
@@ -973,8 +1003,8 @@ function newIssueView(repo) {
       description: String(data.description || ""), state: "open", author: currentUser(),
       editable: true, assignees: [], labels: [], milestone: "", comments: [],
     };
-    await command("create", { collection: "issues", item });
-    navigate(`/${repo.owner}/${repo.name}/issues/${number}`);
+    const result = await command("create", { collection: "issues", item });
+    navigate(`/${repo.owner}/${repo.name}/issues/${result.item.number}`);
   });
 }
 
@@ -1375,6 +1405,7 @@ async function render() {
     root,
     escapeHtml,
     currentUser,
+    sessionToken,
     worldId,
     layout,
     link,

@@ -66,9 +66,6 @@ class OpenAIChatClient:
 
     @property
     def gateway_provenance(self) -> str:
-        declared = os.environ.get("FACTORY26_GATEWAY_PROVENANCE", "").strip()
-        if declared:
-            return declared
         host = self.endpoint_host.lower()
         if host == "dashscope.aliyuncs.com" or host.endswith(".maas.aliyuncs.com"):
             return "alibaba-cloud-bailian"
@@ -89,6 +86,7 @@ class OpenAIChatClient:
         tools: list[dict[str, Any]],
         *,
         max_tokens: int | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> ModelReply:
         if self.request_count >= self.max_requests:
             self.trace.record(
@@ -109,7 +107,9 @@ class OpenAIChatClient:
         }
         if tools:
             payload["tools"] = tools
-            payload["tool_choice"] = "auto"
+            payload["tool_choice"] = tool_choice if tool_choice is not None else "auto"
+        elif tool_choice is not None:
+            raise ValueError("tool_choice requires at least one tool schema")
         self.trace.record(
             "model_request",
             endpoint=self.endpoint,

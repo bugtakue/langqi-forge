@@ -122,6 +122,75 @@ class ComputeProcessTests(unittest.TestCase):
                 )
                 self.assertEqual(status, 201)
                 workbook_id = workbook["id"]
+                first_document = json.loads(json.dumps(workbook))
+                first_document["name"] = "Saved revision one"
+                status, saved_document = request_json(
+                    port,
+                    f"/api/workbooks/{workbook_id}",
+                    method="PUT",
+                    payload=first_document,
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(saved_document["documentRevision"], 1)
+                stale_document = json.loads(json.dumps(workbook))
+                stale_document["name"] = "Must not overwrite"
+                status, conflict = request_json(
+                    port,
+                    f"/api/workbooks/{workbook_id}",
+                    method="PUT",
+                    payload=stale_document,
+                )
+                self.assertEqual(status, 409)
+                self.assertEqual(conflict["code"], "document_revision_conflict")
+                status, unchanged_document = request_json(
+                    port, f"/api/workbooks/{workbook_id}"
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(unchanged_document["name"], "Saved revision one")
+                self.assertEqual(unchanged_document["documentRevision"], 1)
+
+                data_dir = project / "backend" / "data"
+                blocked_data_dir = project / "backend" / "data-blocked"
+                data_dir.rename(blocked_data_dir)
+                data_dir.write_text("persistence path intentionally blocked", encoding="utf-8")
+                failed_document = json.loads(json.dumps(saved_document))
+                failed_document["name"] = "Must remain uncommitted"
+                try:
+                    status, failed_write = request_json(
+                        port,
+                        f"/api/workbooks/{workbook_id}",
+                        method="PUT",
+                        payload=failed_document,
+                    )
+                    self.assertEqual(status, 500)
+                    self.assertTrue(failed_write["error"])
+                finally:
+                    data_dir.unlink()
+                    blocked_data_dir.rename(data_dir)
+                status, after_failed_write = request_json(
+                    port, f"/api/workbooks/{workbook_id}"
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(after_failed_write["name"], "Saved revision one")
+                self.assertEqual(after_failed_write["documentRevision"], 1)
+
+                invalid_document = json.loads(json.dumps(saved_document))
+                invalid_document["documentRevision"] = 1
+                invalid_document["sheets"] = []
+                status, invalid_write = request_json(
+                    port,
+                    f"/api/workbooks/{workbook_id}",
+                    method="PUT",
+                    payload=invalid_document,
+                )
+                self.assertEqual(status, 422)
+                self.assertIn("1–100 worksheets", invalid_write["error"])
+                status, after_invalid_write = request_json(
+                    port, f"/api/workbooks/{workbook_id}"
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(after_invalid_write["documentRevision"], 1)
+
                 status, posted = request_json(
                     port,
                     f"/api/workbooks/{workbook_id}/compute",
@@ -237,6 +306,25 @@ class ComputeProcessTests(unittest.TestCase):
                 self.assertEqual(unchanged["enterprise"]["revision"], 3)
             finally:
                 stop(second)
+
+            state_path = project / "backend" / "data" / "sheet-state.json"
+            tampered_state = json.loads(state_path.read_text(encoding="utf-8"))
+            tampered_state["workbooks"][0]["enterprise"]["ledger"]["accounts"][0][
+                "name"
+            ] = "Tampered after commit"
+            tampered = json.dumps(tampered_state, indent=2).encode()
+            state_path.write_bytes(tampered)
+            completed = subprocess.run(
+                ["node", "server.mjs"],
+                cwd=project / "backend",
+                env={**os.environ, "PORT": str(free_port())},
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertEqual(state_path.read_bytes(), tampered)
+            self.assertIn(b"failed business_state integrity", completed.stderr)
 
 
 if __name__ == "__main__":

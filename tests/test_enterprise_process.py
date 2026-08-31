@@ -30,7 +30,7 @@ def request_json(
     *,
     method: str = "GET",
     payload: dict | None = None,
-    actor: str = "fixture-user-30",
+    token: str = "",
 ) -> tuple[int, dict]:
     data = None if payload is None else json.dumps(payload).encode()
     request = urllib.request.Request(
@@ -39,8 +39,8 @@ def request_json(
         method=method,
         headers={
             "content-type": "application/json",
-            "x-langqi-user": actor,
             "x-langqi-world": "process-test",
+            **({"authorization": f"Bearer {token}"} if token else {}),
         },
     )
     try:
@@ -48,6 +48,24 @@ def request_json(
             return response.status, json.loads(response.read())
     except urllib.error.HTTPError as error:
         return error.code, json.loads(error.read())
+
+
+def authenticate(port: int, username: str) -> str:
+    status, payload = request_json(
+        port,
+        "/api/command",
+        method="POST",
+        payload={
+            "type": "account.authenticate",
+            "payload": {
+                "login": username,
+                "password": "Fixture-password-123!",
+            },
+        },
+    )
+    if status != 200 or not payload.get("sessionToken"):
+        raise AssertionError(f"authentication failed: {status} {payload}")
+    return str(payload["sessionToken"])
 
 
 class EnterpriseProcessTests(unittest.TestCase):
@@ -97,6 +115,90 @@ class EnterpriseProcessTests(unittest.TestCase):
 
             first = start(reset=True)
             try:
+                status, anonymous_state = request_json(port, "/api/state")
+                self.assertEqual(status, 200)
+                self.assertEqual(anonymous_state["accounts"], [])
+                status, forged = request_json(
+                    port,
+                    "/api/command",
+                    method="POST",
+                    payload={
+                        "type": "patch",
+                        "payload": {
+                            "collection": "repositories",
+                            "id": "acme/protection-repo",
+                            "patch": {"visibility": "public"},
+                        },
+                    },
+                )
+                self.assertEqual(status, 401)
+                self.assertEqual(forged["code"], "authentication_required")
+
+                maintainer_token = authenticate(port, "fixture-user-30")
+                protection_admin_token = authenticate(port, "fixture-user-24")
+                status, authenticated_state = request_json(
+                    port, "/api/state", token=protection_admin_token
+                )
+                self.assertEqual(status, 200)
+                self.assertTrue(authenticated_state["accounts"])
+                self.assertTrue(
+                    all(
+                        "password" not in account and "passwordHash" not in account
+                        for account in authenticated_state["accounts"]
+                    )
+                )
+                status, undeclared = request_json(
+                    port,
+                    "/api/command",
+                    method="POST",
+                    token=protection_admin_token,
+                    payload={
+                        "type": "patch",
+                        "payload": {
+                            "collection": "repositories",
+                            "id": "acme/protection-repo",
+                            "patch": {"owner": "attacker"},
+                        },
+                    },
+                )
+                self.assertEqual(status, 422)
+                self.assertEqual(undeclared["code"], "validation")
+
+                data_dir = project / "backend" / "data"
+                blocked_data_dir = project / "backend" / "data-blocked"
+                data_dir.rename(blocked_data_dir)
+                data_dir.write_text("persistence path intentionally blocked", encoding="utf-8")
+                try:
+                    status, failed_write = request_json(
+                        port,
+                        "/api/command",
+                        method="POST",
+                        token=protection_admin_token,
+                        payload={
+                            "type": "patch",
+                            "payload": {
+                                "collection": "repositories",
+                                "id": "acme/protection-repo",
+                                "patch": {"visibility": "private"},
+                            },
+                        },
+                    )
+                    self.assertEqual(status, 500)
+                    self.assertTrue(failed_write["error"])
+                finally:
+                    data_dir.unlink()
+                    blocked_data_dir.rename(data_dir)
+                status, after_failed_write = request_json(
+                    port, "/api/state", token=protection_admin_token
+                )
+                self.assertEqual(status, 200)
+                protection_repo = next(
+                    item
+                    for item in after_failed_write["repositories"]
+                    if item["id"] == "acme/protection-repo"
+                )
+                self.assertEqual(protection_repo["visibility"], "public")
+
                 status, bypass = request_json(
                     port,
                     "/api/command",
@@ -109,6 +211,7 @@ class EnterpriseProcessTests(unittest.TestCase):
                             "patch": {"state": "merged"},
                         },
                     },
+                    token=maintainer_token,
                 )
                 self.assertEqual(status, 409)
                 self.assertEqual(bypass["code"], "protected_transition")
@@ -117,7 +220,7 @@ class EnterpriseProcessTests(unittest.TestCase):
                     port,
                     "/api/command",
                     method="POST",
-                    actor="fixture-user-24",
+                    token=protection_admin_token,
                     payload={
                         "type": "list.add",
                         "payload": {
@@ -134,7 +237,9 @@ class EnterpriseProcessTests(unittest.TestCase):
                     },
                 )
                 self.assertEqual(status, 200)
-                status, current = request_json(port, "/api/state")
+                status, current = request_json(
+                    port, "/api/state", token=protection_admin_token
+                )
                 self.assertEqual(status, 200)
                 protected_repo = next(
                     item
@@ -147,7 +252,7 @@ class EnterpriseProcessTests(unittest.TestCase):
                     port,
                     "/api/command",
                     method="POST",
-                    actor="fixture-user-24",
+                    token=protection_admin_token,
                     payload={
                         "type": "patch",
                         "payload": {
@@ -168,10 +273,13 @@ class EnterpriseProcessTests(unittest.TestCase):
                         "type": "pullRequest.merge",
                         "payload": {"id": "acme/pr-repo#8"},
                     },
+                    token=maintainer_token,
                 )
                 self.assertEqual(status, 200)
                 self.assertEqual(merged["item"]["state"], "merged")
-                status, integrity = request_json(port, "/api/audit/verify")
+                status, integrity = request_json(
+                    port, "/api/audit/verify", token=maintainer_token
+                )
                 self.assertEqual(status, 200)
                 self.assertTrue(integrity["valid"])
                 self.assertTrue(integrity["stateBound"])
@@ -180,7 +288,10 @@ class EnterpriseProcessTests(unittest.TestCase):
 
             second = start(reset=False)
             try:
-                status, restored = request_json(port, "/api/state")
+                maintainer_token = authenticate(port, "fixture-user-30")
+                status, restored = request_json(
+                    port, "/api/state", token=maintainer_token
+                )
                 self.assertEqual(status, 200)
                 pull = next(
                     item
@@ -191,6 +302,28 @@ class EnterpriseProcessTests(unittest.TestCase):
                 self.assertTrue(pull["mergeCommit"].startswith("merge-8-"))
             finally:
                 stop(second)
+
+            state_path = project / "backend" / "data" / "github-state.json"
+            tampered_state = json.loads(state_path.read_text(encoding="utf-8"))
+            protection_repo = next(
+                item
+                for item in tampered_state["repositories"]
+                if item["id"] == "acme/protection-repo"
+            )
+            protection_repo["visibility"] = "private"
+            tampered = json.dumps(tampered_state, indent=2).encode()
+            state_path.write_bytes(tampered)
+            completed = subprocess.run(
+                ["node", "server.mjs"],
+                cwd=project / "backend",
+                env={**os.environ, "PORT": str(free_port())},
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertEqual(state_path.read_bytes(), tampered)
+            self.assertIn(b"Refusing to start with invalid GitHub state", completed.stderr)
 
     def test_corrupt_persisted_state_is_preserved_and_startup_fails_closed(
         self,

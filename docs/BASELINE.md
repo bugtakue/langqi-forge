@@ -1,8 +1,10 @@
-# Public baseline — 2026-08-31
+# Historical v1 public baseline — 2026-08-31
 
 ## 结论
 
 Langqi Forge 已用真实阿里云百炼 `qwen-plus` 规划调用完成 GitHub 与 Spreadsheet 双域闭环。模型不是生成后的旁路说明器：它必须调用 `select_build_contract`，其领域与覆盖判断直接决定执行路线；错选或损坏返回会被发布门拒绝。
+
+本页是 commit `c93949a` 的历史 v1 基线，用于保留真实模型证据与演进过程；它不代表当前 v2 强化实现已经完成生产资格运行。
 
 | 运行 | 模块 | 模型请求 | prompt / completion Token | GUI | unexpected / skipped / flaky | GUI 墙钟时间 |
 |---|---:|---:|---:|---:|---:|---:|

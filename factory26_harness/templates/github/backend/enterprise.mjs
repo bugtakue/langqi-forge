@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
+import { hashPassword } from "./auth.mjs";
+
 const FORM_COMPONENT_TYPES = new Set(["markdown", "input", "textarea", "dropdown", "checkboxes"]);
 const TERMINAL_JOB_STATES = new Set(["success", "failure", "cancelled", "skipped"]);
 
@@ -84,7 +86,7 @@ function isOrganizationOwner(state, organization, actor) {
 
 function canAdminRepository(state, repo, actor) {
   if (!repo || !actor) return false;
-  if (repo.owner === actor || isOrganizationOwner(state, repo.owner, actor)) return true;
+  if (repo.owner === actor || isOrganizationOwner(state, repo.owner, actor) || asArray(repo.administrators).includes(actor)) return true;
   return asArray(repo.accesses).some((access) => access.subject === actor && access.role === "admin");
 }
 
@@ -991,7 +993,16 @@ export function executeEnterpriseCommand(state, command, context = {}) {
         item = next;
         state.scimUsers.push(item);
       }
-      if (!state.accounts.some((entry) => entry.username === userName)) state.accounts.push({ id: userName, username: userName, email: cleanString(payload.email || `${userName}@example.test`, 240), password: randomUUID(), managedByScim: true });
+      if (!state.accounts.some((entry) => entry.username === userName)) {
+        state.accounts.push({
+          id: userName,
+          username: userName,
+          email: cleanString(payload.email || `${userName}@example.test`, 240),
+          passwordHash: hashPassword(`Managed-${randomUUID()}-Aa1!`),
+          credentialStatus: "managed",
+          managedByScim: true,
+        });
+      }
       const org = findOrganization(state, organization);
       if (!org.members.some((entry) => entry.username === userName)) org.members.push({ username: userName, role: "Member", source: "SCIM" });
       return { ok: true, item };

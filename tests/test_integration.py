@@ -221,7 +221,9 @@ class _PartialImplementationHandler(_PlannerHandler):
 
 
 class DryRunIntegrationTests(unittest.TestCase):
-    def _run_github_with_planner(self, handler: type[BaseHTTPRequestHandler]) -> dict:
+    def _run_github_with_planner(
+        self, handler: type[BaseHTTPRequestHandler], *, expected_returncode: int = 0
+    ) -> dict:
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -272,7 +274,9 @@ children:
                     check=False,
                 )
                 self.assertEqual(
-                    completed.returncode, 0, completed.stdout + "\n" + completed.stderr
+                    completed.returncode,
+                    expected_returncode,
+                    completed.stdout + "\n" + completed.stderr,
                 )
                 return json.loads(
                     (output / ".arc" / "harness-report.json").read_text(
@@ -346,6 +350,7 @@ children:
                 encoding="utf-8"
             )
             self.assertIn('"state": "completed"', events)
+            self.assertNotIn('"phase": "test", "status": "passed"', events)
             self.assertTrue(
                 (output / ".arc" / "traceability" / "requirements.json").is_file()
             )
@@ -703,14 +708,16 @@ children:
             )
             self.assertEqual(report["transaction_safety"]["rolled_back"], 1)
 
-    def test_planner_domain_disagreement_keeps_available_kernel_but_fails_release_route(
+    def test_planner_domain_disagreement_cannot_silently_use_the_kernel(
         self,
     ) -> None:
-        report = self._run_github_with_planner(_WrongDomainPlannerHandler)
-        self.assertTrue(report["run_completed_successfully"])
+        report = self._run_github_with_planner(
+            _WrongDomainPlannerHandler, expected_returncode=1
+        )
+        self.assertFalse(report["run_completed_successfully"])
         self.assertEqual(
             report["execution_route"],
-            "planner-disagreement-safe-deterministic-kernel",
+            "planner-disagreement-bounded-code-agent",
         )
         self.assertEqual(report["planner_contract"]["domain"], "sheet")
 

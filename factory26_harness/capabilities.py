@@ -15,6 +15,8 @@ class CapabilityDefinition:
     implemented: bool
     patterns: tuple[str, ...]
     description: str
+    behavior_clauses: tuple[str, ...]
+    exclusions: tuple[str, ...]
     implementation_files: tuple[str, ...]
     validation_tests: tuple[str, ...]
 
@@ -64,6 +66,8 @@ class CoverageAnalysis:
                     "version": definition.version,
                     "implemented": definition.implemented,
                     "description": definition.description,
+                    "behavior_clauses": list(definition.behavior_clauses),
+                    "exclusions": list(definition.exclusions),
                     "implementation_files": list(definition.implementation_files),
                     "validation_tests": list(definition.validation_tests),
                 }
@@ -81,6 +85,8 @@ def _capability(
     patterns: tuple[str, ...],
     description: str,
     version: str = "1",
+    behavior_clauses: tuple[str, ...] | None = None,
+    exclusions: tuple[str, ...] | None = None,
     implementation_files: tuple[str, ...] | None = None,
     validation_tests: tuple[str, ...] | None = None,
 ) -> CapabilityDefinition:
@@ -100,6 +106,15 @@ def _capability(
         if domain == "github"
         else ("public ARC Spreadsheet 102-test suite",)
     )
+    default_exclusions = (
+        (
+            "No external network service, deployment, package registry, wiki, board, or notification behavior is included unless separately named.",
+        )
+        if domain == "github"
+        else (
+            "No sharing, charts, macros, version history, external connector, or notification behavior is included unless separately named.",
+        )
+    )
     return CapabilityDefinition(
         capability_id=capability_id,
         domain=domain,
@@ -107,6 +122,8 @@ def _capability(
         implemented=implemented,
         patterns=patterns,
         description=description,
+        behavior_clauses=behavior_clauses or (description,),
+        exclusions=exclusions or default_exclusions,
         implementation_files=(
             default_files if implementation_files is None and implemented else implementation_files or ()
         ),
@@ -125,7 +142,19 @@ CAPABILITIES: tuple[CapabilityDefinition, ...] = (
             r"register|create (?:a )?(?:new )?(?:github )?account",
             r"sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
         ),
-        description="Account lifecycle, credentials, recovery, and browser sessions.",
+        description="Server-issued world-bound sessions, derived credentials, generic recovery contexts, and account lifecycle.",
+        version="2",
+        implementation_files=(
+            "factory26_harness/templates/github/backend/auth.mjs",
+            "factory26_harness/templates/github/backend/authorization.mjs",
+            "factory26_harness/templates/github/backend/server.mjs",
+            "factory26_harness/templates/github/frontend/src/app.js",
+        ),
+        validation_tests=(
+            "tests/github_auth.test.mjs",
+            "tests/test_enterprise_process.py",
+            "public ARC GitHub 101-test suite",
+        ),
     ),
     _capability(
         "organization_permissions",
@@ -135,7 +164,18 @@ CAPABILITIES: tuple[CapabilityDefinition, ...] = (
             r"(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
             r"team member|team hierarchy|repository access|grant (?:a )?repository role|collaborator",
         ),
-        description="Organizations, teams, memberships, roles, and repository grants.",
+        description="Server-enforced organizations, teams, memberships, role inheritance, and repository grants.",
+        version="2",
+        implementation_files=(
+            "factory26_harness/templates/github/backend/authorization.mjs",
+            "factory26_harness/templates/github/backend/server.mjs",
+            "factory26_harness/templates/github/frontend/src/app.js",
+        ),
+        validation_tests=(
+            "tests/github_auth.test.mjs",
+            "tests/test_enterprise_process.py",
+            "public ARC GitHub 101-test suite",
+        ),
     ),
     _capability(
         "repository_lifecycle",
@@ -412,6 +452,12 @@ UNSUPPORTED_OPERATION_PATTERNS = (
     r"(?:write|modify|delete)\b.{0,40}\b(?:outside (?:the )?(?:workspace|project)|scoring harness)",
     r"(?:execute|run)\b.{0,24}\b(?:arbitrary )?(?:shell|system) commands?",
     r"\bgenerate (?:an? )?sbom\b|\bprocess (?:a )?payment\b|\bsend (?:an? )?sms\b",
+    r"\b(?:deploy|publish|release)\b.{0,48}\b(?:kubernetes|k8s|container|docker|cloud|cluster)\b",
+    r"\b(?:kubernetes|k8s|container|docker)\b.{0,48}\b(?:deploy|runtime|cluster|image)\b",
+    r"\b(?:invoke|integrate with|connect to)\b.{0,40}\b(?:external|third[ -]?party)\b.{0,24}\b(?:api|service|webhook|approval)\b",
+    r"\b(?:send|deliver)\b.{0,40}\b(?:email notification|notification email)\b.{0,24}\b(?:via|through|using)\b|\bsmtp (?:delivery|server|integration)\b|\bwebhook (?:delivery|integration)\b",
+    r"\b(?:package registry|github packages|wiki pages?|project boards?|notification delivery)\b",
+    r"\b(?:share (?:a )?workbook|workbook sharing|spreadsheet charts?|recorded macros?|macro execution|version history|external data connector)\b",
 )
 
 
@@ -430,11 +476,63 @@ def planner_capability_map() -> dict[str, tuple[str, ...]]:
     }
 
 
+def planner_capability_contracts() -> dict[str, dict[str, Any]]:
+    """Return the closed-world planner catalog in a token-efficient shape.
+
+    Capability ids and versions stay explicit, while domain-wide exclusions are
+    deduplicated instead of repeated for every capability.  This is a trusted
+    control-plane description; requirement text remains a separate untrusted
+    payload in ``planner.requirement_digest``.
+    """
+
+    return {
+        domain: {
+            "capabilities": {
+                item.capability_id: {
+                    "v": item.version,
+                    "does": " | ".join(item.behavior_clauses),
+                }
+                for item in definitions
+                if item.implemented
+            },
+            "domain_exclusions": sorted(
+                {
+                    exclusion
+                    for item in definitions
+                    for exclusion in item.exclusions
+                }
+            ),
+            "unavailable": sorted(
+                item.capability_id for item in definitions if not item.implemented
+            ),
+        }
+        for domain, definitions in sorted(CAPABILITY_CATALOG.items())
+    }
+
+
 def implemented_capability_map() -> dict[str, tuple[str, ...]]:
     return {
         domain: capability_ids(domain, implemented_only=True)
         for domain in sorted(CAPABILITY_CATALOG)
     }
+
+
+def generated_implementation_files(
+    domain: str, capability_ids_to_map: tuple[str, ...] | list[str]
+) -> tuple[str, ...]:
+    selected = set(capability_ids_to_map)
+    marker = f"factory26_harness/templates/{domain}/"
+    files = set()
+    for definition in CAPABILITY_CATALOG.get(domain, ()):
+        if definition.capability_id not in selected:
+            continue
+        for file_path in definition.implementation_files:
+            files.add(
+                file_path[len(marker) :]
+                if file_path.startswith(marker)
+                else file_path
+            )
+    return tuple(sorted(files))
 
 
 def _requirement_text(node: RequirementNode) -> str:

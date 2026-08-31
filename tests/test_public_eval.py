@@ -5,7 +5,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from factory26_harness.public_eval import _write, ensure_playwright
+from factory26_harness.public_eval import _reserve_run_label, _write, ensure_playwright
 
 
 class PublicEvalTests(unittest.TestCase):
@@ -28,6 +28,14 @@ class PublicEvalTests(unittest.TestCase):
                 list(executor.map(lambda value: _write(target, value), values))
             self.assertIn(target.read_text(encoding="utf-8"), values)
             self.assertEqual(list(target.parent.glob(f".{target.name}.*.tmp")), [])
+
+    def test_public_evaluation_labels_are_immutable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _reserve_run_label(root, "github")
+            (root / "github.feedback.json").write_text("{}", encoding="utf-8")
+            with self.assertRaisesRegex(FileExistsError, "immutable"):
+                _reserve_run_label(root, "github")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,10 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from factory26_harness.capabilities import analyze_coverage
+from factory26_harness.capabilities import (
+    analyze_coverage,
+    generated_implementation_files,
+)
 from factory26_harness.requirements import RequirementNode, flatten_atomic, load_requirement_tree
 
 
@@ -82,6 +85,28 @@ class CapabilityCoverageTests(unittest.TestCase):
         )
         self.assertFalse(coverage.kernel_eligible, coverage.as_dict())
         self.assertEqual(coverage.uncovered_requirement_ids, ("X2",))
+
+    def test_adjacent_but_unimplemented_products_never_inherit_kernel_coverage(self) -> None:
+        cases = (
+            ("github", "Create a repository and deploy it to Kubernetes"),
+            ("github", "Create an issue and send an email notification through SMTP"),
+            ("github", "Publish code to GitHub Packages and update wiki pages"),
+            ("sheet", "Create a workbook with spreadsheet charts and recorded macros"),
+            ("sheet", "Share a workbook and retain version history"),
+        )
+        for index, (domain, title) in enumerate(cases):
+            coverage = analyze_coverage([node(f"B{index}", title)], domain)
+            self.assertFalse(coverage.kernel_eligible, coverage.as_dict())
+            self.assertEqual(coverage.uncovered_requirement_ids, (f"B{index}",))
+
+    def test_capabilities_resolve_to_generated_source_paths(self) -> None:
+        files = generated_implementation_files(
+            "github", ["authentication", "repository_lifecycle"]
+        )
+        self.assertIn("backend/auth.mjs", files)
+        self.assertIn("backend/server.mjs", files)
+        self.assertIn("frontend/src/app.js", files)
+        self.assertTrue(all(not path.startswith("factory26_harness/") for path in files))
 
 
 if __name__ == "__main__":

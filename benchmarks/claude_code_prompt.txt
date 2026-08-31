@@ -1,0 +1,13 @@
+You are participating in the Factory26 application-building benchmark.
+
+Build the complete application described by the read-only requirements directory shown below. Start from this empty working directory and create exactly two runnable project directories at its root:
+
+- frontend: must support `npm install` and `npm run build`
+- backend: must support `PORT=<port> npm start` and expose `GET /api/health`
+
+Requirements directory: {requirements_dir}
+Domain: {domain}
+
+Work autonomously until the application is complete. Implement persistent server-side state, backend authorization and validation, and the visible workflows in the requirements. Do not merely create static mock screens. Do not read, search for, infer from, or modify any benchmark test source. Do not access any directory other than this working directory and the requirements directory. Do not ask the user questions. Do not use network search, MCP, plugins, skills, prior sessions, or pre-existing project code. Package installation is allowed only inside the generated frontend/backend when needed.
+
+Before finishing, run clean frontend and backend install/build/start/health checks yourself. A partial application or an explanation without runnable source is a failed result.

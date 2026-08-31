@@ -17,15 +17,24 @@ async function heading(expected) {
   assert.match((await page.locator("h1").first().textContent()) || "", expected);
 }
 
+async function signIn(username) {
+  await page.goto(`${baseUrl}/login`);
+  await page.evaluate(() => {
+    localStorage.removeItem("langqi-forge-session");
+    localStorage.removeItem("langqi-forge-token");
+  });
+  await page.reload();
+  await page.getByLabel("Username or email").fill(username);
+  await page.getByLabel("Password").fill("Fixture-password-123!");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForURL(`${baseUrl}/`);
+}
+
 try {
   const initialState = await (await page.request.get(`${baseUrl}/api/state`)).json();
   const owner = initialState.organizations.find((entry) => entry.name === "acme").owner;
   const reviewer = initialState.environments.find((entry) => entry.repoId === "acme/pr-repo" && entry.name === "production").requiredReviewers[0];
-  await page.goto(`${baseUrl}/login`);
-  await page.getByLabel("Username or email").fill(owner);
-  await page.getByLabel("Password").fill("Fixture-password-123!");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.waitForURL(`${baseUrl}/`);
+  await signIn(owner);
 
   await page.goto(`${baseUrl}/acme/pr-repo/actions`);
   await heading(/^Actions$/);
@@ -35,13 +44,14 @@ try {
   await page.waitForURL(/\/actions\/runs\//);
   await heading(/Workflow run #/);
   assert.match((await page.locator("main").textContent()) || "", /waiting/i);
+  const workflowRunUrl = page.url();
 
-  await page.evaluate((user) => localStorage.setItem("langqi-forge-session", user), reviewer);
-  await page.reload();
+  await signIn(reviewer);
+  await page.goto(workflowRunUrl);
   await page.getByRole("button", { name: "Approve deployment" }).click();
   await page.waitForFunction(() => document.querySelector("main")?.textContent?.includes("success"));
 
-  await page.evaluate((user) => localStorage.setItem("langqi-forge-session", user), owner);
+  await signIn(owner);
   await page.goto(`${baseUrl}/acme/pr-repo/settings/rules`);
   await heading(/Repository rulesets/);
   assert.match((await page.locator("main").textContent()) || "", /Main branch guard/);

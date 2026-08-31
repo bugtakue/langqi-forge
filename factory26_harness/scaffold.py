@@ -150,6 +150,7 @@ const publicDir = path.resolve(here, "../frontend/dist");
 const dataDir = path.resolve(here, "data");
 const statePath = path.join(dataDir, "state.json");
 const port = Number.parseInt(process.env.PORT || "3000", 10);
+const host = process.env.HOST || "0.0.0.0";
 let ready = false;
 
 await mkdir(dataDir, { recursive: true });
@@ -219,7 +220,7 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(port, "127.0.0.1", () => console.log(`listening on ${port}`));
+server.listen(port, host, () => console.log(`listening on ${host}:${port}`));
 '''
 
 
