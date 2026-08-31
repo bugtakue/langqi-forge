@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from benchmarks.run_claude_code import (
+    CHECKPOINTED_PROMPT_PATH,
     ROOT,
     ensure_fresh_output,
     protocol_violations as claude_protocol_violations,
@@ -41,6 +42,13 @@ class CompetitorBenchmarkTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("--timeout-seconds", completed.stdout)
+        self.assertIn("--prompt-profile", completed.stdout)
+
+    def test_checkpointed_prompt_forces_early_runnable_state(self) -> None:
+        prompt = CHECKPOINTED_PROMPT_PATH.read_text(encoding="utf-8")
+        self.assertIn("immediately create both package manifests", prompt)
+        self.assertIn("at most two files", prompt)
+        self.assertIn("Preserve a runnable state after every increment", prompt)
 
     def test_requirement_digest_is_stable_and_content_bound(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

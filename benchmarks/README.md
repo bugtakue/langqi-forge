@@ -10,7 +10,7 @@ Langqi Forge 可以使用自己的版本化能力内核和可证伪能力胶囊�
 
 ## B. Blank-workspace Agent 比赛
 
-`run_codex.py` 与 `run_claude_code.py` 用同一份 prompt 模板、同一份只读需求、空输出目录、零人工、固定墙钟和同一外部评分器，专门比较两个通用代码 Agent 从零构建的能力。
+`run_codex.py` 与 `run_claude_code.py` 用同一份 prompt 模板、同一份只读需求、空输出目录、零人工、固定墙钟和同一外部评分器，专门比较两个通用代码 Agent 从零构建的能力。默认的 `checkpointed-v3` 会先要求可启动骨架，再以最多两文件的增量编辑扩展；首轮原始提示仍保留为 `unbounded-v2`。
 
 ### 不可变协议
 
@@ -49,12 +49,14 @@ Codex：
 .venv/bin/python benchmarks/run_codex.py github \
   --output-dir /tmp/codex-github-run \
   --codex .cache/benchmark-tools/codex-0.151.0/node_modules/.bin/codex \
-  --model gpt-5.4 --effort high --timeout-seconds 1800
+  --model gpt-5.4 --effort high --timeout-seconds 1800 \
+  --prompt-profile checkpointed-v3
 
 .venv/bin/python benchmarks/run_codex.py sheet \
   --output-dir /tmp/codex-sheet-run \
   --codex .cache/benchmark-tools/codex-0.151.0/node_modules/.bin/codex \
-  --model gpt-5.4 --effort high --timeout-seconds 1800
+  --model gpt-5.4 --effort high --timeout-seconds 1800 \
+  --prompt-profile checkpointed-v3
 ```
 
 Claude Code：
@@ -62,11 +64,13 @@ Claude Code：
 ```bash
 .venv/bin/python benchmarks/run_claude_code.py github \
   --output-dir /tmp/claude-github-run \
-  --model sonnet --effort high --max-budget-usd 5 --timeout-seconds 1800
+  --model sonnet --effort high --max-budget-usd 5 --timeout-seconds 1800 \
+  --prompt-profile checkpointed-v3
 
 .venv/bin/python benchmarks/run_claude_code.py sheet \
   --output-dir /tmp/claude-sheet-run \
-  --model sonnet --effort high --max-budget-usd 5 --timeout-seconds 1800
+  --model sonnet --effort high --max-budget-usd 5 --timeout-seconds 1800 \
+  --prompt-profile checkpointed-v3
 ```
 
 然后为每个成功生成的制品执行相同 GUI：

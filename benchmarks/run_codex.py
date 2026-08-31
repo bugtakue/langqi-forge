@@ -13,7 +13,7 @@ from pathlib import Path
 
 try:
     from benchmarks.run_claude_code import (
-        PROMPT_PATH,
+        PROMPT_PROFILES,
         ROOT,
         command_version,
         ensure_fresh_output,
@@ -24,7 +24,7 @@ try:
     )
 except ModuleNotFoundError:  # Direct `python benchmarks/run_codex.py ...` execution.
     from run_claude_code import (  # type: ignore[no-redef]
-        PROMPT_PATH,
+        PROMPT_PROFILES,
         ROOT,
         command_version,
         ensure_fresh_output,
@@ -103,6 +103,11 @@ def parse_args() -> argparse.Namespace:
         "--effort", choices=("low", "medium", "high", "xhigh"), default="high"
     )
     parser.add_argument("--timeout-seconds", type=int, default=1800)
+    parser.add_argument(
+        "--prompt-profile",
+        choices=tuple(PROMPT_PROFILES),
+        default="checkpointed-v3",
+    )
     return parser.parse_args()
 
 
@@ -288,7 +293,8 @@ def run() -> int:
     control_root.mkdir()
     workspace.mkdir()
     shutil.copytree(source_requirements, requirements)
-    prompt = PROMPT_PATH.read_text(encoding="utf-8").format(
+    selected_prompt_path = PROMPT_PROFILES[args.prompt_profile]
+    prompt = selected_prompt_path.read_text(encoding="utf-8").format(
         requirements_dir=requirements,
         domain=args.domain,
     )
@@ -370,7 +376,7 @@ def run() -> int:
         status = "protocol_violation"
 
     metadata = {
-        "schema": "langqi-blank-workspace-agent-v2",
+        "schema": f"langqi-blank-workspace-agent-{args.prompt_profile.rsplit('-', 1)[-1]}",
         "agent": "codex",
         "status": status,
         "returncode": returncode,
@@ -397,7 +403,9 @@ def run() -> int:
         "requirements_path": str(requirements),
         "requirements_source": str(source_requirements),
         "workspace_path": str(workspace),
-        "prompt_template_path": str(PROMPT_PATH),
+        "prompt_profile": args.prompt_profile,
+        "prompt_template_path": str(selected_prompt_path),
+        "prompt_template_sha256": file_sha256(selected_prompt_path),
         "exact_prompt_path": str(exact_prompt_path),
         "trace_path": str(trace_path),
         "stderr_path": str(stderr_path),

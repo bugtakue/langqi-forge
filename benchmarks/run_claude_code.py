@@ -14,6 +14,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPT_PATH = Path(__file__).with_name("claude_code_prompt.txt")
+CHECKPOINTED_PROMPT_PATH = Path(__file__).with_name("checkpointed_prompt.txt")
+PROMPT_PROFILES = {
+    "unbounded-v2": PROMPT_PATH,
+    "checkpointed-v3": CHECKPOINTED_PROMPT_PATH,
+}
 ALLOWED_CLAUDE_TOOLS = frozenset({"Bash", "Edit", "Glob", "Grep", "Read", "Write"})
 
 
@@ -54,6 +59,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-budget-usd", type=float, default=5.0)
     parser.add_argument("--timeout-seconds", type=int, default=1800)
+    parser.add_argument(
+        "--prompt-profile",
+        choices=tuple(PROMPT_PROFILES),
+        default="checkpointed-v3",
+    )
     return parser.parse_args()
 
 
@@ -184,7 +194,8 @@ def run() -> int:
     control_root.mkdir()
     workspace.mkdir()
     shutil.copytree(source_requirements, requirements)
-    prompt = PROMPT_PATH.read_text(encoding="utf-8").format(
+    selected_prompt_path = PROMPT_PROFILES[args.prompt_profile]
+    prompt = selected_prompt_path.read_text(encoding="utf-8").format(
         requirements_dir=requirements,
         domain=args.domain,
     )
@@ -265,7 +276,7 @@ def run() -> int:
         status = "protocol_violation"
 
     metadata = {
-        "schema": "langqi-blank-workspace-agent-v2",
+        "schema": f"langqi-blank-workspace-agent-{args.prompt_profile.rsplit('-', 1)[-1]}",
         "agent": "claude-code",
         "status": status,
         "returncode": returncode,
@@ -291,7 +302,9 @@ def run() -> int:
         "requirements_path": str(requirements),
         "requirements_source": str(source_requirements),
         "workspace_path": str(workspace),
-        "prompt_template_path": str(PROMPT_PATH),
+        "prompt_profile": args.prompt_profile,
+        "prompt_template_path": str(selected_prompt_path),
+        "prompt_template_sha256": file_sha256(selected_prompt_path),
         "exact_prompt_path": str(exact_prompt_path),
         "trace_path": str(trace_path),
         "stderr_path": str(stderr_path),
