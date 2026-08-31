@@ -241,6 +241,19 @@ def verify_source_manifest(source_root: Path) -> dict[str, Any]:
     return manifest
 
 
+def require_external_output_directory(source_root: Path, output_dir: Path) -> None:
+    """Keep generated workspaces outside an unpacked submission source tree."""
+    resolved_source = source_root.resolve()
+    if not (resolved_source / SOURCE_MANIFEST_NAME).is_file():
+        return
+    resolved_output = output_dir.expanduser().resolve()
+    if resolved_output == resolved_source or resolved_source in resolved_output.parents:
+        raise RuntimeError(
+            "an unpacked submission bundle requires --output-dir outside its "
+            "source directory so generated files cannot contaminate source verification"
+        )
+
+
 def _zip_info(relative: str, *, executable: bool = False) -> zipfile.ZipInfo:
     info = zipfile.ZipInfo(relative, FIXED_ZIP_TIMESTAMP)
     info.compress_type = zipfile.ZIP_DEFLATED

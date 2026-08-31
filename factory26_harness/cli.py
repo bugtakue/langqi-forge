@@ -35,7 +35,11 @@ from .requirements import (
     requirement_source_sha256,
 )
 from .scaffold import scaffold_workspace
-from .submission_bundle import SOURCE_MANIFEST_NAME, verify_source_manifest
+from .submission_bundle import (
+    SOURCE_MANIFEST_NAME,
+    require_external_output_directory,
+    verify_source_manifest,
+)
 from .trace import ProductionTrace
 from .workspace_tools import WorkspaceTools
 
@@ -211,7 +215,20 @@ def _recover_open_transactions(
 
 
 def _source_identity() -> dict[str, Any]:
+    manifest_path = SOURCE_ROOT / SOURCE_MANIFEST_NAME
     declared = os.environ.get("FACTORY26_SOURCE_REVISION", "").strip()
+    if manifest_path.is_file():
+        manifest = verify_source_manifest(SOURCE_ROOT)
+        if declared and declared != manifest["source_revision"]:
+            raise RuntimeError(
+                "declared source revision does not match verified submission manifest"
+            )
+        return {
+            "revision": manifest["source_revision"],
+            "worktree_clean": True,
+            "source": "verified-submission-manifest",
+            "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        }
     if declared:
         return {"revision": declared, "worktree_clean": None, "source": "environment"}
     try:
@@ -233,17 +250,6 @@ def _source_identity() -> dict[str, Any]:
         ).stdout.strip()
         return {"revision": revision, "worktree_clean": not status, "source": "git"}
     except (OSError, subprocess.SubprocessError):
-        manifest_path = SOURCE_ROOT / SOURCE_MANIFEST_NAME
-        if manifest_path.is_file():
-            manifest = verify_source_manifest(SOURCE_ROOT)
-            return {
-                "revision": manifest["source_revision"],
-                "worktree_clean": True,
-                "source": "verified-submission-manifest",
-                "manifest_sha256": hashlib.sha256(
-                    manifest_path.read_bytes()
-                ).hexdigest(),
-            }
         return {
             "revision": "unavailable",
             "worktree_clean": None,
@@ -379,11 +385,12 @@ def main() -> int:
         raise SystemExit("this first harness version supports --type web only")
     started = time.monotonic()
     output_dir = _output_dir(args)
+    require_external_output_directory(SOURCE_ROOT, output_dir)
+    source_identity = _source_identity()
     output_dir.mkdir(parents=True, exist_ok=True)
     requirement_path = Path(args.requirement_path).expanduser().resolve()
     smoke_port = _safe_smoke_port(args.smoke_port, args.web_port)
     run_id = os.environ.get("FACTORY26_RUN_ID", "").strip() or str(uuid.uuid4())
-    source_identity = _source_identity()
 
     log(f"[env] requirement_path={requirement_path}")
     log(f"[env] output_dir={output_dir}")

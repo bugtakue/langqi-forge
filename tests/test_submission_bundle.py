@@ -6,10 +6,13 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
+from factory26_harness import cli
 from factory26_harness.submission_bundle import (
     SOURCE_MANIFEST_NAME,
     build_submission_bundle,
+    require_external_output_directory,
     verify_source_manifest,
 )
 
@@ -106,6 +109,47 @@ class SubmissionBundleTests(unittest.TestCase):
             self.assertEqual(
                 verified["source_revision"], first_result["source_revision"]
             )
+
+    def test_unpacked_bundle_rejects_internal_output_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = self._source_tree(root)
+            bundle = root / "agent.zip"
+            build_submission_bundle(source, bundle)
+            extracted = root / "extracted"
+            with zipfile.ZipFile(bundle) as archive:
+                archive.extractall(extracted)
+
+            require_external_output_directory(extracted, root / "workspace")
+            with self.assertRaisesRegex(RuntimeError, "requires --output-dir outside"):
+                require_external_output_directory(
+                    extracted, extracted / "generated-project"
+                )
+
+    def test_source_identity_prefers_bundle_manifest_inside_outer_git(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = self._source_tree(root)
+            bundle = root / "agent.zip"
+            result = build_submission_bundle(source, bundle)
+            extracted = source / "outer-container" / "unpacked"
+            with zipfile.ZipFile(bundle) as archive:
+                archive.extractall(extracted)
+
+            with patch.object(cli, "SOURCE_ROOT", extracted):
+                identity = cli._source_identity()
+                with patch.dict(
+                    cli.os.environ,
+                    {"FACTORY26_SOURCE_REVISION": "0" * 40},
+                ):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "does not match verified"
+                    ):
+                        cli._source_identity()
+
+            self.assertEqual(identity["revision"], result["source_revision"])
+            self.assertEqual(identity["source"], "verified-submission-manifest")
+            self.assertTrue(identity["worktree_clean"])
 
     def test_manifest_verification_rejects_tampering(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
