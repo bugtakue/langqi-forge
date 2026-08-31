@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from benchmarks.run_claude_code import (
+    ROOT,
     ensure_fresh_output,
     requirement_digest,
     trace_metrics,
@@ -14,6 +17,22 @@ from benchmarks.run_codex import trace_metrics as codex_trace_metrics
 
 
 class CompetitorBenchmarkTests(unittest.TestCase):
+    def test_codex_runner_direct_script_help_is_executable(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "benchmarks" / "run_codex.py"),
+                "--help",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("--timeout-seconds", completed.stdout)
+
     def test_requirement_digest_is_stable_and_content_bound(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -10,13 +10,22 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from benchmarks.run_claude_code import (
-    PROMPT_PATH,
-    ROOT,
-    command_version,
-    ensure_fresh_output,
-    requirement_digest,
-)
+try:
+    from benchmarks.run_claude_code import (
+        PROMPT_PATH,
+        ROOT,
+        command_version,
+        ensure_fresh_output,
+        requirement_digest,
+    )
+except ModuleNotFoundError:  # Direct `python benchmarks/run_codex.py ...` execution.
+    from run_claude_code import (  # type: ignore[no-redef]
+        PROMPT_PATH,
+        ROOT,
+        command_version,
+        ensure_fresh_output,
+        requirement_digest,
+    )
 
 
 def parse_args() -> argparse.Namespace:
