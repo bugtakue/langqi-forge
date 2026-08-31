@@ -60,5 +60,6 @@
 ## 尚未冒充完成的事项
 
 - 最新代码尚未用百炼密钥重新生成最终双域生产轨迹；仓库现有 `evidence/final/` 仍是上一份真实 `qwen-plus` 运行。
-- 2026-09-01 的 `unbounded-v2` 隔离盲测不构成成对成绩：Codex CLI `0.151.0` + `gpt-5.4/high` 在 GitHub 上 1200.063 秒 timeout，未产生可评分文件；在 Spreadsheet 上 1200.062 秒 timeout，已生成前后端 10 个文件，但未执行 install/build/start，因此仍不评分。两次均无违规工具事件。Claude Code `2.1.161` 在 5.792 秒返回 OAuth token revoked 的 401，属认证失败而非参赛成绩。新增的 `checkpointed-v3` 对双方同时要求早期可运行骨架与最多两文件的增量编辑；它是独立第二赛制，不覆盖 v2 超时。在 Claude 重新认证并完成同题运行前，不宣称任一通用 Agent 获胜。
+- 2026-09-01 的 `unbounded-v2` 隔离盲测不构成成对成绩：Codex CLI `0.151.0` + `gpt-5.4/high` 在 GitHub 上 1200.063 秒 timeout，未产生可评分文件；在 Spreadsheet 上 1200.062 秒 timeout，已生成前后端 10 个文件，但未执行 install/build/start，因此仍不评分。两次均无违规工具事件。Claude Code `2.1.161` 在 5.792 秒返回 OAuth token revoked 的 401，属认证失败而非参赛成绩。
+- 独立的 `checkpointed-v3` 对双方同时要求早期可运行骨架与最多两文件的增量编辑，不覆盖 v2 超时。Codex 的 Spreadsheet v3 运行在约 1 分钟内生成了前后端可安装骨架，随后逐层生成事务持久化、公式、结构变更、CSV、排序/筛选/校验/透视和真实 SPA；但在 1200.044 秒时仍未做完最终 build/start 收尾，所以状态仍是 timeout、不评分。它证明检查点策略改善了可恢复性，也暴露出单文件仍可膨胀到 1,584 行的剩余问题。在 Claude 重新认证并完成同题运行前，不宣称任一通用 Agent 获胜。
 - 3–5 分钟视频按用户要求后置；官网项目未提交，也未保存不可撤回的提交动作。
