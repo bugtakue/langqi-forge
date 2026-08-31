@@ -1,18 +1,49 @@
-# Langqi Forge — Factory26 Low-Token Harness
+# Langqi Forge（琅岐铸造）
 
-Factory26 / ARC-Bench 的独立参赛工程。它把规格编译成可运行软件：稳定能力走确定性领域内核，未知能力才进入受限代码 Agent 与定点修复环。目标不是堆更多 Agent，而是在 GUI 通过率、Token 与完成时间三项指标之间取得可复现的优势。
+Factory26 / ARC-Bench 参赛 Harness：让一个低 Token 规格规划 Agent 选择可验证的构建契约，再由版本化能力内核或受限代码 Agent 生成可运行软件。
 
-当前闭环：
+它不是“零 Token 模板脚本”。正式路径必须完成一次真实 OpenAI-compatible 模型调用，并由模型通过 `select_build_contract` 函数工具明确给出领域、能力覆盖、风险和验证重点。模型选错、拒答、返回损坏参数或没有真正调用工具时，软件可以安全降级生成，但发布资格门会失败。
 
-1. 读取并按依赖顺序编译 `requirements.yaml`。
-2. 识别题目领域：GitHub 与 Spreadsheet 走零 Token 可持久化内核，未知题生成通用地基。
-3. 未被领域内核覆盖的需求才通过 OpenAI-compatible 网关交给带受限工具的代码 Agent。
-4. 每批只提供少量需求和已观测相关文件，记录需求到文件的影响图并聚类 GUI 失败。
-5. 在独立 smoke port 上执行构建、启动和 `/api/health` 检查，不占用评分端口。
-6. 把 prompts、模型回复、工具调用、Agent 迭代、人工干预点、需求溯源和 Git 提交全部落盘。
-7. 最后由 fail-closed 资格门同时检查双域 GUI、对抗夹具、并发、时间、跳过项与 Token。
+## 已验证结果
 
-## 平台契约
+2026-08-31 使用阿里云百炼 `qwen-plus` 的真实独立运行：
+
+| 制品 / 世界 | 模型请求 | prompt / completion Token | GUI | unexpected / skipped / flaky | GUI 时间 |
+|---|---:|---:|---:|---:|---:|
+| GitHub 基准 | 1 | 2776 / 270 | 101 / 101 | 0 / 0 / 0 | 18.077 秒 |
+| GitHub 对抗改名 | 同一制品 | 同上 | 101 / 101 | 0 / 0 / 0 | 9.313 秒 |
+| Spreadsheet 基准 | 1 | 1756 / 271 | 102 / 102 | 0 / 0 / 0 | 27.002 秒 |
+
+三次 GUI 验收均为 4 workers、文件内完全并发。GitHub 与 Spreadsheet 的生成、构建、启动、健康检查、完整轨迹和 fail-closed 资格门全部通过。GUI 时间会受本机并发负载影响；这组结果只证明固定公开需求哈希，不保证隐藏测试、Top 20 或获奖。
+
+- [完整公开生产轨迹](evidence/final/README.md)
+- [基线、对抗与演进记录](docs/BASELINE.md)
+- [轨迹字段与人工干预边界](docs/TRACE.md)
+- [Harness 架构与失败语义](docs/ARCHITECTURE.md)
+
+## Harness 如何工作
+
+```mermaid
+flowchart LR
+  A[requirements.yaml] --> B[确定性规格编译器]
+  B --> C[一次低 Token 模型规划]
+  C -->|select_build_contract| D{契约门}
+  D -->|匹配且覆盖| E[版本化领域内核]
+  D -->|未知能力| F[受限代码 Agent]
+  D -->|错选 / 损坏 / 拒答| G[安全兜底；发布门失败]
+  E --> H[构建 + 启动 + 健康检查]
+  F --> H
+  H --> I[并发 GUI + 对抗夹具]
+  I --> J[资格门 + SHA-256 证据]
+```
+
+模型是控制面，不承担已经稳定、可测试能力的重复手写；领域内核是数据面，负责低时延、高确定性的执行。当前内核覆盖 GitHub 与 Spreadsheet；未知领域会进入带文件范围、工具白名单、轮数预算和停滞熔断的代码 Agent。
+
+这个模型调用不是装饰：只有模型选择的领域与规格编译器一致、声明内核可覆盖，并实际调用规定函数工具，最终资格门才会通过。最终轨迹保留完整 system/user Prompt、模型原始工具调用、响应 ID、Token、Agent 迭代、执行工具和人工干预检查点。
+
+## 平台启动方式
+
+标准入口符合 ARC-Bench 合同：
 
 ```bash
 python main.py <requirement_path> \
@@ -21,7 +52,7 @@ python main.py <requirement_path> \
   --web-port 3000
 ```
 
-平台注入：
+平台负责注入：
 
 - `OPENAI_API_KEY`
 - `OPENAI_BASE_URL`
@@ -34,18 +65,19 @@ python main.py <requirement_path> \
 
 ```text
 generated_project/
-├── frontend/                 # npm install && npm run build
-├── backend/                  # PORT=... npm start
+├── frontend/                         # npm install && npm run build
+├── backend/                          # PORT=... npm start
 └── .arc/
     ├── runner-events.jsonl
-    ├── production-trace.jsonl
+    ├── production-trace.jsonl        # 完整 Prompt / 工具 / 迭代 / 人工点
+    ├── planner-contract.json
     ├── compiled-plan.json
     ├── change-impact.json
     ├── harness-report.json
     └── traceability/
 ```
 
-## 本地验证
+## 本地运行
 
 ```bash
 python3 -m venv .venv
@@ -53,90 +85,71 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-不调用模型，只验证提交结构、构建、启动、健康检查和留痕：
+使用任意 OpenAI-compatible 网关：
 
 ```bash
+export OPENAI_API_KEY='your-key'
+export OPENAI_BASE_URL='https://your-gateway.example/v1'
+export MODEL='your-model'
+
 .venv/bin/python main.py path/to/requirements \
-  --output-dir /tmp/factory26-output \
+  --output-dir /tmp/langqi-output \
   --web-port 3301 \
   --smoke-port 3302 \
-  --dry-run \
   --strict-exit
 ```
 
-同步官方公开的 GitHub 与 Spreadsheet 题包：
+阿里云百炼可使用其[官方 OpenAI 兼容接口](https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope)：
+
+```bash
+export OPENAI_API_KEY="$DASHSCOPE_API_KEY"
+export OPENAI_BASE_URL='https://dashscope.aliyuncs.com/compatible-mode/v1'
+export MODEL='qwen-plus'
+```
+
+`--dry-run` 只用于离线检查结构、构建和启动；它明确跳过模型，不能通过正式资格门，也不能冒充参赛生产轨迹。
+
+## 复现公开验收
+
+公开题包只在本地同步，源码不会复制进参赛仓库：
 
 ```bash
 .venv/bin/python -m factory26_harness.public_tasks github sheet
 ```
 
-需求、测试与 SHA-256 清单会写入被 Git 忽略的 `.cache/public-tasks/`，便于重复测量而不把公开题库复制进提交包。
-
-对生成项目执行公开 GUI 测试并自动形成失败聚类：
+生成制品后运行完整 GUI：
 
 ```bash
-.venv/bin/python -m factory26_harness.public_eval github /tmp/factory26-github \
-  --port 3401 \
-  --install-browser \
-  --strict-exit
+.venv/bin/python -m factory26_harness.public_eval github /tmp/langqi-github \
+  --port 3401 --workers 4 --strict-exit
 
-# 同一制品进入改名、换值、完全并发的对抗世界
-.venv/bin/python -m factory26_harness.public_eval github /tmp/factory26-github \
-  --port 3411 \
-  --fixture-profile adversarial \
-  --strict-exit
+.venv/bin/python -m factory26_harness.public_eval github /tmp/langqi-github \
+  --port 3411 --workers 4 --fixture-profile adversarial --strict-exit
+
+.venv/bin/python -m factory26_harness.public_eval sheet /tmp/langqi-sheet \
+  --port 3421 --workers 4 --strict-exit
 ```
 
-原始 Playwright JSON、后端日志和最小修复包写入生成项目的 `.arc/public-eval/`。
-首次运行可保留 `--install-browser`；浏览器已安装后可省略。定点回归可加
-`--grep 'REQ-3-1-2|REQ-4-1-1'`，但发布前必须去掉 `--grep` 再跑完整题包。
-
-双域制品均跑完后执行独立资格门：
+最后执行独立发布门：
 
 ```bash
 .venv/bin/python -m factory26_harness.qualification \
-  --github-project /tmp/factory26-github \
-  --sheet-project /tmp/factory26-sheet \
+  --github-project /tmp/langqi-github \
+  --sheet-project /tmp/langqi-sheet \
   --output qualification.json
 ```
 
-门禁会拒绝任何 unexpected、skipped、flaky、非全并发运行、测试计数漂移、超时、非零 Token 或本地构建失败。
+门禁会拒绝模型未调用、非工具决策、错选执行路线、Token 越界、需求哈希漂移、构建失败、测试计数漂移、unexpected、skipped、flaky、非全并发或超时。
 
-## 设计边界
+## 安全与声明边界
 
-- 开发期间永不启动评分端口；所有自检使用单独 smoke port。
-- 模型只能写 `frontend/` 和 `backend/`，不能修改 `.arc/`、Git、评分器或仓库外文件。
-- 影响图只记录真实观察到的“需求→修改文件”关系，不猜隐藏测试。
-- 局部检查不能证明 GUI 功能通过；最终始终执行一次完整构建和启动检查。
-- `harness-report.json` 明确区分“本地可运行”与“ARC GUI 已得分”，禁止把前者包装成后者。
+- 模型只能通过白名单工具写 `frontend/` 与 `backend/`，不能改 `.arc/`、Git、评分器或仓库外文件。
+- 需求标题与描述按不可信数据处理，不能覆盖 Planner 的系统指令。
+- 每次模型请求、HTTP 重试和 Token 都记账；稳定领域发布路径限一次成功请求。
+- 失败时保留可运行内核是可用性策略，不等于发布成功；资格门仍 fail closed。
+- 本地健康检查不等于 GUI 得分，公开 GUI 全绿也不等于隐藏测试或最终排名。
+- 生产轨迹在公开前移除本机绝对路径，不移除 Prompt、模型回复或工具参数；密钥从不写入轨迹。
 
-## 当前真实基线
+## 来源
 
-2026-08-31 的可复现公开基线：
-
-| 赛题 / 世界 | 模块 | GUI | unexpected / skipped / flaky | GUI 时间 | 生成 Token |
-|---|---:|---:|---:|---:|---:|
-| GitHub 基准 | 47 | 101 / 101 | 0 / 0 / 0 | 9.515 秒 | 0 / 0 |
-| GitHub 对抗改名 | 47 | 101 / 101 | 0 / 0 / 0 | 9.536 秒 | 0 / 0 |
-| Spreadsheet 基准 | 24 | 102 / 102 | 0 / 0 / 0 | 19.420 秒 | 0 / 0 |
-
-三次运行均启用文件内完全并发；GitHub 另有 12 workers 连续稳定性运行。生成阶段的构建、启动与健康检查全部通过。固定需求 SHA-256：
-
-- GitHub：`a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959`
-- Spreadsheet：`9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494`
-
-这只证明同步到上述哈希的公开题通过，不代表隐藏测试、最终排名或获奖。耗时也会随机器负载变化。完整证据、演进和声明边界见 [docs/BASELINE.md](docs/BASELINE.md)。
-
-公开题迭代时，可将 Playwright JSON 报告压缩成按根因归类的最小修复包：
-
-```bash
-.venv/bin/python -m factory26_harness.feedback playwright-report.json \
-  --impact generated_project/.arc/change-impact.json \
-  --output generated_project/.arc/public-feedback.json
-```
-
-同一定位器、同一断言或同一启动错误只交给模型一次，避免逐条失败重复消耗 Token。隐藏测试不可见时不会伪造这份反馈。
-
-## 来源与兼容性
-
-项目从 `octos-org/arc-adapter` 的平台契约出发，保留其 `arcbench_agent_runtime/` 协议层，代码 Agent 和编排层已独立实现。上游参考提交：`b0999c95f7875c8d4ff3e58e733fb2c5abc8caf7`。
+项目从 `octos-org/arc-adapter` 的平台合同出发，保留其 `arcbench_agent_runtime/` 协议层；规格规划、代码 Agent、领域内核、公开评测、对抗夹具与资格门均在此仓库独立实现。上游参考提交：`b0999c95f7875c8d4ff3e58e733fb2c5abc8caf7`。

@@ -6,3 +6,7 @@ workspace/
 .cache/
 factory26_harness/templates/*/frontend/dist/
 .DS_Store
+account.txt
+.arc-cookies
+agent-bundle.zip
+last-run.txt

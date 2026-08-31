@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from .model import OpenAIChatClient
 from .requirements import RequirementNode
 from .trace import ProductionTrace
 from .workspace_tools import WorkspaceTools
-
 
 SYSTEM_PROMPT = """You are the implementation worker inside a scored ARC-Bench harness.
 Your job is to EDIT the provided frontend/ and backend/ so the assigned requirements work end to end.
@@ -36,7 +36,10 @@ class AgentRun:
 
 
 def _assistant_message(reply_message: dict[str, Any]) -> dict[str, Any]:
-    message: dict[str, Any] = {"role": "assistant", "content": reply_message.get("content") or ""}
+    message: dict[str, Any] = {
+        "role": "assistant",
+        "content": reply_message.get("content") or "",
+    }
     if reply_message.get("tool_calls"):
         message["tool_calls"] = reply_message["tool_calls"]
     return message
@@ -55,23 +58,37 @@ class CodingAgent:
         self.trace = trace
         self.max_turns = max(2, max_turns)
 
-    def implement(self, nodes: Iterable[RequirementNode], related_files: Iterable[str] = ()) -> AgentRun:
+    def implement(
+        self, nodes: Iterable[RequirementNode], related_files: Iterable[str] = ()
+    ) -> AgentRun:
         nodes = list(nodes)
         requirement_text = "\n\n".join(node.compact_spec() for node in nodes)
         related = sorted({path for path in related_files if path})
         prompt = (
             "Implement this requirement batch now.\n\n"
             + requirement_text
-            + ("\n\nPreviously observed related files:\n- " + "\n- ".join(related) if related else "")
+            + (
+                "\n\nPreviously observed related files:\n- " + "\n- ".join(related)
+                if related
+                else ""
+            )
         )
-        return self._run(prompt, stage="implementation", requirement_ids=[node.req_id for node in nodes])
+        return self._run(
+            prompt,
+            stage="implementation",
+            requirement_ids=[node.req_id for node in nodes],
+        )
 
     def repair(self, failure_text: str, related_files: Iterable[str]) -> AgentRun:
         related = sorted({path for path in related_files if path})
         prompt = (
             "A deterministic validation failed. Find the root cause, edit only what is needed, then run full validation.\n\n"
             f"Failure:\n{failure_text[-6000:]}\n\n"
-            + ("Likely related files:\n- " + "\n- ".join(related) if related else "Inspect the minimal relevant files first.")
+            + (
+                "Likely related files:\n- " + "\n- ".join(related)
+                if related
+                else "Inspect the minimal relevant files first."
+            )
         )
         return self._run(prompt, stage="repair", requirement_ids=[])
 
@@ -80,12 +97,22 @@ class CodingAgent:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ]
-        self.trace.record("agent_session_started", stage=stage, requirement_ids=requirement_ids, prompt=prompt)
+        self.trace.record(
+            "agent_session_started",
+            stage=stage,
+            requirement_ids=requirement_ids,
+            prompt=prompt,
+        )
         changed_before = set(self.tools.changed_files)
         final_summary = ""
         no_tool_turns = 0
+        invalid_tool_turns = 0
+        tool_schemas = self.tools.schemas()
+        valid_tool_names = {
+            str(item.get("function", {}).get("name") or "") for item in tool_schemas
+        }
         for turn in range(1, self.max_turns + 1):
-            reply = self.model.complete(messages, self.tools.schemas())
+            reply = self.model.complete(messages, tool_schemas)
             messages.append(_assistant_message(reply.raw_message))
             if not reply.tool_calls:
                 final_summary = reply.content.strip()
@@ -99,7 +126,9 @@ class CodingAgent:
                         changed_files=changed,
                         summary=final_summary,
                     )
-                    return AgentRun(bool(changed) or stage == "repair", final_summary, changed, turn)
+                    return AgentRun(
+                        bool(changed) or stage == "repair", final_summary, changed, turn
+                    )
                 messages.append(
                     {
                         "role": "user",
@@ -108,12 +137,18 @@ class CodingAgent:
                 )
                 continue
             no_tool_turns = 0
+            recognized_tool = False
             for call in reply.tool_calls:
                 function = call.get("function") or {}
                 name = str(function.get("name") or "")
+                recognized_tool = recognized_tool or name in valid_tool_names
                 raw_arguments = function.get("arguments") or "{}"
                 try:
-                    arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else dict(raw_arguments)
+                    arguments = (
+                        json.loads(raw_arguments)
+                        if isinstance(raw_arguments, str)
+                        else dict(raw_arguments)
+                    )
                 except (json.JSONDecodeError, TypeError, ValueError):
                     arguments = {}
                 result = self.tools.execute(name, arguments)
@@ -124,6 +159,22 @@ class CodingAgent:
                         "content": result,
                     }
                 )
+            if recognized_tool:
+                invalid_tool_turns = 0
+            else:
+                invalid_tool_turns += 1
+                if invalid_tool_turns >= 3:
+                    changed = tuple(sorted(self.tools.changed_files - changed_before))
+                    self.trace.record(
+                        "agent_session_stalled",
+                        stage=stage,
+                        requirement_ids=requirement_ids,
+                        reason="three consecutive turns used no recognized workspace tool",
+                        changed_files=changed,
+                    )
+                    return AgentRun(
+                        False, "no recognized workspace tool used", changed, turn
+                    )
         changed = tuple(sorted(self.tools.changed_files - changed_before))
         self.trace.record(
             "agent_session_exhausted",
@@ -131,4 +182,9 @@ class CodingAgent:
             requirement_ids=requirement_ids,
             changed_files=changed,
         )
-        return AgentRun(False, final_summary or "maximum tool turns reached", changed, self.max_turns)
+        return AgentRun(
+            False,
+            final_summary or "maximum tool turns reached",
+            changed,
+            self.max_turns,
+        )

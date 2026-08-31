@@ -2,112 +2,50 @@
 
 ## 结论
 
-Langqi Forge 已在 ARC-Bench 公开 GitHub 与 Spreadsheet 题包上完成从空目录生成到浏览器验收的双域闭环。GitHub 还通过了重命名夹具与文件内完全并发门禁。
+Langqi Forge 已用真实阿里云百炼 `qwen-plus` 规划调用完成 GitHub 与 Spreadsheet 双域闭环。模型不是生成后的旁路说明器：它必须调用 `select_build_contract`，其领域与覆盖判断直接决定执行路线；错选或损坏返回会被发布门拒绝。
 
-| 运行 | 模块 | GUI | Unexpected / skipped / flaky | GUI 墙钟时间 | prompt / completion Token |
-|---|---:|---:|---:|---:|---:|
-| GitHub 基准 | 47 | 101 / 101 | 0 / 0 / 0 | 9.515 秒 | 0 / 0 |
-| GitHub 对抗改名 | 47 | 101 / 101 | 0 / 0 / 0 | 9.536 秒 | 0 / 0 |
-| Spreadsheet 基准 | 24 | 102 / 102 | 0 / 0 / 0 | 19.420 秒 | 0 / 0 |
+| 运行 | 模块 | 模型请求 | prompt / completion Token | GUI | unexpected / skipped / flaky | GUI 墙钟时间 |
+|---|---:|---:|---:|---:|---:|---:|
+| GitHub 基准 | 47 | 1 | 2776 / 270 | 101 / 101 | 0 / 0 / 0 | 18.077 秒 |
+| GitHub 对抗改名 | 47 | 同一制品 | 同上 | 101 / 101 | 0 / 0 / 0 | 9.313 秒 |
+| Spreadsheet 基准 | 24 | 1 | 1756 / 271 | 102 / 102 | 0 / 0 / 0 | 27.002 秒 |
 
-三次运行均启用文件内完全并发。GitHub 另通过 12 workers 的连续 101 / 101 稳定性运行；本地结构、构建、启动与健康检查也全部通过。
+三次 GUI 验收均启用 4 workers 与文件内完全并发。双域生成阶段的构建、启动和健康检查通过；`factory26-public-qualification-v1` 最终为 `passed=true`。
 
-这是公开题成绩，不是隐藏题成绩、Top 20 保证或获奖预测。
+这是公开题成绩，不是隐藏题成绩、Top 20 保证或获奖预测。墙钟时间受本机同时运行两套浏览器验收的资源争抢影响。
 
-## 固定输入
+## 固定输入与模型证据
 
-- Harness 分支：`codex/low-token-impact-harness`
-- 上游适配器基线：`b0999c95f7875c8d4ff3e58e733fb2c5abc8caf7`
-- 题包：ARC-Bench playground catalog 的 `github` 与 `sheet`
+- 模型：阿里云百炼 `qwen-plus`
+- 接口：`dashscope.aliyuncs.com` OpenAI-compatible Chat Completions
+- 决策方式：函数工具 `select_build_contract`
+- 每个领域：1 次成功模型请求、1 次 HTTP 尝试、1 次 Planner 迭代、0 次代码 Agent 迭代、0 次人工干预
 - GitHub：47 模块 / 101 测试，需求 SHA-256 `a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959`
 - Spreadsheet：24 模块 / 102 测试，需求 SHA-256 `9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494`
-- 最终证据：4 workers、文件内完全并发；timeout / expect timeout 为 30,000 / 5,000 ms
+- 上游适配器基线：`b0999c95f7875c8d4ff3e58e733fb2c5abc8caf7`
 
-同步器会把每个公开测试文件的 SHA-256 记录在 `.cache/public-tasks/<task>/manifest.json`。题库被 `.gitignore` 排除，不进入参赛源码包。
+模型请求的 system/user Prompt、工具 schema、原始 tool call、响应 ID、Token 与契约均保留在 `evidence/final/*/production-trace.jsonl`。公开题源码被 `.gitignore` 排除，不进入证据包或提交包。
 
 ## 对抗与并发门禁
 
-GitHub `adversarial` profile 会改写 31 个账号，以及仓库、Fork、分支、默认分支、Issue、标签、里程碑、草稿分支和评审者等夹具。它的目的不是增加公开题覆盖，而是发现名字硬编码与并发竞态。
+GitHub `adversarial` profile 会改写 31 个账号，以及仓库、Fork、分支、默认分支、Issue、标签、里程碑、草稿分支和评审者等夹具，用于发现名字硬编码与并发竞态。
 
-这套门禁真实发现并促成两项修复：
+开发过程真实发现并修复了四类问题：
 
-1. 普通 PR 与草稿 PR 并发创建时曾竞争同一编号；现由后端原子分配。
-2. Issue 标题保存后的异步整页重绘曾覆盖刚打开的描述表单；现改为局部字段更新。
+1. 普通 PR 与草稿 PR 并发创建时竞争同一编号，改为后端原子分配。
+2. Issue 标题保存后的异步整页重绘覆盖刚打开的描述表单，改为局部字段更新。
+3. 两个评测进程共用临时 Playwright 配置文件，改为同目录唯一临时文件再原子替换。
+4. Spreadsheet 的 Ctrl+V fallback 晚于下一次剪贴板写入，改为在 keydown 当下快照剪贴板 Promise。
 
-独立资格门 `factory26-public-qualification-v1` 会拒绝：测试失败、跳过、flaky、非全并发运行、测试计数漂移、超时、非零 Token，以及本地生成检查失败。
-
-## 复现
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python -m factory26_harness.public_tasks github sheet
-```
-
-生成并验收 GitHub：
-
-```bash
-GITHUB_RUN="$(mktemp -d /tmp/langqi-github.XXXXXX)"
-.venv/bin/python main.py .cache/public-tasks/github/requirements \
-  --output-dir "$GITHUB_RUN/app" \
-  --web-port 3421 \
-  --smoke-port 3422 \
-  --dry-run \
-  --strict-exit
-
-.venv/bin/python -m factory26_harness.public_eval github "$GITHUB_RUN/app" \
-  --port 3431 \
-  --install-browser \
-  --strict-exit
-
-.venv/bin/python -m factory26_harness.public_eval github "$GITHUB_RUN/app" \
-  --port 3441 \
-  --fixture-profile adversarial \
-  --strict-exit
-```
-
-生成并验收 Spreadsheet：
-
-```bash
-SHEET_RUN="$(mktemp -d /tmp/langqi-sheet.XXXXXX)"
-.venv/bin/python main.py .cache/public-tasks/sheet/requirements \
-  --output-dir "$SHEET_RUN/app" \
-  --web-port 3451 \
-  --smoke-port 3452 \
-  --dry-run \
-  --strict-exit
-
-.venv/bin/python -m factory26_harness.public_eval sheet "$SHEET_RUN/app" \
-  --port 3461 \
-  --strict-exit
-```
-
-浏览器已安装后可去掉 `--install-browser`。最后运行 fail-closed 门禁：
-
-```bash
-.venv/bin/python -m factory26_harness.qualification \
-  --github-project "$GITHUB_RUN/app" \
-  --sheet-project "$SHEET_RUN/app" \
-  --output qualification.json
-```
-
-生成制品中的关键证据：
-
-- `.arc/harness-report.json`
-- `.arc/compiled-plan.json`
-- `.arc/public-eval/github.feedback.json`
-- `.arc/public-eval/github.adversarial.feedback.json`
-- `.arc/public-eval/sheet.feedback.json`
-- `.arc/runner-events.jsonl`
-- `.arc/production-trace.jsonl`
+资格门拒绝：模型未调用、非函数工具决策、Planner 错选或失败、HTTP 重试、Token 为零或越界、需求哈希不符、本地检查失败、GUI 计数漂移、unexpected、skipped、flaky、非完全并发及超时。
 
 ## 演进记录
 
 Spreadsheet：
 
-| 版本 | 公开通过数 | 关键变化 |
+| 阶段 | 公开通过数 | 关键变化 |
 |---|---:|---|
-| 通用地基 | 0 / 102 | 只验证平台契约、构建和启动 |
+| 通用地基 | 0 / 102 | 只验证平台合同、构建和启动 |
 | Sheet core | 31 / 102 | 工作簿、工作表、单元格与公式基础 |
 | Clipboard / menu | 38 / 102 | 剪贴板与菜单交互 |
 | Reversible state core | 78 / 102 | 可逆编辑、结构操作、验证与引用迁移 |
@@ -117,19 +55,54 @@ GitHub：
 
 | 阶段 | 公开通过数 | 关键变化 |
 |---|---:|---|
-| 通用地基 | 0 / 101 | 只验证平台契约、构建和启动 |
+| 通用地基 | 0 / 101 | 只验证平台合同、构建和启动 |
 | Account / organization | 30 / 101 | 身份、团队、成员与仓库授权 |
 | Repository lifecycle | 45 / 101 | 搜索、创建、Fork、克隆与可见性 |
 | Code / branch | 60 / 101 | 文件树、提交、搜索、分支与 Web 编辑 |
 | Issue workflow | 76 / 101 | 创建、编辑、评论、元数据、关闭与权限 |
 | Protection / PR / review | 101 / 101 | 保护规则、比较、评审、合并与状态转换 |
 
-局部修复可使用 `--grep`；表中的最终结论均来自去掉 `--grep` 后对全量题包的干净运行。
+随后由纯确定性内核进化为当前混合 Harness：一次模型规划 → 受约束工具契约 → 版本化内核或代码 Agent → 并发 GUI → 发布资格门。
+
+## 复现
+
+先配置比赛网关或百炼兼容接口：
+
+```bash
+export OPENAI_API_KEY='your-key'
+export OPENAI_BASE_URL='https://dashscope.aliyuncs.com/compatible-mode/v1'
+export MODEL='qwen-plus'
+```
+
+同步公开任务并生成两个制品：
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m factory26_harness.public_tasks github sheet
+
+GITHUB_RUN="$(mktemp -d /tmp/langqi-github.XXXXXX)"
+SHEET_RUN="$(mktemp -d /tmp/langqi-sheet.XXXXXX)"
+
+.venv/bin/python main.py .cache/public-tasks/github/requirements \
+  --output-dir "$GITHUB_RUN/project" --web-port 3421 --smoke-port 3422 --strict-exit
+
+.venv/bin/python main.py .cache/public-tasks/sheet/requirements \
+  --output-dir "$SHEET_RUN/project" --web-port 3451 --smoke-port 3452 --strict-exit
+```
+
+再执行 GitHub 基准、GitHub 对抗、Spreadsheet 基准与资格门。完整命令见仓库首页。关键证据：
+
+- `.arc/harness-report.json`
+- `.arc/planner-contract.json`
+- `.arc/compiled-plan.json`
+- `.arc/production-trace.jsonl`
+- `.arc/public-eval/*.feedback.json`
+- `qualification.json`
 
 ## 声明边界
 
-- 只证明固定哈希的公开 `github` 101 / 101 与 `sheet` 102 / 102。
-- 隐藏测试仍可能揭示未覆盖的语义、可访问性、性能、异常路径或环境差异。
-- `keep` 通用骨架仍为 0 / 32；保留这个地板线，用于说明“能启动”不等于“有业务功能”。
-- GitHub 与 Spreadsheet 使用确定性零 Token 路径；未知题目仍进入受限模型实现与失败聚类修复路径。
-- 公开全绿、对抗全绿和门禁通过都不等于隐藏题全绿，更不等于最终排名、融资价值或获奖保证。
+- 只证明固定哈希公开任务的 GitHub 101 / 101 与 Sheet 102 / 102。
+- 未声称模型独立手写了所有界面；准确口径是“模型规划控制面 + 确定性能力数据面”。
+- 未知任务仍可能进入受限代码 Agent，带来更多 Token、时间与失败风险。
+- 公开全绿、对抗全绿和资格门通过都不等于隐藏题全绿、最终排名或获奖保证。

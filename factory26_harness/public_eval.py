@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import signal
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -16,7 +18,7 @@ from .checks import failures, run_full_checks
 from .feedback import parse_playwright_json, repair_packets
 from .impact import ChangeImpactGraph
 from .public_fixtures import public_fixture_environment
-
+from .trace import ProductionTrace
 
 PLAYWRIGHT_PACKAGE = {
     "name": "factory26-public-eval-cache",
@@ -26,7 +28,7 @@ PLAYWRIGHT_PACKAGE = {
     "devDependencies": {"@playwright/test": "^1.54.0"},
 }
 
-PLAYWRIGHT_CONFIG = r'''import { defineConfig, devices } from '@playwright/test';
+PLAYWRIGHT_CONFIG = r"""import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: process.env.FACTORY26_PUBLIC_TEST_DIR,
@@ -44,14 +46,28 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });
-'''
+"""
 
 
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(content, encoding="utf-8")
-    temporary.replace(path)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary.write(content)
+            temporary.flush()
+            temporary_path = Path(temporary.name)
+        temporary_path.replace(path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def ensure_playwright(cache_root: Path, *, install_browser: bool = False) -> Path:
@@ -72,7 +88,10 @@ def ensure_playwright(cache_root: Path, *, install_browser: bool = False) -> Pat
             check=False,
         )
         if completed.returncode != 0:
-            raise RuntimeError("Playwright npm install failed: " + (completed.stderr or completed.stdout)[-3000:])
+            raise RuntimeError(
+                "Playwright npm install failed: "
+                + (completed.stderr or completed.stdout)[-3000:]
+            )
     if install_browser:
         completed = subprocess.run(
             [str(binary), "install", "chromium"],
@@ -83,7 +102,10 @@ def ensure_playwright(cache_root: Path, *, install_browser: bool = False) -> Pat
             check=False,
         )
         if completed.returncode != 0:
-            raise RuntimeError("Playwright Chromium install failed: " + (completed.stderr or completed.stdout)[-3000:])
+            raise RuntimeError(
+                "Playwright Chromium install failed: "
+                + (completed.stderr or completed.stdout)[-3000:]
+            )
     return binary
 
 
@@ -92,9 +114,13 @@ def _wait_ready(port: int, process: subprocess.Popen, timeout: int = 30) -> None
     last_error = "not ready"
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            raise RuntimeError(f"generated backend exited with code {process.returncode}")
+            raise RuntimeError(
+                f"generated backend exited with code {process.returncode}"
+            )
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2) as response:
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/health", timeout=2
+            ) as response:
                 payload = json.loads(response.read().decode("utf-8"))
                 if response.status == 200 and payload.get("ready") is True:
                     return
@@ -137,18 +163,39 @@ def run_public_evaluation(
 ) -> dict[str, Any]:
     project_dir = project_dir.resolve()
     cache_root = cache_root.resolve()
+    trace = ProductionTrace(project_dir / ".arc" / "production-trace.jsonl")
     tests_dir = cache_root / task_id / "tests"
     if not tests_dir.is_dir():
+        trace.record(
+            "public_evaluation_failed",
+            task_id=task_id,
+            stage="task_sync_preflight",
+            error="public task is not synchronized",
+        )
         raise FileNotFoundError(f"public task is not synchronized: {tests_dir}")
     check_results = run_full_checks(project_dir, port + 1)
     broken = failures(check_results)
     if broken:
-        raise RuntimeError("generated project failed local checks: " + "; ".join(item.summary for item in broken))
+        trace.record(
+            "public_evaluation_failed",
+            task_id=task_id,
+            stage="local_preflight",
+            checks=[item.as_dict() for item in check_results],
+        )
+        raise RuntimeError(
+            "generated project failed local checks: "
+            + "; ".join(item.summary for item in broken)
+        )
 
     playwright = ensure_playwright(cache_root, install_browser=install_browser)
     result_root = project_dir / ".arc" / "public-eval"
     result_root.mkdir(parents=True, exist_ok=True)
-    label = run_label or (task_id if fixture_profile == "baseline" else f"{task_id}.{fixture_profile}")
+    harness_report_path = project_dir / ".arc" / "harness-report.json"
+    harness_report = json.loads(harness_report_path.read_text(encoding="utf-8"))
+    source_run_id = str(harness_report.get("run_id") or "")
+    label = run_label or (
+        task_id if fixture_profile == "baseline" else f"{task_id}.{fixture_profile}"
+    )
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", label):
         raise ValueError(f"unsafe run label: {label!r}")
     backend_log_path = result_root / f"{label}.backend.log"
@@ -169,6 +216,22 @@ def run_public_evaluation(
         task_id, environment["E2E_BASE_URL"], fixture_profile
     ).items():
         environment.setdefault(name, value)
+    trace.record(
+        "public_evaluation_started",
+        source_run_id=source_run_id,
+        task_id=task_id,
+        run_label=label,
+        fixture_profile=fixture_profile,
+        workers=workers,
+        fully_parallel=environment["FACTORY26_PUBLIC_FULLY_PARALLEL"] == "1",
+        timeout_ms=timeout_ms,
+        expect_timeout_ms=expect_timeout_ms,
+        filtered=grep is not None,
+        prompt_invocations=0,
+        agent_iterations=0,
+        manual_interventions=0,
+        tool="playwright.test",
+    )
     with backend_log_path.open("w", encoding="utf-8") as backend_log:
         process = subprocess.Popen(
             ["npm", "start"],
@@ -182,7 +245,12 @@ def run_public_evaluation(
         try:
             _wait_ready(port, process)
             started = time.monotonic()
-            command = [str(playwright), "test", "--config", str(cache_root / "playwright.config.mjs")]
+            command = [
+                str(playwright),
+                "test",
+                "--config",
+                str(cache_root / "playwright.config.mjs"),
+            ]
             if grep:
                 command.extend(["--grep", grep])
             completed = subprocess.run(
@@ -205,13 +273,23 @@ def run_public_evaluation(
     try:
         payload = json.loads(completed.stdout)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Playwright did not produce JSON: {completed.stderr[-2000:]}") from exc
+        trace.record(
+            "public_evaluation_failed",
+            task_id=task_id,
+            run_label=label,
+            stage="playwright_report_parse",
+            exit_code=completed.returncode,
+        )
+        raise RuntimeError(
+            f"Playwright did not produce JSON: {completed.stderr[-2000:]}"
+        ) from exc
     stats = payload.get("stats") or {}
     failed = parse_playwright_json(payload)
     impact = ChangeImpactGraph(project_dir / ".arc" / "change-impact.json")
     packets = repair_packets(failed, impact)
     feedback_payload = {
         "version": 1,
+        "source_run_id": source_run_id,
         "task_id": task_id,
         "run_label": label,
         "fixture_profile": fixture_profile,
@@ -223,15 +301,30 @@ def run_public_evaluation(
         "failure_count": len(failed),
         "repair_packets": packets,
     }
+    feedback_path = result_root / f"{label}.feedback.json"
     _write(
-        result_root / f"{label}.feedback.json",
-        json.dumps(feedback_payload, ensure_ascii=False, indent=2) + "\n",
+        feedback_path, json.dumps(feedback_payload, ensure_ascii=False, indent=2) + "\n"
+    )
+    trace.record(
+        "public_evaluation_completed",
+        task_id=task_id,
+        run_label=label,
+        fixture_profile=fixture_profile,
+        exit_code=completed.returncode,
+        duration_seconds=feedback_payload["duration_seconds"],
+        stats=stats,
+        failure_count=len(failed),
+        repair_packet_count=len(packets),
+        evidence_file=f".arc/public-eval/{label}.feedback.json",
+        evidence_sha256=hashlib.sha256(feedback_path.read_bytes()).hexdigest(),
     )
     return feedback_payload
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run a synchronized public ARC task against a generated project")
+    parser = argparse.ArgumentParser(
+        description="Run a synchronized public ARC task against a generated project"
+    )
     parser.add_argument("task_id")
     parser.add_argument("project_dir", type=Path)
     parser.add_argument("--cache", type=Path, default=Path(".cache/public-tasks"))
@@ -240,7 +333,9 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=30_000)
     parser.add_argument("--expect-timeout", type=int, default=5_000)
     parser.add_argument("--install-browser", action="store_true")
-    parser.add_argument("--grep", help="Only run tests whose title matches this regular expression")
+    parser.add_argument(
+        "--grep", help="Only run tests whose title matches this regular expression"
+    )
     parser.add_argument(
         "--fixture-profile",
         choices=("baseline", "adversarial"),
@@ -253,7 +348,9 @@ def main() -> int:
         default=None,
         help="Override task-specific Playwright intra-file parallelism",
     )
-    parser.add_argument("--run-label", help="Safe filename label for retaining repeated evaluation runs")
+    parser.add_argument(
+        "--run-label", help="Safe filename label for retaining repeated evaluation runs"
+    )
     parser.add_argument("--strict-exit", action="store_true")
     args = parser.parse_args()
     result = run_public_evaluation(

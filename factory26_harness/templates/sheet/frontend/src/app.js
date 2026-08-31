@@ -10,6 +10,7 @@ let pointerLast = null;
 let suppressClick = false;
 let internalClipboard = null;
 let pendingPaste = null;
+let pasteQueue = Promise.resolve();
 let undoStack = [];
 let redoStack = [];
 
@@ -887,10 +888,15 @@ async function pasteAt(start, text) {
   }
   if (proposed.some(({ coordinate, raw }) => rawCell(sheet, coordinate) !== raw)) recordHistory();
   sheet.cells = nextCells;
-  sheet.selected = start;
-  sheet.selection = [start];
   await queueSave();
   renderEditor();
+}
+
+function enqueuePaste(start, textPromise) {
+  pasteQueue = pasteQueue
+    .catch(() => undefined)
+    .then(async () => pasteAt(start, await textPromise));
+  return pasteQueue;
 }
 
 async function clipboardText(event) {
@@ -910,7 +916,7 @@ function showContextMenu(cell, x, y) {
   menu.querySelector("button").addEventListener("click", async () => {
     const text = await clipboardText();
     menu.remove();
-    await pasteAt(cell.dataset.coordinate, text);
+    await enqueuePaste(cell.dataset.coordinate, Promise.resolve(text));
   });
   document.body.append(menu);
 }
@@ -1651,9 +1657,10 @@ document.addEventListener("paste", (event) => {
   if (!workbook || event.target?.matches('[aria-label^="Edit "]')) return;
   event.preventDefault();
   const start = pendingPaste?.start || activeSheet().selected || "A1";
+  const textPromise = pendingPaste?.textPromise || clipboardText(event);
   if (pendingPaste) pendingPaste.handled = true;
   pendingPaste = null;
-  void clipboardText(event).then((text) => pasteAt(start, text));
+  void enqueuePaste(start, textPromise);
 });
 
 document.addEventListener("keydown", (event) => {
@@ -1665,16 +1672,18 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     void restoreHistory(redoStack, undoStack);
   } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
-    const operation = { start: activeSheet().selected || "A1", handled: false };
+    const immediate = internalClipboard?.text;
+    const operation = {
+      start: activeSheet().selected || "A1",
+      handled: false,
+      textPromise: immediate ? Promise.resolve(immediate) : navigator.clipboard.readText(),
+    };
     pendingPaste = operation;
     setTimeout(() => {
       if (operation.handled) return;
       operation.handled = true;
       if (pendingPaste === operation) pendingPaste = null;
-      const immediate = internalClipboard?.text;
-      void (immediate ? Promise.resolve(immediate) : navigator.clipboard.readText()).then((text) =>
-        pasteAt(operation.start, text),
-      );
+      void enqueuePaste(operation.start, operation.textPromise);
     }, 0);
   } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
     event.preventDefault();

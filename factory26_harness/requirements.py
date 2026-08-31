@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import yaml
 
@@ -46,7 +48,9 @@ def _requirement_file(requirement_dir: Path) -> Path:
         candidate = requirement_dir / name
         if candidate.is_file():
             return candidate
-    candidates = sorted(requirement_dir.glob("*.yaml")) + sorted(requirement_dir.glob("*.yml"))
+    candidates = sorted(requirement_dir.glob("*.yaml")) + sorted(
+        requirement_dir.glob("*.yml")
+    )
     if len(candidates) == 1:
         return candidates[0]
     raise FileNotFoundError(f"requirements.yaml not found in {requirement_dir}")
@@ -61,9 +65,15 @@ def load_requirement_tree(requirement_dir: Path) -> dict[str, Any]:
             if isinstance(wrapped, dict):
                 payload = wrapped
                 break
-    if not isinstance(payload, dict) or not (payload.get("id") or payload.get("req_id")):
+    if not isinstance(payload, dict) or not (
+        payload.get("id") or payload.get("req_id")
+    ):
         raise ValueError(f"invalid requirement tree: {requirement_file}")
     return payload
+
+
+def requirement_source_sha256(requirement_dir: Path) -> str:
+    return hashlib.sha256(_requirement_file(requirement_dir).read_bytes()).hexdigest()
 
 
 def _walk(node: dict[str, Any]) -> Iterable[dict[str, Any]]:
@@ -75,7 +85,9 @@ def _walk(node: dict[str, Any]) -> Iterable[dict[str, Any]]:
 
 def _is_atomic(node: dict[str, Any]) -> bool:
     node_type = str(node.get("type") or "").upper()
-    children = [child for child in node.get("children") or [] if isinstance(child, dict)]
+    children = [
+        child for child in node.get("children") or [] if isinstance(child, dict)
+    ]
     return node_type == "ATOMIC" or (not children and node_type != "FOLDER")
 
 
@@ -90,11 +102,17 @@ def flatten_atomic(tree: dict[str, Any]) -> list[RequirementNode]:
             continue
         seen.add(req_id)
         dependencies = tuple(
-            str(value).strip() for value in raw.get("dependencies") or [] if str(value).strip()
+            str(value).strip()
+            for value in raw.get("dependencies") or []
+            if str(value).strip()
         )
-        scenarios = tuple(dict(item) for item in raw.get("scenarios") or [] if isinstance(item, dict))
+        scenarios = tuple(
+            dict(item) for item in raw.get("scenarios") or [] if isinstance(item, dict)
+        )
         visual_reference = tuple(
-            str(value).strip() for value in raw.get("visual_reference") or [] if str(value).strip()
+            str(value).strip()
+            for value in raw.get("visual_reference") or []
+            if str(value).strip()
         )
         nodes.append(
             RequirementNode(
@@ -122,7 +140,9 @@ def _stable_topological_order(nodes: list[RequirementNode]) -> list[RequirementN
             if dependency in by_id and dependency != node.req_id:
                 indegree[node.req_id] += 1
                 outgoing[dependency].append(node.req_id)
-    ready = sorted((req_id for req_id, degree in indegree.items() if degree == 0), key=position.get)
+    ready = sorted(
+        (req_id for req_id, degree in indegree.items() if degree == 0), key=position.get
+    )
     ordered: list[RequirementNode] = []
     while ready:
         req_id = ready.pop(0)
@@ -140,7 +160,9 @@ def _stable_topological_order(nodes: list[RequirementNode]) -> list[RequirementN
 
 def batches(nodes: list[RequirementNode], size: int) -> list[list[RequirementNode]]:
     normalized = max(1, size)
-    return [nodes[index : index + normalized] for index in range(0, len(nodes), normalized)]
+    return [
+        nodes[index : index + normalized] for index in range(0, len(nodes), normalized)
+    ]
 
 
 def plan_payload(nodes: list[RequirementNode], batch_size: int) -> dict[str, Any]:
@@ -154,7 +176,9 @@ def plan_payload(nodes: list[RequirementNode], batch_size: int) -> dict[str, Any
             {
                 "index": index,
                 "requirement_ids": [node.req_id for node in group],
-                "dependencies": sorted({dep for node in group for dep in node.dependencies}),
+                "dependencies": sorted(
+                    {dep for node in group for dep in node.dependencies}
+                ),
             }
             for index, group in enumerate(groups, 1)
         ],
@@ -165,8 +189,14 @@ def detect_domain(tree: dict[str, Any]) -> str:
     root_text = " ".join(
         str(tree.get(key) or "") for key in ("id", "name", "title", "description")
     ).lower()
-    if any(token in root_text for token in ("spreadsheet", "workbook", "worksheet", "online sheet")):
+    if any(
+        token in root_text
+        for token in ("spreadsheet", "workbook", "worksheet", "online sheet")
+    ):
         return "sheet"
-    if any(token in root_text for token in ("github", "repository", "pull request", "code collaboration")):
+    if any(
+        token in root_text
+        for token in ("github", "repository", "pull request", "code collaboration")
+    ):
         return "github"
     return "generic"

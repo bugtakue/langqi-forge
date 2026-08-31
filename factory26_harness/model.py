@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from .trace import ProductionTrace
 
@@ -18,6 +19,7 @@ class ModelReply:
     raw_message: dict[str, Any]
     prompt_tokens: int
     completion_tokens: int
+    response_id: str
 
 
 class OpenAIChatClient:
@@ -28,24 +30,80 @@ class OpenAIChatClient:
         self.trace = trace
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
+        self.request_count = 0
+        self.http_attempt_count = 0
+        self.max_requests = max(
+            1, int(os.environ.get("FACTORY26_MAX_MODEL_REQUESTS", "64"))
+        )
         if not self.api_key or not self.base_url or not self.model:
             raise RuntimeError("OPENAI_API_KEY, OPENAI_BASE_URL and MODEL are required")
 
     @property
     def endpoint(self) -> str:
         normalized = self.base_url.rstrip("/")
-        return normalized if normalized.endswith("/chat/completions") else normalized + "/chat/completions"
+        return (
+            normalized
+            if normalized.endswith("/chat/completions")
+            else normalized + "/chat/completions"
+        )
 
-    def complete(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> ModelReply:
+    @property
+    def endpoint_host(self) -> str:
+        return str(urlsplit(self.endpoint).hostname or "")
+
+    @property
+    def gateway_provenance(self) -> str:
+        declared = os.environ.get("FACTORY26_GATEWAY_PROVENANCE", "").strip()
+        if declared:
+            return declared
+        host = self.endpoint_host.lower()
+        if host == "dashscope.aliyuncs.com" or host.endswith(".maas.aliyuncs.com"):
+            return "alibaba-cloud-bailian"
+        if host in {"127.0.0.1", "localhost", "::1"}:
+            return "local-openai-protocol-fixture"
+        return "openai-compatible-runtime"
+
+    def gateway_evidence(self) -> dict[str, Any]:
+        return {
+            "provenance": self.gateway_provenance,
+            "endpoint_host": self.endpoint_host,
+            "model": self.model,
+        }
+
+    def complete(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        max_tokens: int | None = None,
+    ) -> ModelReply:
+        if self.request_count >= self.max_requests:
+            self.trace.record(
+                "model_budget_exhausted",
+                request_count=self.request_count,
+                maximum_requests=self.max_requests,
+            )
+            raise RuntimeError(
+                f"model request budget exhausted at {self.max_requests} calls"
+            )
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
             "temperature": 0,
-            "max_tokens": int(os.environ.get("FACTORY26_MAX_OUTPUT_TOKENS", "8192")),
+            "max_tokens": max_tokens
+            if max_tokens is not None
+            else int(os.environ.get("FACTORY26_MAX_OUTPUT_TOKENS", "8192")),
         }
-        self.trace.record("model_request", endpoint=self.endpoint, model=self.model, payload=payload)
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        self.trace.record(
+            "model_request",
+            endpoint=self.endpoint,
+            model=self.model,
+            gateway=self.gateway_evidence(),
+            payload=payload,
+        )
         encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         last_error = "model request failed"
         for attempt in range(1, 4):
@@ -59,29 +117,48 @@ class OpenAIChatClient:
                 },
             )
             try:
+                self.http_attempt_count += 1
                 with urllib.request.urlopen(request, timeout=240) as response:
                     body = json.loads(response.read().decode("utf-8"))
                 message = dict(body["choices"][0]["message"])
                 usage = body.get("usage") or {}
-                prompt_tokens = int(usage.get("prompt_tokens") or 0)
-                completion_tokens = int(usage.get("completion_tokens") or 0)
+                prompt_tokens = int(
+                    usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+                )
+                completion_tokens = int(
+                    usage.get("completion_tokens") or usage.get("output_tokens") or 0
+                )
+                response_id = str(body.get("id") or "")
                 self.total_prompt_tokens += prompt_tokens
                 self.total_completion_tokens += completion_tokens
+                self.request_count += 1
                 reply = ModelReply(
                     content=str(message.get("content") or ""),
                     tool_calls=tuple(message.get("tool_calls") or ()),
                     raw_message=message,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
+                    response_id=response_id,
                 )
                 self.trace.record(
                     "model_response",
                     model=self.model,
+                    gateway=self.gateway_evidence(),
+                    response_id=response_id,
                     message=message,
-                    usage={"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens},
+                    usage={
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                    },
                 )
                 return reply
-            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError, ValueError) as exc:
+            except (
+                urllib.error.URLError,
+                urllib.error.HTTPError,
+                TimeoutError,
+                KeyError,
+                ValueError,
+            ) as exc:
                 detail = ""
                 if isinstance(exc, urllib.error.HTTPError):
                     try:
