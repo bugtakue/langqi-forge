@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -86,6 +87,7 @@ class GitClient:
                 "backend/node_modules/",
                 "frontend/node_modules/",
                 "backend/coverage/",
+                "backend/data/",
                 "frontend/dist/",
                 "frontend/dist-ssr/",
                 "*.db",
@@ -150,6 +152,29 @@ class GitClient:
     def status_porcelain(self) -> str:
         return self.run(["status", "--short"], check=False).stdout
 
+    def changed_paths(self) -> tuple[str, ...]:
+        output = self.run(
+            ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+            check=False,
+        ).stdout
+        entries = output.split("\0")
+        paths: set[str] = set()
+        index = 0
+        while index < len(entries):
+            entry = entries[index]
+            index += 1
+            if not entry:
+                continue
+            status = entry[:2]
+            path = entry[3:] if len(entry) > 3 else ""
+            if path:
+                paths.add(path)
+            if "R" in status or "C" in status:
+                if index < len(entries) and entries[index]:
+                    paths.add(entries[index])
+                index += 1
+        return tuple(sorted(paths))
+
     def add_all(self) -> None:
         self.run(["add", "."])
 
@@ -180,6 +205,45 @@ class GitClient:
     def restore_worktree(self) -> None:
         self.run(["reset", "--hard"])
         self.events.notify_commit_history_changed("git_restore_worktree", preview=True)
+
+    def restore_paths(self, commit_oid: str, paths: tuple[str, ...]) -> None:
+        normalized = str(commit_oid or "").strip().lower()
+        safe_paths = tuple(
+            path
+            for path in paths
+            if path and not path.startswith(("/", "-")) and ".." not in path.split("/")
+        )
+        if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", normalized):
+            raise ValueError("commit_oid must be a full hexadecimal object id")
+        if not safe_paths or len(safe_paths) != len(paths):
+            raise ValueError("one or more restore paths are unsafe")
+        verified = self.run(
+            ["rev-parse", "--verify", f"{normalized}^{{commit}}"], check=False
+        )
+        if verified.returncode != 0:
+            raise ValueError("checkpoint commit does not exist in this repository")
+        tracked_paths = tuple(
+            path
+            for path in safe_paths
+            if self.run(
+                ["ls-tree", "-r", "--name-only", normalized, "--", path],
+                check=False,
+            ).stdout.strip()
+        )
+        if tracked_paths:
+            self.run(
+                [
+                    "restore",
+                    "--source",
+                    normalized,
+                    "--staged",
+                    "--worktree",
+                    "--",
+                    *tracked_paths,
+                ]
+            )
+        self.run(["clean", "-fdx", "--", *safe_paths])
+        self.events.notify_commit_history_changed("git_restore_paths", preview=True)
 
     def clean_untracked(self) -> None:
         self.run(["clean", "-fd"])

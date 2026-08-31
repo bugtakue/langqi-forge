@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .trace import ProductionTrace
+from .trace import ProductionTrace, verify_trace_rows
 
 PUBLIC_REQUIREMENT_SHA256 = {
     "github": "a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959",
@@ -269,6 +269,7 @@ def _trace_checks(
         ]
 
     events = [str(row.get("event") or "") for row in rows]
+    trace_integrity = verify_trace_rows(rows)
     sequences = [row.get("sequence") for row in rows]
     payloads: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
@@ -305,6 +306,12 @@ def _trace_checks(
     )
     return [
         _check("trace_readable", True, True, True),
+        _check(
+            "trace_integrity",
+            trace_integrity["valid"],
+            trace_integrity,
+            {"valid": True},
+        ),
         _check(
             "trace_sequence_contiguous",
             sequences == list(range(1, len(rows) + 1)),

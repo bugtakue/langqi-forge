@@ -35,6 +35,19 @@ class OpenAIChatClient:
         self.max_requests = max(
             1, int(os.environ.get("FACTORY26_MAX_MODEL_REQUESTS", "64"))
         )
+        self.max_response_bytes = max(
+            1024, int(os.environ.get("FACTORY26_MAX_MODEL_RESPONSE_BYTES", "10000000"))
+        )
+        self.max_request_bytes = max(
+            1024, int(os.environ.get("FACTORY26_MAX_MODEL_REQUEST_BYTES", "5000000"))
+        )
+        self.max_total_prompt_tokens = max(
+            1, int(os.environ.get("FACTORY26_MAX_TOTAL_PROMPT_TOKENS", "100000"))
+        )
+        self.max_total_completion_tokens = max(
+            1,
+            int(os.environ.get("FACTORY26_MAX_TOTAL_COMPLETION_TOKENS", "100000")),
+        )
         if not self.api_key or not self.base_url or not self.model:
             raise RuntimeError("OPENAI_API_KEY, OPENAI_BASE_URL and MODEL are required")
 
@@ -105,6 +118,10 @@ class OpenAIChatClient:
             payload=payload,
         )
         encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        if len(encoded) > self.max_request_bytes:
+            raise RuntimeError(
+                f"model request exceeds {self.max_request_bytes} byte safety limit"
+            )
         last_error = "model request failed"
         for attempt in range(1, 4):
             request = urllib.request.Request(
@@ -119,8 +136,22 @@ class OpenAIChatClient:
             try:
                 self.http_attempt_count += 1
                 with urllib.request.urlopen(request, timeout=240) as response:
-                    body = json.loads(response.read().decode("utf-8"))
-                message = dict(body["choices"][0]["message"])
+                    declared_length = int(response.headers.get("content-length") or 0)
+                    if declared_length > self.max_response_bytes:
+                        raise ValueError("model response exceeds declared byte safety limit")
+                    raw_body = response.read(self.max_response_bytes + 1)
+                    if len(raw_body) > self.max_response_bytes:
+                        raise ValueError("model response exceeds byte safety limit")
+                    body = json.loads(raw_body.decode("utf-8"))
+                choices = body.get("choices") if isinstance(body, dict) else None
+                if not isinstance(choices, list) or not choices:
+                    raise ValueError("model response choices are missing")
+                raw_message = choices[0].get("message") if isinstance(choices[0], dict) else None
+                if not isinstance(raw_message, dict):
+                    raise ValueError("model response message is invalid")
+                message = dict(raw_message)
+                if not isinstance(message.get("tool_calls") or [], list):
+                    raise ValueError("model response tool_calls must be an array")
                 usage = body.get("usage") or {}
                 prompt_tokens = int(
                     usage.get("prompt_tokens") or usage.get("input_tokens") or 0
@@ -128,6 +159,15 @@ class OpenAIChatClient:
                 completion_tokens = int(
                     usage.get("completion_tokens") or usage.get("output_tokens") or 0
                 )
+                if prompt_tokens < 0 or completion_tokens < 0:
+                    raise ValueError("model token usage cannot be negative")
+                if (
+                    self.total_prompt_tokens + prompt_tokens
+                    > self.max_total_prompt_tokens
+                    or self.total_completion_tokens + completion_tokens
+                    > self.max_total_completion_tokens
+                ):
+                    raise ValueError("model token budget exceeded")
                 response_id = str(body.get("id") or "")
                 self.total_prompt_tokens += prompt_tokens
                 self.total_completion_tokens += completion_tokens

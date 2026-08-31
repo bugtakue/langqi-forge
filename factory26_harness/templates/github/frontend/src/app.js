@@ -1,3 +1,5 @@
+import { handleEnterpriseRoute } from "./enterprise.js";
+
 const root = document.querySelector("#app");
 let state = null;
 let accountMenuOpen = false;
@@ -34,6 +36,7 @@ async function request(path, options = {}) {
     headers: {
       "content-type": "application/json",
       "x-langqi-world": worldId(),
+      "x-langqi-user": currentUser(),
       ...(options.headers || {}),
     },
   });
@@ -358,6 +361,8 @@ function organizationTabs(org) {
     ${link(`/orgs/${org.name}/repositories`, "Repositories")}
     ${link(`/orgs/${org.name}/teams`, "Teams")}
     ${link(`/orgs/${org.name}/people`, "People")}
+    ${link(`/orgs/${org.name}/audit-log`, "Audit log")}
+    ${link(`/orgs/${org.name}/settings/security`, "Security")}
   </nav>`;
 }
 
@@ -621,6 +626,7 @@ function repoTabs(repo, codeHref = `/${repo.owner}/${repo.name}`) {
     ${link(`/${repo.owner}/${repo.name}/commits`, "Commits")}
     ${link(`/${repo.owner}/${repo.name}/issues`, "Issues")}
     ${link(`/${repo.owner}/${repo.name}/pulls`, "Pull requests")}
+    ${link(`/${repo.owner}/${repo.name}/actions`, "Actions")}
     ${link(`/${repo.owner}/${repo.name}/settings`, "Settings")}
   </nav>`;
 }
@@ -777,6 +783,9 @@ function repositoryView(repo) {
     return;
   }
   const branch = activeBranch(repo);
+  const relation = (state.repositoryRelations || []).find(
+    (entry) => entry.repoId === repo.id && entry.username === currentUser(),
+  ) || { starred: false, watching: "participating" };
   layout(`
     <section class="stack">
       <div><p class="muted">${escapeHtml(repo.owner)} /</p><h1>${escapeHtml(repo.name)}</h1><span class="badge">${escapeHtml(repo.visibility)}</span></div>
@@ -787,6 +796,7 @@ function repositoryView(repo) {
         <div id="branch-menu"></div>
         <button class="btn secondary" type="button" data-action="code-menu">Code</button>
         ${currentUser() ? `<button class="btn secondary" type="button" data-action="fork-repository">Fork</button>` : ""}
+        ${currentUser() ? `<button class="btn secondary" type="button" aria-pressed="${relation.starred}" data-action="star-repository">${relation.starred ? "Unstar" : "Star"}</button><label class="sr-only" for="watch-repository">Watch repository</label><select id="watch-repository" aria-label="Watch repository"><option value="participating" ${relation.watching === "participating" ? "selected" : ""}>Participating and @mentions</option><option value="all" ${relation.watching === "all" ? "selected" : ""}>All activity</option><option value="ignore" ${relation.watching === "ignore" ? "selected" : ""}>Ignore</option></select>` : ""}
         ${canWriteRepository(repo) ? '<button class="btn secondary" type="button" data-action="add-file">Add file</button><div id="add-file-menu"></div>' : ""}
         <div id="code-menu"></div>
       </div>
@@ -832,6 +842,14 @@ function repositoryView(repo) {
     root.querySelector('[data-action="create-file"]').addEventListener("click", () => navigate(`/${repo.owner}/${repo.name}/new/${encodeURIComponent(branch.name)}`));
   });
   root.querySelector('[data-action="fork-repository"]')?.addEventListener("click", () => navigate(`/${repo.owner}/${repo.name}/fork`));
+  root.querySelector('[data-action="star-repository"]')?.addEventListener("click", async () => {
+    await command("repository.star", { repoId: repo.id, starred: !relation.starred });
+    render();
+  });
+  root.querySelector("#watch-repository")?.addEventListener("change", async (event) => {
+    await command("repository.watch", { repoId: repo.id, watching: event.target.value });
+    render();
+  });
   root.querySelector('[data-action="code-menu"]').addEventListener("click", () => {
     let protocol = "https";
     const menu = root.querySelector("#code-menu");
@@ -920,7 +938,7 @@ function repositoryIssuesView(repo) {
   const parameters = new URLSearchParams(location.search);
   const selectedState = parameters.get("state") || "open";
   const initialQuery = parameters.get("q") || "";
-  layout(`<section class="stack"><h1>Issues</h1>${repoTabs(repo)}<div class="toolbar">${link(`/${repo.owner}/${repo.name}/issues?state=open`, "Open")} ${link(`/${repo.owner}/${repo.name}/issues?state=closed`, "Closed")} ${currentUser() ? link(`/${repo.owner}/${repo.name}/issues/new`, "New issue", 'class="btn"') : ""}</div><div class="form-row"><label for="issue-search">Search or filter issues</label><input id="issue-search" type="search" aria-label="Search or filter issues" value="${escapeHtml(initialQuery)}" /></div><div id="issue-list" class="stack"></div></section>`);
+  layout(`<section class="stack"><h1>Issues</h1>${repoTabs(repo)}<div class="toolbar">${link(`/${repo.owner}/${repo.name}/issues?state=open`, "Open")} ${link(`/${repo.owner}/${repo.name}/issues?state=closed`, "Closed")} ${currentUser() ? link(`/${repo.owner}/${repo.name}/issues/new`, "New issue", 'class="btn"') : ""} ${canAdminRepository(repo) ? link(`/${repo.owner}/${repo.name}/issues/templates`, "Issue forms", 'class="btn secondary"') : ""}</div><div class="form-row"><label for="issue-search">Search or filter issues</label><input id="issue-search" type="search" aria-label="Search or filter issues" value="${escapeHtml(initialQuery)}" /></div><div id="issue-list" class="stack"></div></section>`);
   const renderList = (query) => {
     const issues = state.issues.filter((issue) => issue.repoId === repo.id && issue.state === selectedState && issue.title.toLowerCase().includes(query.toLowerCase()));
     root.querySelector("#issue-list").innerHTML = issues.map((issue) => `<article class="card"><h2>${link(`/${repo.owner}/${repo.name}/issues/${issue.number}`, issue.title)}</h2></article>`).join("") || '<div class="panel">No issues found.</div>';
@@ -1167,7 +1185,12 @@ function pullRequestView(repo, pull) {
   root.querySelector('[data-action="merge-pull"]')?.addEventListener("click", () => {
     root.querySelector("#merge-confirm").innerHTML = '<button class="btn danger" type="button" data-action="confirm-merge">Confirm merge</button>';
     root.querySelector('[data-action="confirm-merge"]').addEventListener("click", async () => {
-      await command("patch", { collection: "pullRequests", id: pull.id, patch: { state: "merged" } });
+      const result = await command("pullRequest.merge", { id: pull.id });
+      if (!result.ok) {
+        const reasons = result.details?.reasons?.join(", ") || result.message || "Merge policy denied this operation.";
+        root.querySelector("#merge-confirm").innerHTML = `<div class="error">Merge blocked: ${escapeHtml(reasons)}</div>`;
+        return;
+      }
       render();
     });
   });
@@ -1213,7 +1236,7 @@ function pullRequestFilesView(repo, pull) {
 function repositorySettingsView(repo, section = "general") {
   if (authRequired()) return;
   if (!canViewRepository(repo)) return repositoryView(repo);
-  const nav = `<nav class="side-nav">${link(`/${repo.owner}/${repo.name}/settings`, "General")} ${link(`/${repo.owner}/${repo.name}/settings/access`, "Manage access")} ${link(`/${repo.owner}/${repo.name}/settings/branches`, "Branches")}</nav>`;
+  const nav = `<nav class="side-nav">${link(`/${repo.owner}/${repo.name}/settings`, "General")} ${link(`/${repo.owner}/${repo.name}/settings/access`, "Manage access")} ${link(`/${repo.owner}/${repo.name}/settings/branches`, "Branches")} ${link(`/${repo.owner}/${repo.name}/settings/rules`, "Rulesets")} ${link(`/${repo.owner}/${repo.name}/settings/environments`, "Environments")} ${link(`/${repo.owner}/${repo.name}/settings/repository-lifecycle`, "Danger zone")}</nav>`;
   if (section === "branches") {
     if (!canAdminRepository(repo)) {
       layout(`<div class="split">${nav}<section class="panel"><h1>Branches</h1><p>Administrator permission is required.</p></section></div>`);
@@ -1345,6 +1368,26 @@ async function render() {
 
   if (path === "/organizations") return organizationsView();
   if (path === "/organizations/new") return newOrganizationView();
+
+  if (handleEnterpriseRoute({
+    path,
+    state,
+    root,
+    escapeHtml,
+    currentUser,
+    worldId,
+    layout,
+    link,
+    repoTabs,
+    organizationTabs,
+    command,
+    navigate,
+    render,
+    bindCommon,
+    authRequired,
+    canViewRepository,
+    canAdminRepository,
+  })) return;
 
   let match = path.match(/^\/orgs\/([^/]+)\/teams\/new$/);
   if (match) {

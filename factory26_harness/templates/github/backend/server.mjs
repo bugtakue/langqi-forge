@@ -3,6 +3,15 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  appendAuditEvent,
+  auditCsv,
+  evaluateDirectBranchWritePolicy,
+  executeEnterpriseCommand,
+  normalizeEnterpriseState,
+  shouldAuditCommand,
+  verifyEnterpriseState,
+} from "./enterprise.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(here, "../frontend/dist");
@@ -145,10 +154,10 @@ function seededState() {
     accounts.push({ id: username, username, email: `${username}@example.test`, password: "Fixture-password-123!" });
   }
 
-  const organizationOwner = env("E2E_ORGANIZATION_OWNER_USERNAME", "fixture-06-organization-owner");
+  const organizationOwner = env("E2E_ORGANIZATION_OWNER_USERNAME", accounts[5].username);
   const existingMember = env(
     "E2E_ORGANIZATION_EXISTING_MEMBER_USERNAME",
-    "fixture-08-organization-existing-member",
+    accounts[7].username,
   );
   const nonOwner = env("E2E_ORGANIZATION_NON_OWNER_USERNAME", "fixture-user-10");
   const memberToRemove = env("E2E_ORGANIZATION_MEMBER_TO_REMOVE", "removable-user");
@@ -189,7 +198,7 @@ function seededState() {
       name: env("E2E_ACCESS_TEAM_NAME", "platform-team"),
       parent: "",
       members: [],
-      maintainers: [env("E2E_TEAM_MAINTAINER_USERNAME", "fixture-07-team-maintainer")],
+      maintainers: [env("E2E_TEAM_MAINTAINER_USERNAME", accounts[6].username)],
     },
     {
       id: "acme/security-team",
@@ -342,7 +351,7 @@ function seededState() {
     },
   ];
 
-  return { version: 1, accounts, organizations, teams, repositories, issues, pullRequests };
+  return normalizeEnterpriseState({ version: 2, accounts, organizations, teams, repositories, issues, pullRequests });
 }
 
 const allowedCollections = new Set([
@@ -364,10 +373,17 @@ await mkdir(dataDir, { recursive: true });
 if (process.env.FACTORY26_RESET_FIXTURES !== "1") {
   try {
     const loaded = JSON.parse(await readFile(statePath, "utf8"));
-    if (loaded && Array.isArray(loaded.accounts)) state = loaded;
-  } catch {
-    // A fresh deterministic fixture is the safe fallback.
+    if (!loaded || !Array.isArray(loaded.accounts)) throw new Error("state must contain an accounts array");
+    state = loaded;
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw new Error(`Refusing to overwrite unreadable GitHub state at ${statePath}: ${error.message}`);
+    }
   }
+}
+normalizeEnterpriseState(state);
+if (!state.auditEvents.length) {
+  appendAuditEvent(state, { actor: "system", action: "system.genesis", result: { ok: true } });
 }
 await writeFile(statePath, JSON.stringify(state, null, 2));
 ready = true;
@@ -427,8 +443,10 @@ function stateForWorld(worldId) {
   return projected;
 }
 
-function execute(command, worldId = "global") {
+function execute(command, worldId = "global", actor = "anonymous") {
   const { type, payload = {} } = command;
+  const enterpriseResult = executeEnterpriseCommand(state, command, { actor, worldId });
+  if (enterpriseResult !== null) return enterpriseResult;
   if (type === "account.create") {
     const duplicate = state.accounts.find(
       (item) => item.username === payload.username || item.email === payload.email,
@@ -486,6 +504,18 @@ function execute(command, worldId = "global") {
     const items = collection(payload.collection);
     const item = items.find((entry) => entry.id === payload.id);
     if (!item) return { ok: false, code: "not_found" };
+    if (payload.collection === "pullRequests" && payload.patch?.state === "merged") {
+      return { ok: false, code: "protected_transition", message: "use pullRequest.merge so server-side policies are enforced" };
+    }
+    if (payload.collection === "repositories" && Array.isArray(payload.patch?.branches)) {
+      const previous = new Map((item.branches || []).map((branch) => [branch.name, branch]));
+      const next = new Map(payload.patch.branches.map((branch) => [branch.name, branch]));
+      for (const branchName of new Set([...previous.keys(), ...next.keys()])) {
+        if (JSON.stringify(previous.get(branchName)?.files || null) === JSON.stringify(next.get(branchName)?.files || null)) continue;
+        const policy = evaluateDirectBranchWritePolicy(state, item, branchName, actor);
+        if (!policy.allowed) return { ok: false, code: "protected_branch", message: "direct branch write is blocked by server-side policy", details: policy };
+      }
+    }
     Object.assign(item, payload.patch || {});
     return { ok: true, item };
   }
@@ -532,11 +562,37 @@ const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
     const worldId = String(request.headers["x-langqi-world"] || "global");
+    const actor = String(request.headers["x-langqi-user"] || "anonymous");
     if (url.pathname === "/api/health") return sendJson(response, ready ? 200 : 503, { ready });
+    if (url.pathname === "/api/audit/verify" && request.method === "GET") {
+      return sendJson(response, 200, verifyEnterpriseState(state));
+    }
+    if (url.pathname === "/api/audit/export.csv" && request.method === "GET") {
+      const organization = url.searchParams.get("organization") || "";
+      const org = organization && state.organizations.find((entry) => entry.name === organization);
+      const owner = org && (org.owner === actor || org.members.some((member) => member.username === actor && member.role === "Owner"));
+      if (!actor || actor === "anonymous" || (organization && !owner)) {
+        return sendJson(response, 403, { error: "Organization owner role is required" });
+      }
+      const body = auditCsv(stateForWorld(worldId).auditEvents, {
+        organization,
+        actor: url.searchParams.get("actor") || "",
+        action: url.searchParams.get("action") || "",
+      });
+      response.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": 'attachment; filename="audit-log.csv"',
+      });
+      return response.end(body);
+    }
     if (url.pathname === "/api/state" && request.method === "GET") return sendJson(response, 200, stateForWorld(worldId));
     if (url.pathname === "/api/command" && request.method === "POST") {
-      const result = execute(await readBody(request), worldId);
-      if (result.ok) await persist();
+      const command = await readBody(request);
+      const result = execute(command, worldId, actor);
+      const audited = shouldAuditCommand(command.type);
+      if (result.code === "integrity") return sendJson(response, 409, result);
+      if (audited) appendAuditEvent(state, { actor, action: command.type, payload: command.payload, result });
+      if (result.ok || audited) await persist();
       return sendJson(response, result.ok ? 200 : 409, result);
     }
     if (url.pathname.startsWith("/api/")) return sendJson(response, 404, { error: "Not found" });

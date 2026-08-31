@@ -18,8 +18,19 @@ Factory26 / ARC-Bench 参赛 Harness：让一个低 Token 规格规划 Agent 选
 
 - [完整公开生产轨迹](evidence/final/README.md)
 - [基线、对抗与演进记录](docs/BASELINE.md)
+- [最新对抗强化与故障注入记录](docs/HARDENING.md)
 - [轨迹字段与人工干预边界](docs/TRACE.md)
 - [Harness 架构与失败语义](docs/ARCHITECTURE.md)
+
+## 不止复刻：可执行的企业闭环
+
+公开题内核保持 GitHub 101 项与 Spreadsheet 102 项兼容；同一生成制品还包含两条不是静态页面的企业闭环：
+
+- GitHub：Actions 作业结果写入带来源的 PR checks，活跃 Ruleset 联合审批、CODEOWNERS、状态检查和职责分离做服务端判定；通用 `patch` 不能伪造合并，也不能直写受保护分支；合法合并原子更新目标分支、提交和审计状态根。
+- Spreadsheet：运行时 Schema 支持必填、唯一、引用与安全公式；总账使用整数分、借贷平衡、不可变冲销、幂等重试和关账期；BOM/MRP 支持环检测、提前期、批量、安全库存、损耗、日期化到货与需求追溯。
+- 两域的证据事件同时绑定前一事件哈希和完整业务状态根；链或业务状态任一被篡改，后续写入都会 fail closed。损坏的持久化文件不会被“恢复”为一份空数据。
+
+这些扩展的最新本地证据与正式百炼证据分开记录，避免把 dry-run 冒充模型生产运行。详见 `docs/HARDENING.md`。
 
 ## Harness 如何工作
 

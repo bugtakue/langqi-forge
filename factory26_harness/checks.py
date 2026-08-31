@@ -13,6 +13,35 @@ from pathlib import Path
 from typing import Iterable
 
 
+SAFE_ENVIRONMENT_KEYS = {
+    "CI",
+    "COMSPEC",
+    "FORCE_COLOR",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "NO_COLOR",
+    "PATH",
+    "PATHEXT",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "TZ",
+}
+FORBIDDEN_LIFECYCLE_SCRIPTS = {
+    "install",
+    "postinstall",
+    "postpack",
+    "postprepare",
+    "preinstall",
+    "prepack",
+    "prepare",
+    "prepublish",
+    "prepublishOnly",
+}
+
+
 @dataclass(frozen=True)
 class CheckResult:
     name: str
@@ -25,12 +54,32 @@ class CheckResult:
         return asdict(self)
 
 
-def _run(command: list[str], cwd: Path, timeout: int) -> tuple[int, str, float]:
+def _safe_environment(**extra: str) -> dict[str, str]:
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper() in SAFE_ENVIRONMENT_KEYS
+    }
+    environment.update(
+        {
+            "CI": "1",
+            "NPM_CONFIG_IGNORE_SCRIPTS": "true",
+            "npm_config_ignore_scripts": "true",
+            **extra,
+        }
+    )
+    return environment
+
+
+def _run(
+    command: list[str], cwd: Path, timeout: int, *, environment: dict[str, str] | None = None
+) -> tuple[int, str, float]:
     started = time.monotonic()
     try:
         completed = subprocess.run(
             command,
             cwd=cwd,
+            env=environment or _safe_environment(),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -58,13 +107,73 @@ def structure_check(root: Path) -> CheckResult:
     return CheckResult("structure", not missing, summary, required, time.monotonic() - started)
 
 
+def package_policy_check(root: Path) -> CheckResult:
+    started = time.monotonic()
+    manifests = (
+        (root / "frontend" / "package.json", "build"),
+        (root / "backend" / "package.json", "start"),
+    )
+    errors: list[str] = []
+    related = tuple(str(path.relative_to(root)) for path, _ in manifests)
+    for path, required_script in manifests:
+        try:
+            if path.stat().st_size > 128_000:
+                errors.append(f"{path.name} exceeds 128KB")
+                continue
+            package = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            errors.append(f"{path.relative_to(root)} is invalid: {exc}")
+            continue
+        scripts = package.get("scripts") or {}
+        if not isinstance(scripts, dict):
+            errors.append(f"{path.relative_to(root)} scripts must be an object")
+            continue
+        if not str(scripts.get(required_script) or "").strip():
+            errors.append(f"{path.relative_to(root)} is missing script {required_script}")
+        forbidden = sorted(FORBIDDEN_LIFECYCLE_SCRIPTS.intersection(scripts))
+        if forbidden:
+            errors.append(
+                f"{path.relative_to(root)} contains forbidden lifecycle scripts: {', '.join(forbidden)}"
+            )
+        for section in ("dependencies", "devDependencies"):
+            dependencies = package.get(section) or {}
+            if not isinstance(dependencies, dict) or len(dependencies) > 200:
+                errors.append(
+                    f"{path.relative_to(root)} {section} must contain at most 200 entries"
+                )
+                continue
+            for name, version in dependencies.items():
+                text = str(version or "")
+                if (
+                    len(str(name)) > 214
+                    or len(text) > 500
+                    or text.startswith(("file:", "link:", "/", "../", "./"))
+                    or "..\\" in text
+                ):
+                    errors.append(
+                        f"{path.relative_to(root)} contains unsafe dependency source for {name}"
+                    )
+    return CheckResult(
+        "package_policy",
+        not errors,
+        "package policy passed" if not errors else "; ".join(errors),
+        related,
+        time.monotonic() - started,
+    )
+
+
 def _npm_install(directory: Path) -> tuple[int, str, float]:
     package = json.loads((directory / "package.json").read_text(encoding="utf-8"))
     dependencies = package.get("dependencies") or {}
     dev_dependencies = package.get("devDependencies") or {}
     if not dependencies and not dev_dependencies:
         return 0, "no npm dependencies", 0.0
-    return _run(["npm", "install", "--no-audit", "--no-fund"], directory, 600)
+    return _run(
+        ["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund"],
+        directory,
+        600,
+        environment=_safe_environment(),
+    )
 
 
 def frontend_build_check(root: Path) -> CheckResult:
@@ -75,7 +184,12 @@ def frontend_build_check(root: Path) -> CheckResult:
     install_rc, install_output, install_seconds = _npm_install(frontend)
     if install_rc != 0:
         return CheckResult("frontend_build", False, f"npm install failed\n{install_output}", related, install_seconds)
-    rc, output, seconds = _run(["npm", "run", "build"], frontend, 600)
+    rc, output, seconds = _run(
+        ["npm", "run", "build"],
+        frontend,
+        600,
+        environment=_safe_environment(),
+    )
     return CheckResult(
         "frontend_build",
         rc == 0,
@@ -128,7 +242,7 @@ def startup_check(root: Path, smoke_port: int) -> CheckResult:
         return CheckResult(
             "startup_health", False, f"backend npm install failed\n{install_output}", related, time.monotonic() - started
         )
-    environment = dict(os.environ, PORT=str(smoke_port))
+    environment = _safe_environment(PORT=str(smoke_port))
     process = subprocess.Popen(
         ["npm", "start"],
         cwd=backend,
@@ -163,6 +277,8 @@ def startup_check(root: Path, smoke_port: int) -> CheckResult:
 
 def run_full_checks(root: Path, smoke_port: int) -> list[CheckResult]:
     results = [structure_check(root)]
+    if results[-1].passed:
+        results.append(package_policy_check(root))
     if results[-1].passed:
         results.append(frontend_build_check(root))
     if results[-1].passed:

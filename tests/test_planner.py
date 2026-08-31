@@ -58,6 +58,7 @@ class PlannerTests(unittest.TestCase):
                 "risks": ["permissions"],
                 "validation_focus": ["fork persistence"],
                 "rationale": "Covered by the repository kernel.",
+                "uncovered_requirement_ids": [],
             }
         )
         with tempfile.TemporaryDirectory() as directory:
@@ -84,6 +85,7 @@ class PlannerTests(unittest.TestCase):
                 "risks": [],
                 "validation_focus": [],
                 "rationale": "Invented.",
+                "uncovered_requirement_ids": [],
             }
         )
         with tempfile.TemporaryDirectory() as directory:

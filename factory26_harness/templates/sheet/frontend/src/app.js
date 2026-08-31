@@ -1,3 +1,5 @@
+import { renderComputeStudio } from "./compute.js";
+
 const app = document.querySelector("#app");
 
 const COLUMN_COUNT = 20;
@@ -13,6 +15,7 @@ let pendingPaste = null;
 let pasteQueue = Promise.resolve();
 let undoStack = [];
 let redoStack = [];
+let computeMode = false;
 
 function escapeHtml(value) {
   return String(value)
@@ -711,6 +714,7 @@ function renderEditor() {
       <h1>${escapeHtml(workbook.name)}</h1>
       <span class="status">${escapeHtml(updatedText(workbook.updatedAt))}</span>
       <span class="spacer"></span>
+      <a class="secondary" href="/workbooks/${encodeURIComponent(workbook.id)}/compute">Enterprise compute</a>
       <button class="secondary" type="button" id="rename-workbook">Rename workbook</button>
       <button class="secondary" type="button" id="export-csv">Export CSV</button>
     </header>
@@ -1654,7 +1658,7 @@ function wireEditor() {
 }
 
 document.addEventListener("paste", (event) => {
-  if (!workbook || event.target?.matches('[aria-label^="Edit "]')) return;
+  if (!workbook || computeMode || event.target?.matches('[aria-label^="Edit "]')) return;
   event.preventDefault();
   const start = pendingPaste?.start || activeSheet().selected || "A1";
   const textPromise = pendingPaste?.textPromise || clipboardText(event);
@@ -1664,7 +1668,7 @@ document.addEventListener("paste", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (!workbook || event.target?.matches('[aria-label^="Edit "]')) return;
+  if (!workbook || computeMode || event.target?.matches('[aria-label^="Edit "]')) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
     event.preventDefault();
     void restoreHistory(event.shiftKey ? redoStack : undoStack, event.shiftKey ? undoStack : redoStack);
@@ -1702,8 +1706,9 @@ document.addEventListener("click", (event) => {
 
 async function boot() {
   try {
-    const match = /^\/workbooks\/([^/]+)\/?$/.exec(window.location.pathname);
+    const match = /^\/workbooks\/([^/]+)(\/compute)?\/?$/.exec(window.location.pathname);
     if (!match) {
+      computeMode = false;
       await renderHome();
       return;
     }
@@ -1715,6 +1720,11 @@ async function boot() {
       sheet.validations ||= {};
       sheet.selected ||= "A1";
       sheet.selection ||= [sheet.selected];
+    }
+    computeMode = Boolean(match[2]);
+    if (computeMode) {
+      renderComputeStudio({ app, workbook, request, escapeHtml, updatedText });
+      return;
     }
     renderEditor();
   } catch (error) {

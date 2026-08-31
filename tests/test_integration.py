@@ -10,6 +10,8 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from factory26_harness.cli import _transaction_checksum
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -41,6 +43,7 @@ class _PlannerHandler(BaseHTTPRequestHandler):
                                 "risks": ["permission boundaries"],
                                 "validation_focus": ["repository list persists"],
                                 "rationale": "The GitHub kernel covers this contract.",
+                                "uncovered_requirement_ids": [],
                             }
                         ),
                     },
@@ -89,6 +92,7 @@ class _WrongDomainPlannerHandler(_PlannerHandler):
                                 "risks": ["domain mismatch"],
                                 "validation_focus": ["fail closed"],
                                 "rationale": "Incorrectly selected the sheet kernel.",
+                                "uncovered_requirement_ids": [],
                             }
                         ),
                     },
@@ -134,6 +138,79 @@ class _MalformedPlannerHandler(_PlannerHandler):
             "id": "planner-malformed-response",
             "choices": [{"message": message}],
             "usage": {"prompt_tokens": 100, "completion_tokens": 5},
+        }
+        encoded = json.dumps(payload).encode("utf-8")
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+
+class _PartialImplementationHandler(_PlannerHandler):
+    calls = 0
+
+    def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
+        length = int(self.headers.get("content-length") or 0)
+        request = json.loads(self.rfile.read(length))
+        type(self).calls += 1
+        tool_names = [
+            item.get("function", {}).get("name") for item in request.get("tools") or []
+        ]
+        if "select_build_contract" in tool_names:
+            message = {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "planner-delta",
+                        "type": "function",
+                        "function": {
+                            "name": "select_build_contract",
+                            "arguments": json.dumps(
+                                {
+                                    "domain": "github",
+                                    "kernel_eligible": False,
+                                    "capability_tags": [],
+                                    "risks": ["unseen capability"],
+                                    "validation_focus": ["rollback partial edits"],
+                                    "rationale": "The requirement is outside the known kernel.",
+                                    "uncovered_requirement_ids": ["unknown-feature"],
+                                }
+                            ),
+                        },
+                    }
+                ],
+            }
+        elif type(self).calls == 2:
+            message = {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "partial-write",
+                        "type": "function",
+                        "function": {
+                            "name": "write_file",
+                            "arguments": json.dumps(
+                                {
+                                    "path": "frontend/src/partial-poison.js",
+                                    "content": "throw new Error('partial');\n",
+                                }
+                            ),
+                        },
+                    }
+                ],
+            }
+        else:
+            message = {
+                "role": "assistant",
+                "content": "Finished without validation.",
+            }
+        payload = {
+            "id": f"partial-{type(self).calls}",
+            "choices": [{"message": message}],
+            "usage": {"prompt_tokens": 20, "completion_tokens": 10},
         }
         encoded = json.dumps(payload).encode("utf-8")
         self.send_response(200)
@@ -434,6 +511,197 @@ children:
         finally:
             server.shutdown()
             server.server_close()
+
+    def test_unvalidated_partial_agent_edits_are_transactionally_rolled_back(
+        self,
+    ) -> None:
+        _PartialImplementationHandler.calls = 0
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _PartialImplementationHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                temporary = Path(directory)
+                requirements = temporary / "requirements"
+                output = temporary / "output"
+                requirements.mkdir()
+                (requirements / "requirements.yaml").write_text(
+                    """id: github-app
+name: GitHub Code Collaboration
+type: FOLDER
+children:
+  - id: unknown-feature
+    name: Teleport repository artifacts
+    type: ATOMIC
+    description: Move an artifact through a quantum tunnel.
+""",
+                    encoding="utf-8",
+                )
+                environment = {
+                    **os.environ,
+                    "OPENAI_API_KEY": "transaction-test",
+                    "OPENAI_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1",
+                    "MODEL": "transaction-model",
+                    "FACTORY26_MAX_MODEL_REQUESTS": "4",
+                }
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        str(REPOSITORY_ROOT / "main.py"),
+                        str(requirements),
+                        "--output-dir",
+                        str(output),
+                        "--web-port",
+                        "3994",
+                        "--smoke-port",
+                        "3995",
+                        "--max-agent-turns",
+                        "2",
+                        "--strict-exit",
+                    ],
+                    cwd=REPOSITORY_ROOT,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                )
+                self.assertEqual(
+                    completed.returncode, 1, completed.stdout + completed.stderr
+                )
+                self.assertFalse(
+                    (output / "frontend" / "src" / "partial-poison.js").exists()
+                )
+                ledger = json.loads(
+                    (output / ".arc" / "transaction-ledger.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(
+                    ledger["transactions"][0]["status"], "rolled_back"
+                )
+                self.assertEqual(ledger["version"], 2)
+                self.assertEqual(
+                    ledger["checksum"],
+                    _transaction_checksum(ledger["transactions"]),
+                )
+                report = json.loads(
+                    (output / ".arc" / "harness-report.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(report["transaction_safety"]["rolled_back"], 1)
+                self.assertEqual(report["agent_failures"], ["unknown-feature"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_restart_recovers_an_open_transaction_before_scaffolding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            requirements = temporary / "requirements"
+            output = temporary / "output"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: app
+name: Recovery workspace
+type: FOLDER
+children:
+  - id: recovery
+    name: Recover safely
+    type: ATOMIC
+    description: Keep stable state after a process interruption.
+""",
+                encoding="utf-8",
+            )
+            source = output / "frontend" / "src" / "app.js"
+            source.parent.mkdir(parents=True)
+            source.write_text("stable\n", encoding="utf-8")
+            subprocess.run(["git", "init"], cwd=output, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "config", "user.name", "Recovery Test"],
+                cwd=output,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "recovery@example.test"],
+                cwd=output,
+                check=True,
+            )
+            subprocess.run(["git", "add", "."], cwd=output, check=True)
+            subprocess.run(
+                ["git", "commit", "-m", "checkpoint"], cwd=output, check=True
+            )
+            checkpoint = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=output,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            source.write_text("poisoned partial edit\n", encoding="utf-8")
+            ledger = output / ".arc" / "transaction-ledger.json"
+            ledger.parent.mkdir()
+            ledger.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "transactions": [
+                            {
+                                "run_id": "crashed-run",
+                                "kind": "implementation_batch",
+                                "index": 1,
+                                "requirement_ids": ["recovery"],
+                                "checkpoint_commit": checkpoint,
+                                "status": "open",
+                                "changed_files": ["frontend/src/app.js"],
+                                "result_commit": None,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPOSITORY_ROOT / "main.py"),
+                    str(requirements),
+                    "--output-dir",
+                    str(output),
+                    "--web-port",
+                    "3996",
+                    "--smoke-port",
+                    "3997",
+                    "--dry-run",
+                    "--strict-exit",
+                ],
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            self.assertEqual(
+                completed.returncode, 0, completed.stdout + completed.stderr
+            )
+            self.assertEqual(source.read_text(encoding="utf-8"), "stable\n")
+            recovered = json.loads(ledger.read_text(encoding="utf-8"))
+            self.assertEqual(recovered["version"], 2)
+            self.assertEqual(
+                recovered["checksum"],
+                _transaction_checksum(recovered["transactions"]),
+            )
+            self.assertEqual(
+                recovered["transactions"][0]["status"],
+                "rolled_back_on_restart",
+            )
+            report = json.loads(
+                (output / ".arc" / "harness-report.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(report["transaction_safety"]["rolled_back"], 1)
 
     def test_planner_domain_disagreement_keeps_available_kernel_but_fails_release_route(
         self,

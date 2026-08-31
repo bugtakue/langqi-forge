@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .trace import reseal_trace_rows, verify_trace_rows
+
 RUN_FILES = {
     "github": (
         ".arc/harness-report.json",
@@ -52,10 +54,18 @@ def _export_trace(
     rows = []
     for line in source.read_text(encoding="utf-8").splitlines():
         if line.strip():
-            rows.append(_sanitize(json.loads(line), replacements))
+            rows.append(json.loads(line))
     sequences = [row.get("sequence") for row in rows]
     if sequences != list(range(1, len(rows) + 1)):
         raise ValueError(f"trace sequence is not contiguous: {source}")
+    verification = verify_trace_rows(rows)
+    if not verification["valid"]:
+        raise ValueError(
+            f"trace integrity failed at row {verification.get('row')}: {source}"
+        )
+    rows = reseal_trace_rows(
+        [_sanitize(row, replacements) for row in rows]
+    )
     destination.parent.mkdir(parents=True, exist_ok=True)
     rendered = "".join(
         json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
