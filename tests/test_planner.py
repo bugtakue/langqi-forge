@@ -16,12 +16,23 @@ class _PlannerModel:
         self.arguments = arguments
         self.calls = 0
 
-    def complete(self, messages, tools, *, max_tokens=None, tool_choice=None):
+    def complete(
+        self,
+        messages,
+        tools,
+        *,
+        max_tokens=None,
+        tool_choice=None,
+        max_attempts=3,
+        timeout_seconds=None,
+    ):
         self.calls += 1
         self.messages = messages
         self.tools = tools
         self.max_tokens = max_tokens
         self.tool_choice = tool_choice
+        self.max_attempts = max_attempts
+        self.timeout_seconds = timeout_seconds
         return SimpleNamespace(
             content="",
             tool_calls=(
@@ -70,6 +81,8 @@ class PlannerTests(unittest.TestCase):
             )
             self.assertEqual(model.calls, 1)
             self.assertEqual(model.max_tokens, 700)
+            self.assertEqual(model.max_attempts, 1)
+            self.assertEqual(model.timeout_seconds, 60)
             self.assertEqual(
                 model.tool_choice,
                 {

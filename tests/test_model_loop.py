@@ -37,7 +37,12 @@ class _ModelHandler(BaseHTTPRequestHandler):
                         "type": "function",
                         "function": {
                             "name": "write_file",
-                            "arguments": json.dumps({"path": "frontend/src/generated.txt", "content": "generated\n"}),
+                            "arguments": json.dumps(
+                                {
+                                    "path": "frontend/src/generated.txt",
+                                    "content": "generated\n",
+                                }
+                            ),
                         },
                     }
                 ],
@@ -58,7 +63,10 @@ class _ModelHandler(BaseHTTPRequestHandler):
                 ],
             }
         else:
-            message = {"role": "assistant", "content": "Implemented the requested file."}
+            message = {
+                "role": "assistant",
+                "content": "Implemented the requested file.",
+            }
         payload = {
             "choices": [{"message": message}],
             "usage": {"prompt_tokens": 10, "completion_tokens": 5},
@@ -87,7 +95,7 @@ class ModelLoopTests(unittest.TestCase):
                         {
                             "name": "test-frontend",
                             "private": True,
-                            "scripts": {"build": "node -e \"\""},
+                            "scripts": {"build": 'node -e ""'},
                         }
                     ),
                     encoding="utf-8",
@@ -97,7 +105,7 @@ class ModelLoopTests(unittest.TestCase):
                         {
                             "name": "test-backend",
                             "private": True,
-                            "scripts": {"start": "node -e \"\""},
+                            "scripts": {"start": 'node -e ""'},
                         }
                     ),
                     encoding="utf-8",
@@ -120,12 +128,20 @@ class ModelLoopTests(unittest.TestCase):
                         visual_reference=(),
                         raw={},
                     )
-                    result = CodingAgent(client, tools, trace, max_turns=4).implement([node])
+                    result = CodingAgent(client, tools, trace, max_turns=4).implement(
+                        [node]
+                    )
                 self.assertTrue(result.completed)
-                self.assertEqual((root / "frontend" / "src" / "generated.txt").read_text(), "generated\n")
+                self.assertEqual(
+                    (root / "frontend" / "src" / "generated.txt").read_text(),
+                    "generated\n",
+                )
                 self.assertEqual(client.total_prompt_tokens, 30)
                 self.assertEqual(client.total_completion_tokens, 15)
-                self.assertNotIn("test-secret", (root / ".arc" / "trace.jsonl").read_text(encoding="utf-8"))
+                self.assertNotIn(
+                    "test-secret",
+                    (root / ".arc" / "trace.jsonl").read_text(encoding="utf-8"),
+                )
         finally:
             server.shutdown()
             server.server_close()
@@ -165,9 +181,9 @@ class ModelLoopTests(unittest.TestCase):
                 visual_reference=(),
                 raw={},
             )
-            result = CodingAgent(
-                FloodModel(), tools, trace, max_turns=3
-            ).implement([requirement])
+            result = CodingAgent(FloodModel(), tools, trace, max_turns=3).implement(
+                [requirement]
+            )
             self.assertFalse(result.completed)
             self.assertEqual(result.summary, "workspace tool-call budget exceeded")
             self.assertEqual(tools.write_operations, 0)
@@ -192,6 +208,23 @@ class ModelLoopTests(unittest.TestCase):
                         ],
                         [],
                     )
+            self.assertEqual(client.http_attempt_count, 0)
+
+    def test_invalid_request_policy_fails_before_network_io(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = ProductionTrace(root / "trace.jsonl")
+            environment = {
+                "OPENAI_API_KEY": "test-secret",
+                "OPENAI_BASE_URL": "http://127.0.0.1:1/v1",
+                "MODEL": "mock-model",
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                client = OpenAIChatClient(trace)
+                with self.assertRaisesRegex(ValueError, "max_attempts"):
+                    client.complete([], [], max_attempts=0)
+                with self.assertRaisesRegex(ValueError, "timeout"):
+                    client.complete([], [], timeout_seconds=241)
             self.assertEqual(client.http_attempt_count, 0)
 
 

@@ -21,7 +21,7 @@ Langqi Forge 的目标不是“再包一层 Claude Code”，而是让软件工�
 | 层级 | 状态 | 能证明什么 |
 |---|---|---|
 | 2026-08-31 历史生产基线 | 真实调用阿里云百炼 `qwen-plus`；GitHub 101/101 + 改名对抗 101/101 + Spreadsheet 102/102 | 旧提交 `c93949a`在固定公开题上 304/304；见 [`evidence/final/`](evidence/final/README.md) |
-| 当前 v2 强化候选 | Python 90/90、Node 22/22；最新双域 dry-run 制品仍为 304/304 | 新身份边界、并发事务、封口轨迹、原始 GUI 报告、能力胶囊和独立验证器通过本地回归 |
+| 当前 v2 强化候选 | Python 94/94、Node 22/22；最新双域 dry-run 制品仍为 304/304 | 新身份边界、并发事务、封口轨迹、原始 GUI 报告、能力胶囊和独立验证器通过本地回归 |
 | v2 最终生产证据 | 待本次实现冻结后生成 | 必须从干净 commit 通过真实模型网关、三次顺序 GUI、v2 资格门和独立证据验证器 |
 
 上述结果只适用于已锁定哈希的公开任务，不等于隐藏题必过、Top 20 或获奖保证。
@@ -206,6 +206,21 @@ export MODEL='qwen-plus'
 ```
 
 独立验证器会检查精确文件集、SHA/size、封口轨迹、模型请求/回复/tool-call 事件、三次固定 GUI、胶囊语义、脱敏轨迹的确定性重演，并独立重算资格检查。
+
+## 评委一页入口
+
+为了让评委不必先阅读整个仓库，可从已封口的双域制品生成一份自包含 HTML 和同源 JSON：
+
+```bash
+.venv/bin/python -m factory26_harness.judge_report \
+  --github-project /tmp/langqi-github \
+  --sheet-project /tmp/langqi-sheet \
+  --qualification /tmp/qualification.json \
+  --output /tmp/langqi-judge/index.html \
+  --data-output /tmp/langqi-judge/index.json
+```
+
+报告会先重验运行封口、轨迹和能力胶囊，然后展示需求数、模型使用、Agent 轮次、人工干预、三套 GUI 和封口事件。未提供或未通过资格文件时，页面不会冒充“已合格”；dry-run 只显示 `LOCAL CANDIDATE`。输出文件已存在时拒绝覆盖，避免用新报告洗掉旧结果。
 
 ## 安全与声明边界
 

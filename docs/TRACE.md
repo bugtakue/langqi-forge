@@ -6,7 +6,7 @@
 
 | 要求 | 主要事件 | 可验证内容 |
 |---|---|---|
-| Prompts | `agent_session_started`, `model_request` | 完整 system/user messages、紧凑需求摘要、工具 schema、强制 tool choice |
+| Prompts | `agent_session_started`, `model_request` | 完整 system/user messages、紧凑需求摘要、工具 schema、强制 tool choice、请求尝试数与超时上限 |
 | 工具调用 | `model_response`, `agent_tool_call`, `deterministic_scaffold`, `validation_result`, `public_evaluation_*` | provider response id、原始 tool call、实际应用参数、生成文件、构建/启动/Playwright |
 | Agent 迭代 | `agent_session_started`, `agent_session_completed`, `run_completed` | Planner 与 Coding Agent 的阶段、次数、Token、路由和结果 |
 | 人工干预点 | `human_intervention_checkpoint` | 是否需要人工、实际次数、失败时是关闭门还是临时改代码 |
@@ -42,6 +42,10 @@
 独立验证器不只检查两份文件各自的哈希。它会从精确轨迹的 `run_started` 导出两个绝对根路径，重演同一脱敏和 reseal 算法，要求结果与公开轨迹逐字段一致。
 
 公开提交链接应指向脱敏轨迹；精确轨迹与整个证据包用于独立审计。
+
+## 评委报告的边界
+
+`factory26_harness.judge_report` 是只读的展示层，不是新证据源。它只能在 `verify_run_envelope` 和能力胶囊验证通过后，将已封口制品派生成自包含 HTML/JSON。报告不回写项目、不改写轨迹、不重跑评测，也不把未提供的资格结果推断为通过。因此它适合作为评委阅读入口，但最终真值仍由封口制品、资格文件和独立证据验证器共同决定。
 
 ## 人工干预边界
 

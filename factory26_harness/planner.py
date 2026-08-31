@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
@@ -197,7 +198,9 @@ def _contract(
     if any(req_id not in known_requirement_ids for req_id in uncovered_requirement_ids):
         raise ValueError("planner named an unknown uncovered requirement id")
     if kernel_eligible and uncovered_requirement_ids:
-        raise ValueError("kernel-eligible contract cannot contain uncovered requirements")
+        raise ValueError(
+            "kernel-eligible contract cannot contain uncovered requirements"
+        )
     if not kernel_eligible and not uncovered_requirement_ids:
         raise ValueError(
             "non-kernel-eligible contract must identify uncovered requirements"
@@ -225,12 +228,12 @@ class SpecificationPlanner:
         nodes: Iterable[RequirementNode],
     ) -> PlannerContract:
         nodes = list(nodes)
+        timeout_seconds = int(os.environ.get("FACTORY26_PLANNER_TIMEOUT_SECONDS", "60"))
         digest = requirement_digest(tree, nodes)
         prompt = (
             "Select the build contract for this compiled requirement digest. "
             "No classifier hint or local coverage verdict is provided; judge only the requirements "
-            "against the closed-world capability contracts.\n\n"
-            + digest
+            "against the closed-world capability contracts.\n\n" + digest
         )
         self.trace.record(
             "agent_session_started",
@@ -250,6 +253,8 @@ class SpecificationPlanner:
                 "type": "function",
                 "function": {"name": "select_build_contract"},
             },
+            max_attempts=1,
+            timeout_seconds=timeout_seconds,
         )
         arguments, decision_mode = _arguments_from_reply(reply)
         self.trace.record(

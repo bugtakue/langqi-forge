@@ -87,7 +87,18 @@ class OpenAIChatClient:
         *,
         max_tokens: int | None = None,
         tool_choice: str | dict[str, Any] | None = None,
+        max_attempts: int = 3,
+        timeout_seconds: int | None = None,
     ) -> ModelReply:
+        if not 1 <= max_attempts <= 3:
+            raise ValueError("max_attempts must be between 1 and 3")
+        request_timeout = (
+            int(timeout_seconds)
+            if timeout_seconds is not None
+            else int(os.environ.get("FACTORY26_MODEL_TIMEOUT_SECONDS", "240"))
+        )
+        if not 1 <= request_timeout <= 240:
+            raise ValueError("model timeout must be between 1 and 240 seconds")
         if self.request_count >= self.max_requests:
             self.trace.record(
                 "model_budget_exhausted",
@@ -116,6 +127,10 @@ class OpenAIChatClient:
             model=self.model,
             gateway=self.gateway_evidence(),
             payload=payload,
+            request_policy={
+                "max_attempts": max_attempts,
+                "timeout_seconds": request_timeout,
+            },
         )
         encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         if len(encoded) > self.max_request_bytes:
@@ -123,7 +138,7 @@ class OpenAIChatClient:
                 f"model request exceeds {self.max_request_bytes} byte safety limit"
             )
         last_error = "model request failed"
-        for attempt in range(1, 4):
+        for attempt in range(1, max_attempts + 1):
             request = urllib.request.Request(
                 self.endpoint,
                 data=encoded,
@@ -135,10 +150,14 @@ class OpenAIChatClient:
             )
             try:
                 self.http_attempt_count += 1
-                with urllib.request.urlopen(request, timeout=240) as response:
+                with urllib.request.urlopen(
+                    request, timeout=request_timeout
+                ) as response:
                     declared_length = int(response.headers.get("content-length") or 0)
                     if declared_length > self.max_response_bytes:
-                        raise ValueError("model response exceeds declared byte safety limit")
+                        raise ValueError(
+                            "model response exceeds declared byte safety limit"
+                        )
                     raw_body = response.read(self.max_response_bytes + 1)
                     if len(raw_body) > self.max_response_bytes:
                         raise ValueError("model response exceeds byte safety limit")
@@ -146,7 +165,9 @@ class OpenAIChatClient:
                 choices = body.get("choices") if isinstance(body, dict) else None
                 if not isinstance(choices, list) or not choices:
                     raise ValueError("model response choices are missing")
-                raw_message = choices[0].get("message") if isinstance(choices[0], dict) else None
+                raw_message = (
+                    choices[0].get("message") if isinstance(choices[0], dict) else None
+                )
                 if not isinstance(raw_message, dict):
                     raise ValueError("model response message is invalid")
                 message = dict(raw_message)
@@ -207,6 +228,6 @@ class OpenAIChatClient:
                         detail = ""
                 last_error = f"attempt {attempt}: {exc} {detail}".strip()
                 self.trace.record("model_error", attempt=attempt, error=last_error)
-                if attempt < 3:
+                if attempt < max_attempts:
                     time.sleep(attempt)
         raise RuntimeError(last_error)
