@@ -34,6 +34,7 @@ from .requirements import (
     requirement_source_sha256,
 )
 from .scaffold import scaffold_workspace
+from .submission_bundle import SOURCE_MANIFEST_NAME, verify_source_manifest
 from .trace import ProductionTrace
 from .workspace_tools import WorkspaceTools
 
@@ -231,10 +232,21 @@ def _source_identity() -> dict[str, Any]:
         ).stdout.strip()
         return {"revision": revision, "worktree_clean": not status, "source": "git"}
     except (OSError, subprocess.SubprocessError):
+        manifest_path = SOURCE_ROOT / SOURCE_MANIFEST_NAME
+        if manifest_path.is_file():
+            manifest = verify_source_manifest(SOURCE_ROOT)
+            return {
+                "revision": manifest["source_revision"],
+                "worktree_clean": True,
+                "source": "verified-submission-manifest",
+                "manifest_sha256": hashlib.sha256(
+                    manifest_path.read_bytes()
+                ).hexdigest(),
+            }
         return {
             "revision": "unavailable",
             "worktree_clean": None,
-            "source": "unpacked-bundle",
+            "source": "unpacked-bundle-without-source-manifest",
         }
 
 

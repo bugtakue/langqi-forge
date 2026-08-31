@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 workspace/
+dist/
 .ruff_cache/
 .cache/
 factory26_harness/templates/*/frontend/dist/

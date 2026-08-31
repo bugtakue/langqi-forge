@@ -105,6 +105,17 @@ python main.py <requirement_path> \
 
 平台注入 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`MODEL`、`ARCBENCH_TASK_DIR`、`ARCBENCH_TEMPLATE_DIR` 和 `ARCBENCH_WEB_PORT`。模型网关不被写死为百炼；官方比赛网关可以注入 Kimi、GLM、MiniMax 或 DeepSeek。自发布证据可额外锁定百炼/Qwen profile。
 
+### 生成最小比赛包（不上传）
+
+```bash
+sh arc.sh pack
+# 或
+.venv/bin/python -m factory26_harness.submission_bundle \
+  --output dist/langqi-forge-agent.zip
+```
+
+打包器只收录 `main.py`、运行依赖、Harness 运行模块和双域模板；测试、历史证据、文档、benchmark、缓存和凭据不会进入 zip。文件顺序、时间戳和压缩参数固定，同一提交可产生逐字节相同的包。它无例外拒绝脏工作树，并嵌入逐文件哈希与完整 Git revision；平台解压后即使没有 `.git/`，运行也会先检查源码与清单完全一致，再把声明的 revision 和清单哈希写入生产轨迹。最终真实性仍由公开仓库 commit、上传快照和 zip SHA 的外部绑定共同证明。`arc.sh` 刻意没有登录、上传或提交命令。
+
 生成结果的 `.arc/` 至少包含：
 
 ```text
