@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "generated_at": "2026-08-31T08:46:44.374746+00:00",
+  "scope": "sanitized public production trajectory; public task source is intentionally excluded",
+  "trace_events": {
+    "github": 21,
+    "sheet": 19
+  },
+  "files": [
+    {
+      "path": "github/compiled-plan.json",
+      "sha256": "4373f4e6ba38df2633105cf7dde9d0f1943cc3c692e802b849790e8039e4bccc",
+      "bytes": 5172
+    },
+    {
+      "path": "github/github.adversarial.feedback.json",
+      "sha256": "4dd29a5809b6944648ad19dfc0ec7fd6a758a56ada3e105e0a947f93149bb0e2",
+      "bytes": 489
+    },
+    {
+      "path": "github/github.feedback.json",
+      "sha256": "5427963f1b06c03443905604fb6d7c739ca925fd0a9652f51c07eec1bb56ada4",
+      "bytes": 474
+    },
+    {
+      "path": "github/harness-report.json",
+      "sha256": "c53212d3b22add064732fa07549f755ee563f736c6ecfefab144f940f0454286",
+      "bytes": 3340
+    },
+    {
+      "path": "github/planner-contract.json",
+      "sha256": "a266e80d4ea1d95805b6235b4175dd14636ac1130f18283a07247efb11533ebf",
+      "bytes": 1481
+    },
+    {
+      "path": "github/production-trace.jsonl",
+      "sha256": "2786053c4a615b3fb481a0fd857dd4524d74916d88eb18feb3b33f15101885a0",
+      "bytes": 38760
+    },
+    {
+      "path": "qualification.json",
+      "sha256": "a4d15a1224ba44b64795f07aa01a6af8bce4540d0913d676483ee94dd6f08436",
+      "bytes": 23825
+    },
+    {
+      "path": "sheet/compiled-plan.json",
+      "sha256": "1080a16c3914d9556872221fb7501a64092d1ef8368abb7e5df3511a671186e9",
+      "bytes": 3765
+    },
+    {
+      "path": "sheet/harness-report.json",
+      "sha256": "b83df11d0915b6e51745a4b7639f143345d1eefddab6181258986608cc9d487a",
+      "bytes": 3322
+    },
+    {
+      "path": "sheet/planner-contract.json",
+      "sha256": "c5b5744cbf6d0d9cda3fd60285a56f1fcc9489f7832269359b69513466edfe28",
+      "bytes": 1465
+    },
+    {
+      "path": "sheet/production-trace.jsonl",
+      "sha256": "8fdf6df912449d37d7625c82090b90f94f811bb95f9bad26070f525c9251abfb",
+      "bytes": 27274
+    },
+    {
+      "path": "sheet/sheet.feedback.json",
+      "sha256": "20c825418d8748032176dbde6d1f5f976f3d0120857242c997d74d611b915366",
+      "bytes": 483
+    }
+  ]
+}

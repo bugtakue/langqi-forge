@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "source_run_id": "674576e0-0112-493b-8eed-4c6f998a9829",
+  "task_id": "github",
+  "run_label": "github.adversarial",
+  "fixture_profile": "adversarial",
+  "fully_parallel": true,
+  "workers": 4,
+  "grep": null,
+  "exit_code": 0,
+  "duration_seconds": 8.687,
+  "stats": {
+    "startTime": "2026-08-31T08:45:17.101Z",
+    "duration": 8377.954,
+    "expected": 101,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "failure_count": 0,
+  "repair_packets": []
+}

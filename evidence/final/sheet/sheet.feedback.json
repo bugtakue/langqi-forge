@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "source_run_id": "a6f4e025-2ecb-4e08-8103-c7a333c2fb65",
+  "task_id": "sheet",
+  "run_label": "sheet",
+  "fixture_profile": "baseline",
+  "fully_parallel": true,
+  "workers": 4,
+  "grep": null,
+  "exit_code": 0,
+  "duration_seconds": 17.073,
+  "stats": {
+    "startTime": "2026-08-31T08:45:43.330Z",
+    "duration": 16754.861999999997,
+    "expected": 102,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "failure_count": 0,
+  "repair_packets": []
+}

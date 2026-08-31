@@ -1,0 +1,841 @@
+{
+  "version": 1,
+  "generated_at": "2026-08-31T08:46:20.644825+00:00",
+  "gate": "factory26-public-qualification-v1",
+  "passed": true,
+  "evidence": {
+    "github_generation": {
+      "path": ".arc/harness-report.json",
+      "sha256": "c53212d3b22add064732fa07549f755ee563f736c6ecfefab144f940f0454286",
+      "passed": true,
+      "checks": [
+        {
+          "name": "run_id",
+          "passed": true,
+          "actual": "674576e0-0112-493b-8eed-4c6f998a9829",
+          "expected": "UUID"
+        },
+        {
+          "name": "source_worktree_not_dirty",
+          "passed": true,
+          "actual": true,
+          "expected": "true or unavailable for an unpacked bundle"
+        },
+        {
+          "name": "all_local_checks_passed",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "run_completed_successfully",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "requirement_count",
+          "passed": true,
+          "actual": 47,
+          "expected": 47
+        },
+        {
+          "name": "requirement_sha256",
+          "passed": true,
+          "actual": "a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959",
+          "expected": "a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959"
+        },
+        {
+          "name": "planner_status",
+          "passed": true,
+          "actual": "completed",
+          "expected": "completed"
+        },
+        {
+          "name": "execution_route",
+          "passed": true,
+          "actual": "planner-approved-deterministic-kernel",
+          "expected": "planner-approved-deterministic-kernel"
+        },
+        {
+          "name": "planner_decision_mode",
+          "passed": true,
+          "actual": "tool_call",
+          "expected": "tool_call"
+        },
+        {
+          "name": "planner_capabilities_present",
+          "passed": true,
+          "actual": [
+            "authentication",
+            "organization_permissions",
+            "repository_lifecycle",
+            "code_and_branches",
+            "issues",
+            "pull_requests",
+            "branch_protection"
+          ],
+          "expected": "one or more versioned capabilities"
+        },
+        {
+          "name": "planner_risks_present",
+          "passed": true,
+          "actual": [
+            "Permission logic gaps (e.g., exact role-based access checks for Triage/Maintain/Admin) may require refinement beyond kernel defaults",
+            "Email-based recovery (REQ-1-1-3) assumes SMTP integration not covered by kernel"
+          ],
+          "expected": "one or more bounded risks"
+        },
+        {
+          "name": "planner_validation_focus_present",
+          "passed": true,
+          "actual": [
+            "Authentication flow correctness across sign-up, sign-in, password reset, and sign-out",
+            "Role-enforced operations (e.g., only Owners editing teams, only Admins changing default branches)",
+            "Branch protection enforcement during PR merge attempts"
+          ],
+          "expected": "one or more validation priorities"
+        },
+        {
+          "name": "model_request_count",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "model_http_attempt_count",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "prompt_tokens",
+          "passed": true,
+          "actual": 2776,
+          "expected": {
+            "minimum": 1,
+            "maximum": 6000
+          }
+        },
+        {
+          "name": "completion_tokens",
+          "passed": true,
+          "actual": 280,
+          "expected": {
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        {
+          "name": "planner_iterations",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "coding_agent_iterations",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "manual_interventions",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "trace_readable",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "trace_sequence_contiguous",
+          "passed": true,
+          "actual": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "expected": "1..20"
+        },
+        {
+          "name": "trace_run_started_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_run_id_binding",
+          "passed": true,
+          "actual": "674576e0-0112-493b-8eed-4c6f998a9829",
+          "expected": "674576e0-0112-493b-8eed-4c6f998a9829"
+        },
+        {
+          "name": "trace_model_request_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_model_response_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_model_response_id",
+          "passed": true,
+          "actual": "chatcmpl-0174a68f-cc23-9b1b-8709-5f7ca6c25212",
+          "expected": "non-empty provider response id"
+        },
+        {
+          "name": "trace_planner_tool_schema",
+          "passed": true,
+          "actual": [
+            "select_build_contract"
+          ],
+          "expected": [
+            "select_build_contract"
+          ]
+        },
+        {
+          "name": "trace_agent_tool_call_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_agent_tool_call",
+          "passed": true,
+          "actual": {
+            "arguments": {
+              "capability_tags": [
+                "authentication",
+                "organization_permissions",
+                "repository_lifecycle",
+                "code_and_branches",
+                "issues",
+                "pull_requests",
+                "branch_protection"
+              ],
+              "domain": "github",
+              "kernel_eligible": true,
+              "rationale": "All atomic requirements map cleanly to GitHub domain capabilities: account lifecycle (REQ-1.x) → authentication; org/team management (REQ-2.x) → organization_permissions; repo creation, visibility, forking, cloning (REQ-3.x–4.x) → repository_lifecycle and code_and_branches; issue tracking (REQ-5.x) → issues; PR workflow including protection, review, merge, close (REQ-6.x) → pull_requests and branch_protection. No requirement falls outside the listed GitHub kernel capabilities.",
+              "risks": [
+                "Permission logic gaps (e.g., exact role-based access checks for Triage/Maintain/Admin) may require refinement beyond kernel defaults",
+                "Email-based recovery (REQ-1-1-3) assumes SMTP integration not covered by kernel"
+              ],
+              "validation_focus": [
+                "Authentication flow correctness across sign-up, sign-in, password reset, and sign-out",
+                "Role-enforced operations (e.g., only Owners editing teams, only Admins changing default branches)",
+                "Branch protection enforcement during PR merge attempts"
+              ]
+            },
+            "decision_mode": "tool_call",
+            "iteration": 1,
+            "stage": "specification_planning",
+            "tool": "select_build_contract"
+          },
+          "expected": {
+            "tool": "select_build_contract",
+            "decision_mode": "tool_call"
+          }
+        },
+        {
+          "name": "trace_human_checkpoint",
+          "passed": true,
+          "actual": [
+            {
+              "intervention_count": 0,
+              "intervention_required": false,
+              "policy": "final qualifier execution is autonomous; failures close the gate instead of requesting manual edits"
+            }
+          ],
+          "expected": [
+            {
+              "intervention_required": false,
+              "intervention_count": 0
+            }
+          ]
+        },
+        {
+          "name": "trace_validation_layers",
+          "passed": true,
+          "actual": 3,
+          "expected": {
+            "minimum": 3
+          }
+        },
+        {
+          "name": "trace_run_completed_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_public_evaluations",
+          "passed": true,
+          "actual": 2,
+          "expected": 2
+        },
+        {
+          "name": "trace_no_failure_events",
+          "passed": true,
+          "actual": [],
+          "expected": []
+        }
+      ]
+    },
+    "sheet_generation": {
+      "path": ".arc/harness-report.json",
+      "sha256": "b83df11d0915b6e51745a4b7639f143345d1eefddab6181258986608cc9d487a",
+      "passed": true,
+      "checks": [
+        {
+          "name": "run_id",
+          "passed": true,
+          "actual": "a6f4e025-2ecb-4e08-8103-c7a333c2fb65",
+          "expected": "UUID"
+        },
+        {
+          "name": "source_worktree_not_dirty",
+          "passed": true,
+          "actual": true,
+          "expected": "true or unavailable for an unpacked bundle"
+        },
+        {
+          "name": "all_local_checks_passed",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "run_completed_successfully",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "requirement_count",
+          "passed": true,
+          "actual": 24,
+          "expected": 24
+        },
+        {
+          "name": "requirement_sha256",
+          "passed": true,
+          "actual": "9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494",
+          "expected": "9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494"
+        },
+        {
+          "name": "planner_status",
+          "passed": true,
+          "actual": "completed",
+          "expected": "completed"
+        },
+        {
+          "name": "execution_route",
+          "passed": true,
+          "actual": "planner-approved-deterministic-kernel",
+          "expected": "planner-approved-deterministic-kernel"
+        },
+        {
+          "name": "planner_decision_mode",
+          "passed": true,
+          "actual": "tool_call",
+          "expected": "tool_call"
+        },
+        {
+          "name": "planner_capabilities_present",
+          "passed": true,
+          "actual": [
+            "workbook_lifecycle",
+            "cell_editing",
+            "formulas",
+            "clipboard_and_menus",
+            "reversible_structure",
+            "sorting_and_filtering",
+            "validation_and_references",
+            "pivot_tables"
+          ],
+          "expected": "one or more versioned capabilities"
+        },
+        {
+          "name": "planner_risks_present",
+          "passed": true,
+          "actual": [
+            "Formula recalculation dependency graph fidelity not guaranteed by kernel alone",
+            "Accessibility conformance for all interactive elements (e.g., ARIA tab behavior) must be validated separately"
+          ],
+          "expected": "one or more bounded risks"
+        },
+        {
+          "name": "planner_validation_focus_present",
+          "passed": true,
+          "actual": [
+            "Workbook and worksheet structural operations preserve data integrity",
+            "Formula evaluation matches documented spreadsheet semantics",
+            "All user-facing dialogs and menus meet WCAG 2.1 AA contrast and keyboard navigation requirements"
+          ],
+          "expected": "one or more validation priorities"
+        },
+        {
+          "name": "model_request_count",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "model_http_attempt_count",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "prompt_tokens",
+          "passed": true,
+          "actual": 1756,
+          "expected": {
+            "minimum": 1,
+            "maximum": 6000
+          }
+        },
+        {
+          "name": "completion_tokens",
+          "passed": true,
+          "actual": 271,
+          "expected": {
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        {
+          "name": "planner_iterations",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "coding_agent_iterations",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "manual_interventions",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "trace_readable",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "trace_sequence_contiguous",
+          "passed": true,
+          "actual": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ],
+          "expected": "1..18"
+        },
+        {
+          "name": "trace_run_started_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_run_id_binding",
+          "passed": true,
+          "actual": "a6f4e025-2ecb-4e08-8103-c7a333c2fb65",
+          "expected": "a6f4e025-2ecb-4e08-8103-c7a333c2fb65"
+        },
+        {
+          "name": "trace_model_request_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_model_response_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_model_response_id",
+          "passed": true,
+          "actual": "chatcmpl-3d6df643-7c18-9601-a500-c2a25446af3d",
+          "expected": "non-empty provider response id"
+        },
+        {
+          "name": "trace_planner_tool_schema",
+          "passed": true,
+          "actual": [
+            "select_build_contract"
+          ],
+          "expected": [
+            "select_build_contract"
+          ]
+        },
+        {
+          "name": "trace_agent_tool_call_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_agent_tool_call",
+          "passed": true,
+          "actual": {
+            "arguments": {
+              "capability_tags": [
+                "workbook_lifecycle",
+                "cell_editing",
+                "formulas",
+                "clipboard_and_menus",
+                "reversible_structure",
+                "sorting_and_filtering",
+                "validation_and_references",
+                "pivot_tables"
+              ],
+              "domain": "sheet",
+              "kernel_eligible": true,
+              "rationale": "All atomic requirements map directly to the 'sheet' domain capabilities: workbook creation/import/export/rename (workbook_lifecycle), worksheet add/switch/rename/delete (reversible_structure), cell editing/pasting/selection/cut-copy-paste/undo-redo (cell_editing + clipboard_and_menus + reversible_structure), formula entry/recalculation/error-handling/reference-adjustment (formulas), sort/filter/validation (sorting_and_filtering + validation_and_references), and pivot table creation (pivot_tables). No requirement falls outside the listed sheet kernel capabilities.",
+              "risks": [
+                "Formula recalculation dependency graph fidelity not guaranteed by kernel alone",
+                "Accessibility conformance for all interactive elements (e.g., ARIA tab behavior) must be validated separately"
+              ],
+              "validation_focus": [
+                "Workbook and worksheet structural operations preserve data integrity",
+                "Formula evaluation matches documented spreadsheet semantics",
+                "All user-facing dialogs and menus meet WCAG 2.1 AA contrast and keyboard navigation requirements"
+              ]
+            },
+            "decision_mode": "tool_call",
+            "iteration": 1,
+            "stage": "specification_planning",
+            "tool": "select_build_contract"
+          },
+          "expected": {
+            "tool": "select_build_contract",
+            "decision_mode": "tool_call"
+          }
+        },
+        {
+          "name": "trace_human_checkpoint",
+          "passed": true,
+          "actual": [
+            {
+              "intervention_count": 0,
+              "intervention_required": false,
+              "policy": "final qualifier execution is autonomous; failures close the gate instead of requesting manual edits"
+            }
+          ],
+          "expected": [
+            {
+              "intervention_required": false,
+              "intervention_count": 0
+            }
+          ]
+        },
+        {
+          "name": "trace_validation_layers",
+          "passed": true,
+          "actual": 3,
+          "expected": {
+            "minimum": 3
+          }
+        },
+        {
+          "name": "trace_run_completed_once",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_public_evaluations",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "trace_no_failure_events",
+          "passed": true,
+          "actual": [],
+          "expected": []
+        }
+      ]
+    },
+    "github_baseline": {
+      "path": ".arc/public-eval/github.feedback.json",
+      "sha256": "5427963f1b06c03443905604fb6d7c739ca925fd0a9652f51c07eec1bb56ada4",
+      "passed": true,
+      "checks": [
+        {
+          "name": "source_run_id",
+          "passed": true,
+          "actual": "674576e0-0112-493b-8eed-4c6f998a9829",
+          "expected": "674576e0-0112-493b-8eed-4c6f998a9829"
+        },
+        {
+          "name": "exit_code",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "fixture_profile",
+          "passed": true,
+          "actual": "baseline",
+          "expected": "baseline"
+        },
+        {
+          "name": "fully_parallel",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "minimum_workers",
+          "passed": true,
+          "actual": 4,
+          "expected": {
+            "minimum": 4
+          }
+        },
+        {
+          "name": "unfiltered",
+          "passed": true,
+          "actual": null,
+          "expected": null
+        },
+        {
+          "name": "expected_tests",
+          "passed": true,
+          "actual": 101,
+          "expected": 101
+        },
+        {
+          "name": "unexpected",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "skipped",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "flaky",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "duration_seconds",
+          "passed": true,
+          "actual": 9.123,
+          "expected": {
+            "maximum": 20.0
+          }
+        }
+      ]
+    },
+    "github_adversarial": {
+      "path": ".arc/public-eval/github.adversarial.feedback.json",
+      "sha256": "4dd29a5809b6944648ad19dfc0ec7fd6a758a56ada3e105e0a947f93149bb0e2",
+      "passed": true,
+      "checks": [
+        {
+          "name": "source_run_id",
+          "passed": true,
+          "actual": "674576e0-0112-493b-8eed-4c6f998a9829",
+          "expected": "674576e0-0112-493b-8eed-4c6f998a9829"
+        },
+        {
+          "name": "exit_code",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "fixture_profile",
+          "passed": true,
+          "actual": "adversarial",
+          "expected": "adversarial"
+        },
+        {
+          "name": "fully_parallel",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "minimum_workers",
+          "passed": true,
+          "actual": 4,
+          "expected": {
+            "minimum": 4
+          }
+        },
+        {
+          "name": "unfiltered",
+          "passed": true,
+          "actual": null,
+          "expected": null
+        },
+        {
+          "name": "expected_tests",
+          "passed": true,
+          "actual": 101,
+          "expected": 101
+        },
+        {
+          "name": "unexpected",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "skipped",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "flaky",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "duration_seconds",
+          "passed": true,
+          "actual": 8.687,
+          "expected": {
+            "maximum": 20.0
+          }
+        }
+      ]
+    },
+    "sheet_baseline": {
+      "path": ".arc/public-eval/sheet.feedback.json",
+      "sha256": "20c825418d8748032176dbde6d1f5f976f3d0120857242c997d74d611b915366",
+      "passed": true,
+      "checks": [
+        {
+          "name": "source_run_id",
+          "passed": true,
+          "actual": "a6f4e025-2ecb-4e08-8103-c7a333c2fb65",
+          "expected": "a6f4e025-2ecb-4e08-8103-c7a333c2fb65"
+        },
+        {
+          "name": "exit_code",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "fixture_profile",
+          "passed": true,
+          "actual": "baseline",
+          "expected": "baseline"
+        },
+        {
+          "name": "fully_parallel",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "minimum_workers",
+          "passed": true,
+          "actual": 4,
+          "expected": {
+            "minimum": 4
+          }
+        },
+        {
+          "name": "unfiltered",
+          "passed": true,
+          "actual": null,
+          "expected": null
+        },
+        {
+          "name": "expected_tests",
+          "passed": true,
+          "actual": 102,
+          "expected": 102
+        },
+        {
+          "name": "unexpected",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "skipped",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "flaky",
+          "passed": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "duration_seconds",
+          "passed": true,
+          "actual": 17.073,
+          "expected": {
+            "maximum": 30.0
+          }
+        }
+      ]
+    }
+  }
+}

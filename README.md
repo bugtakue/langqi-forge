@@ -10,9 +10,9 @@ Factory26 / ARC-Bench 参赛 Harness：让一个低 Token 规格规划 Agent 选
 
 | 制品 / 世界 | 模型请求 | prompt / completion Token | GUI | unexpected / skipped / flaky | GUI 时间 |
 |---|---:|---:|---:|---:|---:|
-| GitHub 基准 | 1 | 2776 / 270 | 101 / 101 | 0 / 0 / 0 | 18.077 秒 |
-| GitHub 对抗改名 | 同一制品 | 同上 | 101 / 101 | 0 / 0 / 0 | 9.313 秒 |
-| Spreadsheet 基准 | 1 | 1756 / 271 | 102 / 102 | 0 / 0 / 0 | 27.002 秒 |
+| GitHub 基准 | 1 | 2776 / 280 | 101 / 101 | 0 / 0 / 0 | 9.123 秒 |
+| GitHub 对抗改名 | 同一制品 | 同上 | 101 / 101 | 0 / 0 / 0 | 8.687 秒 |
+| Spreadsheet 基准 | 1 | 1756 / 271 | 102 / 102 | 0 / 0 / 0 | 17.073 秒 |
 
 三次 GUI 验收均为 4 workers、文件内完全并发。GitHub 与 Spreadsheet 的生成、构建、启动、健康检查、完整轨迹和 fail-closed 资格门全部通过。GUI 时间会受本机并发负载影响；这组结果只证明固定公开需求哈希，不保证隐藏测试、Top 20 或获奖。
 
@@ -139,7 +139,7 @@ export MODEL='qwen-plus'
   --output qualification.json
 ```
 
-门禁会拒绝模型未调用、非工具决策、错选执行路线、Token 越界、需求哈希漂移、构建失败、测试计数漂移、unexpected、skipped、flaky、非全并发或超时。
+门禁会拒绝模型未调用、非工具决策、错选执行路线、轨迹缺失、Token 越界、需求哈希漂移、构建失败、少于 4 workers、测试过滤、计数漂移、unexpected、skipped、flaky、非全并发或超时。
 
 ## 安全与声明边界
 

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "run_id": "a6f4e025-2ecb-4e08-8103-c7a333c2fb65",
+  "status": "completed",
+  "contract": {
+    "domain": "sheet",
+    "kernel_eligible": true,
+    "capability_tags": [
+      "workbook_lifecycle",
+      "cell_editing",
+      "formulas",
+      "clipboard_and_menus",
+      "reversible_structure",
+      "sorting_and_filtering",
+      "validation_and_references",
+      "pivot_tables"
+    ],
+    "risks": [
+      "Formula recalculation dependency graph fidelity not guaranteed by kernel alone",
+      "Accessibility conformance for all interactive elements (e.g., ARIA tab behavior) must be validated separately"
+    ],
+    "validation_focus": [
+      "Workbook and worksheet structural operations preserve data integrity",
+      "Formula evaluation matches documented spreadsheet semantics",
+      "All user-facing dialogs and menus meet WCAG 2.1 AA contrast and keyboard navigation requirements"
+    ],
+    "rationale": "All atomic requirements map directly to the 'sheet' domain capabilities: workbook creation/import/export/rename (workbook_lifecycle), worksheet add/switch/rename/delete (reversible_structure), cell editing/pasting/selection/cut-copy-paste/undo-redo (cell_editing + clipboard_and_menus + reversible_structure), formula entry/recalculation/error-handling/reference-adjustment (formulas), sort/filter/va",
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "execution_route": "planner-approved-deterministic-kernel"
+}

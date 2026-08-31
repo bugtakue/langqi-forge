@@ -6,9 +6,9 @@ Langqi Forge 已用真实阿里云百炼 `qwen-plus` 规划调用完成 GitHub �
 
 | 运行 | 模块 | 模型请求 | prompt / completion Token | GUI | unexpected / skipped / flaky | GUI 墙钟时间 |
 |---|---:|---:|---:|---:|---:|---:|
-| GitHub 基准 | 47 | 1 | 2776 / 270 | 101 / 101 | 0 / 0 / 0 | 18.077 秒 |
-| GitHub 对抗改名 | 47 | 同一制品 | 同上 | 101 / 101 | 0 / 0 / 0 | 9.313 秒 |
-| Spreadsheet 基准 | 24 | 1 | 1756 / 271 | 102 / 102 | 0 / 0 / 0 | 27.002 秒 |
+| GitHub 基准 | 47 | 1 | 2776 / 280 | 101 / 101 | 0 / 0 / 0 | 9.123 秒 |
+| GitHub 对抗改名 | 47 | 同一制品 | 同上 | 101 / 101 | 0 / 0 / 0 | 8.687 秒 |
+| Spreadsheet 基准 | 24 | 1 | 1756 / 271 | 102 / 102 | 0 / 0 / 0 | 17.073 秒 |
 
 三次 GUI 验收均启用 4 workers 与文件内完全并发。双域生成阶段的构建、启动和健康检查通过；`factory26-public-qualification-v1` 最终为 `passed=true`。
 
@@ -22,6 +22,7 @@ Langqi Forge 已用真实阿里云百炼 `qwen-plus` 规划调用完成 GitHub �
 - 每个领域：1 次成功模型请求、1 次 HTTP 尝试、1 次 Planner 迭代、0 次代码 Agent 迭代、0 次人工干预
 - GitHub：47 模块 / 101 测试，需求 SHA-256 `a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959`
 - Spreadsheet：24 模块 / 102 测试，需求 SHA-256 `9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494`
+- 产生最终证据的 Harness 源码：`c93949ae525c47aa7be3eeb259a9b5550216020b`（运行时工作树干净）
 - 上游适配器基线：`b0999c95f7875c8d4ff3e58e733fb2c5abc8caf7`
 
 模型请求的 system/user Prompt、工具 schema、原始 tool call、响应 ID、Token 与契约均保留在 `evidence/final/*/production-trace.jsonl`。公开题源码被 `.gitignore` 排除，不进入证据包或提交包。
@@ -37,7 +38,7 @@ GitHub `adversarial` profile 会改写 31 个账号，以及仓库、Fork、分�
 3. 两个评测进程共用临时 Playwright 配置文件，改为同目录唯一临时文件再原子替换。
 4. Spreadsheet 的 Ctrl+V fallback 晚于下一次剪贴板写入，改为在 keydown 当下快照剪贴板 Promise。
 
-资格门拒绝：模型未调用、非函数工具决策、Planner 错选或失败、HTTP 重试、Token 为零或越界、需求哈希不符、本地检查失败、GUI 计数漂移、unexpected、skipped、flaky、非完全并发及超时。
+资格门拒绝：模型未调用、非函数工具决策、Planner 错选或失败、轨迹断裂、缺少 provider response id、HTTP 重试、Token 为零或越界、需求哈希不符、本地检查失败、少于 4 workers、使用 grep、GUI 计数漂移、unexpected、skipped、flaky、非完全并发及超时。
 
 ## 演进记录
 

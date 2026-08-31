@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "source_run_id": "674576e0-0112-493b-8eed-4c6f998a9829",
+  "task_id": "github",
+  "run_label": "github",
+  "fixture_profile": "baseline",
+  "fully_parallel": true,
+  "workers": 4,
+  "grep": null,
+  "exit_code": 0,
+  "duration_seconds": 9.123,
+  "stats": {
+    "startTime": "2026-08-31T08:44:55.334Z",
+    "duration": 8784.248,
+    "expected": 101,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "failure_count": 0,
+  "repair_packets": []
+}

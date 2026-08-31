@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "run_id": "674576e0-0112-493b-8eed-4c6f998a9829",
+  "status": "completed",
+  "contract": {
+    "domain": "github",
+    "kernel_eligible": true,
+    "capability_tags": [
+      "authentication",
+      "organization_permissions",
+      "repository_lifecycle",
+      "code_and_branches",
+      "issues",
+      "pull_requests",
+      "branch_protection"
+    ],
+    "risks": [
+      "Permission logic gaps (e.g., exact role-based access checks for Triage/Maintain/Admin) may require refinement beyond kernel defaults",
+      "Email-based recovery (REQ-1-1-3) assumes SMTP integration not covered by kernel"
+    ],
+    "validation_focus": [
+      "Authentication flow correctness across sign-up, sign-in, password reset, and sign-out",
+      "Role-enforced operations (e.g., only Owners editing teams, only Admins changing default branches)",
+      "Branch protection enforcement during PR merge attempts"
+    ],
+    "rationale": "All atomic requirements map cleanly to GitHub domain capabilities: account lifecycle (REQ-1.x) → authentication; org/team management (REQ-2.x) → organization_permissions; repo creation, visibility, forking, cloning (REQ-3.x–4.x) → repository_lifecycle and code_and_branches; issue tracking (REQ-5.x) → issues; PR workflow including protection, review, merge, close (REQ-6.x) → pull_requests and branc",
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "execution_route": "planner-approved-deterministic-kernel"
+}

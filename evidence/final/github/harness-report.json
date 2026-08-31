@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "strategy": "one-planner-call-then-deterministic-kernel-or-targeted-repair",
+  "run_id": "674576e0-0112-493b-8eed-4c6f998a9829",
+  "source_identity": {
+    "revision": "c93949ae525c47aa7be3eeb259a9b5550216020b",
+    "worktree_clean": true,
+    "source": "git"
+  },
+  "duration_seconds": 8.123,
+  "requirement_count": 47,
+  "requirement_sha256": "a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959",
+  "dry_run": false,
+  "detected_domain": "github",
+  "execution_route": "planner-approved-deterministic-kernel",
+  "agent_iterations": 1,
+  "planner_status": "completed",
+  "planner_contract": {
+    "domain": "github",
+    "kernel_eligible": true,
+    "capability_tags": [
+      "authentication",
+      "organization_permissions",
+      "repository_lifecycle",
+      "code_and_branches",
+      "issues",
+      "pull_requests",
+      "branch_protection"
+    ],
+    "risks": [
+      "Permission logic gaps (e.g., exact role-based access checks for Triage/Maintain/Admin) may require refinement beyond kernel defaults",
+      "Email-based recovery (REQ-1-1-3) assumes SMTP integration not covered by kernel"
+    ],
+    "validation_focus": [
+      "Authentication flow correctness across sign-up, sign-in, password reset, and sign-out",
+      "Role-enforced operations (e.g., only Owners editing teams, only Admins changing default branches)",
+      "Branch protection enforcement during PR merge attempts"
+    ],
+    "rationale": "All atomic requirements map cleanly to GitHub domain capabilities: account lifecycle (REQ-1.x) → authentication; org/team management (REQ-2.x) → organization_permissions; repo creation, visibility, forking, cloning (REQ-3.x–4.x) → repository_lifecycle and code_and_branches; issue tracking (REQ-5.x) → issues; PR workflow including protection, review, merge, close (REQ-6.x) → pull_requests and branc",
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "planner_iterations": 1,
+  "coding_agent_iterations": 0,
+  "manual_interventions": 0,
+  "agent_failures": [],
+  "checks": [
+    {
+      "name": "structure",
+      "passed": true,
+      "summary": "structure complete",
+      "related_files": [
+        "frontend/package.json",
+        "backend/package.json"
+      ],
+      "duration_seconds": 5.4041011026129127e-05
+    },
+    {
+      "name": "frontend_build",
+      "passed": true,
+      "summary": "frontend build passed",
+      "related_files": [
+        "frontend/package.json",
+        "frontend/src",
+        "frontend/build.mjs"
+      ],
+      "duration_seconds": 0.1347067919850815
+    },
+    {
+      "name": "startup_health",
+      "passed": true,
+      "summary": "health endpoint ready",
+      "related_files": [
+        "backend/package.json",
+        "backend/server.mjs",
+        "frontend/dist"
+      ],
+      "duration_seconds": 0.25953045798814856
+    }
+  ],
+  "all_local_checks_passed": true,
+  "run_completed_successfully": true,
+  "model_usage": {
+    "prompt_tokens": 2776,
+    "completion_tokens": 280,
+    "request_count": 1,
+    "http_attempt_count": 1
+  },
+  "model_gateway": {
+    "provenance": "alibaba-cloud-bailian",
+    "endpoint_host": "dashscope.aliyuncs.com",
+    "model": "qwen-plus"
+  },
+  "claim_boundary": "Local checks prove packaging/build/startup only; hidden GUI score is unknown until ARC-Bench evaluates it."
+}
