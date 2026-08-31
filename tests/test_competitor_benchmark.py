@@ -7,12 +7,14 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from benchmarks.run_claude_code import (
     ROOT,
     ensure_fresh_output,
     protocol_violations as claude_protocol_violations,
     requirement_digest,
+    resolve_executable,
     trace_metrics,
 )
 from benchmarks.run_codex import (
@@ -50,6 +52,17 @@ class CompetitorBenchmarkTests(unittest.TestCase):
             self.assertEqual(first, requirement_digest(root))
             target.write_text("second", encoding="utf-8")
             self.assertNotEqual(first, requirement_digest(root))
+
+    def test_relative_cli_path_is_resolved_before_workspace_switch(self) -> None:
+        with patch(
+            "benchmarks.run_claude_code.shutil.which",
+            return_value=".cache/benchmark-tools/codex",
+        ):
+            resolved = resolve_executable(".cache/benchmark-tools/codex")
+        self.assertEqual(
+            resolved,
+            str((ROOT / ".cache/benchmark-tools/codex").resolve()),
+        )
 
     def test_trace_metrics_fail_closed_on_malformed_or_missing_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -9,7 +9,7 @@
 | GitHub 最新 dry-run 制品基准 | 101 / 101 | 0 / 0 / 0 | 4 workers，完全并发 |
 | 同一制品改名对抗 | 101 / 101 | 0 / 0 / 0 | 4 workers，完全并发 |
 | Spreadsheet 最新 dry-run 制品基准 | 102 / 102 | 0 / 0 / 0 | 4 workers，完全并发 |
-| Python 全仓测试 | 95 / 95 | — | 含证据篡改、路径逃逸、胶囊、Planner 时间预算、评委报告、竞品 runner 和实时违规终止合同 |
+| Python 全仓测试 | 96 / 96 | — | 含证据篡改、路径逃逸、胶囊、Planner 时间预算、评委报告、竞品 runner 和实时违规终止合同 |
 | Node 内核与认证合同 | 22 / 22 | — | 含确定性随机总账/BOM 性质测试 |
 
 2026-09-01 在干净提交 `ae293d7` 上完成了新的顺序离线冻结：GitHub baseline 11.113s、GitHub adversarial 10.843s、Spreadsheet baseline 19.327s，全部 4 workers、无 unexpected / skipped / flaky。这些是本地候选证据，不是模型生产证据。最终数字必须在实现冻结后从干净 commit 通过百炼顺序重跑，并由 v2 资格门与独立验证器一起验收。企业 GUI 另通过 GitHub 8 个页面与 Spreadsheet 5 个工作区的端到端操作。

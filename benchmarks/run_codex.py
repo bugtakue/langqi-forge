@@ -20,6 +20,7 @@ try:
         file_sha256,
         repository_state,
         requirement_digest,
+        resolve_executable,
     )
 except ModuleNotFoundError:  # Direct `python benchmarks/run_codex.py ...` execution.
     from run_claude_code import (  # type: ignore[no-redef]
@@ -30,6 +31,7 @@ except ModuleNotFoundError:  # Direct `python benchmarks/run_codex.py ...` execu
         file_sha256,
         repository_state,
         requirement_digest,
+        resolve_executable,
     )
 
 
@@ -267,9 +269,7 @@ def run() -> int:
     args = parse_args()
     if args.timeout_seconds <= 0:
         raise ValueError("timeout must be positive")
-    executable = shutil.which(args.codex)
-    if not executable:
-        raise FileNotFoundError(f"Codex executable not found: {args.codex}")
+    executable = resolve_executable(args.codex)
     codex_version = command_version(executable)
     validate_codex_version(codex_version)
     harness_state = repository_state()

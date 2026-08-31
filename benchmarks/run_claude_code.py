@@ -80,6 +80,16 @@ def command_version(command: str) -> str:
     return (completed.stdout or completed.stderr).strip()
 
 
+def resolve_executable(command: str) -> str:
+    located = shutil.which(command)
+    if not located:
+        raise FileNotFoundError(f"executable not found: {command}")
+    path = Path(located).expanduser()
+    if not path.is_absolute():
+        path = ROOT / path
+    return str(path.resolve())
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -159,9 +169,7 @@ def run() -> int:
     if args.max_budget_usd <= 0 or args.timeout_seconds <= 0:
         raise ValueError("budget and timeout must be positive")
     output = ensure_fresh_output(args.output_dir)
-    executable = shutil.which(args.claude)
-    if not executable:
-        raise FileNotFoundError(f"Claude Code executable not found: {args.claude}")
+    executable = resolve_executable(args.claude)
     harness_state = repository_state()
     source_requirements = (
         ROOT / ".cache" / "public-tasks" / args.domain / "requirements"
