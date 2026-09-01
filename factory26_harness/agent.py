@@ -143,7 +143,7 @@ class CodingAgent:
         )
         self.maximum_context_characters = max(
             8_000,
-            int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "24000")),
+            int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "36000")),
         )
 
     def implement(

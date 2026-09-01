@@ -82,7 +82,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-agent-turns",
         type=int,
-        default=int(os.environ.get("FACTORY26_MAX_AGENT_TURNS", "14")),
+        default=int(os.environ.get("FACTORY26_MAX_AGENT_TURNS", "18")),
     )
     parser.add_argument(
         "--repair-rounds",

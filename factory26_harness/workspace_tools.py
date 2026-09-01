@@ -25,7 +25,7 @@ VALIDATING_SCOPES = {"quick", "full"}
 MAX_TOOL_RESULT_CHARS = 12_000
 MAX_READ_FILE_BYTES = 2_000_000
 MAX_BATCH_READ_FILES = 8
-MAX_BATCH_READ_BYTES = 10_000
+MAX_BATCH_READ_BYTES = 16_000
 
 
 def _contains_sensitive_part(parts: tuple[str, ...]) -> bool:

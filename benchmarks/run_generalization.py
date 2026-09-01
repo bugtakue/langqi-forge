@@ -40,7 +40,9 @@ REQUIREMENTS_PATH = CHALLENGE_ROOT / "requirements.yaml"
 TEST_SOURCE = CHALLENGE_ROOT / "tests" / "change-control.spec.ts"
 REQUIREMENTS_SHA256 = "24bb00980efa8b0ad98088d91cebce74bf5d851f90f4d7025fbee2cef0b7597c"
 TEST_SOURCE_SHA256 = "eef8ca61fd25092b6e084c6189586577eb0d7910deaba8b67ccad27f34887ba0"
-TEST_INVENTORY_SHA256 = "e4e415ab4c80d4db880a94de91304ddb1323974c23944a5c971e1943f88df1f8"
+TEST_INVENTORY_SHA256 = (
+    "e4e415ab4c80d4db880a94de91304ddb1323974c23944a5c971e1943f88df1f8"
+)
 EXPECTED_TEST_COUNT = 5
 EXPECTED_ROUTE = "planner-routed-bounded-code-agent"
 
@@ -92,7 +94,7 @@ def _generate(
             "--batch-size",
             "2",
             "--max-agent-turns",
-            "14",
+            "18",
             "--strict-exit",
         ],
         cwd=agent_root,
@@ -146,7 +148,9 @@ def run_challenge(
         < int(model_usage.get("request_count") or 0)
         or source_identity.get("worktree_clean") is not True
     ):
-        raise RuntimeError("generated run did not exercise the bounded generic agent lane")
+        raise RuntimeError(
+            "generated run did not exercise the bounded generic agent lane"
+        )
     planner_contract = harness_report.get("planner_contract") or {}
     if (
         planner_contract.get("domain") != "generic"
@@ -154,7 +158,9 @@ def run_challenge(
         or set(planner_contract.get("uncovered_requirement_ids") or [])
         != {"REQ-GEN-1", "REQ-GEN-2"}
     ):
-        raise RuntimeError("planner did not explicitly identify the unseen requirements")
+        raise RuntimeError(
+            "planner did not explicitly identify the unseen requirements"
+        )
 
     verify_run_envelope(output_dir)
     source_before = application_source_manifest(output_dir)
@@ -208,7 +214,9 @@ def run_challenge(
             _stop(process)
 
     if _playwright_runtime_contract(cache_root) != runtime_before:
-        raise RuntimeError("Playwright runtime changed during generalization evaluation")
+        raise RuntimeError(
+            "Playwright runtime changed during generalization evaluation"
+        )
     _locked_file(synced_test, TEST_SOURCE_SHA256)
     if application_source_manifest(output_dir) != source_before:
         raise RuntimeError("generalization evaluation mutated generated source")
@@ -279,9 +287,7 @@ def run_challenge(
     )
     write_run_envelope(output_dir)
     if not passed:
-        raise RuntimeError(
-            f"unseen-domain GUI failed with {len(failures)} failure(s)"
-        )
+        raise RuntimeError(f"unseen-domain GUI failed with {len(failures)} failure(s)")
     return proof
 
 
