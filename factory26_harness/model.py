@@ -217,6 +217,7 @@ class OpenAIChatClient:
                 urllib.error.URLError,
                 urllib.error.HTTPError,
                 TimeoutError,
+                ConnectionError,
                 KeyError,
                 ValueError,
             ) as exc:

@@ -5,6 +5,7 @@ import os
 import tempfile
 import threading
 import unittest
+from http.client import RemoteDisconnected
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
@@ -81,6 +82,66 @@ class _ModelHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_remote_disconnect_is_retried_within_the_bounded_http_policy(self) -> None:
+        class FakeResponse:
+            headers: dict[str, str] = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args) -> None:
+                return None
+
+            @staticmethod
+            def read(_limit: int) -> bytes:
+                return json.dumps(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": "recovered",
+                                }
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 3, "completion_tokens": 1},
+                    }
+                ).encode("utf-8")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = ProductionTrace(root / "trace.jsonl")
+            environment = {
+                "OPENAI_API_KEY": "test-secret",
+                "OPENAI_BASE_URL": "https://gateway.example.test/v1",
+                "MODEL": "mock-model",
+            }
+            with (
+                patch.dict(os.environ, environment, clear=False),
+                patch(
+                    "factory26_harness.model.urllib.request.urlopen",
+                    side_effect=[RemoteDisconnected("closed"), FakeResponse()],
+                ),
+                patch("factory26_harness.model.time.sleep"),
+            ):
+                client = OpenAIChatClient(trace)
+                reply = client.complete(
+                    [{"role": "user", "content": "test"}],
+                    [],
+                    max_attempts=2,
+                )
+
+            self.assertEqual(reply.content, "recovered")
+            self.assertEqual(client.request_count, 1)
+            self.assertEqual(client.http_attempt_count, 2)
+            rows = [
+                json.loads(line)
+                for line in trace.path.read_text(encoding="utf-8").splitlines()
+            ]
+            errors = [row for row in rows if row["event"] == "model_error"]
+            self.assertEqual(len(errors), 1)
+            self.assertIn("closed", errors[0]["payload"]["error"])
+
     def test_openai_tool_loop_edits_workspace_and_tracks_usage(self) -> None:
         _ModelHandler.calls = 0
         _ModelHandler.payloads = []
