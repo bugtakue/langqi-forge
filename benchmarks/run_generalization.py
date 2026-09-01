@@ -62,13 +62,26 @@ def _stop(process: subprocess.Popen[Any]) -> None:
         process.wait(timeout=5)
 
 
-def _generate(output_dir: Path, web_port: int, smoke_port: int) -> None:
+def _resolve_agent_root(agent_root: Path) -> Path:
+    resolved = agent_root.expanduser().resolve()
+    if not (resolved / "main.py").is_file():
+        raise ValueError("generalization agent root must contain main.py")
+    return resolved
+
+
+def _generate(
+    output_dir: Path,
+    web_port: int,
+    smoke_port: int,
+    *,
+    agent_root: Path,
+) -> None:
     if output_dir.exists():
         raise ValueError("generalization output directory must not already exist")
     completed = subprocess.run(
         [
             sys.executable,
-            str(REPOSITORY_ROOT / "main.py"),
+            str(agent_root / "main.py"),
             str(REQUIREMENTS_PATH),
             "--output-dir",
             str(output_dir),
@@ -82,7 +95,7 @@ def _generate(output_dir: Path, web_port: int, smoke_port: int) -> None:
             "14",
             "--strict-exit",
         ],
-        cwd=REPOSITORY_ROOT,
+        cwd=agent_root,
         env=dict(os.environ),
         capture_output=True,
         text=True,
@@ -102,12 +115,19 @@ def run_challenge(
     *,
     web_port: int,
     smoke_port: int,
+    agent_root: Path = REPOSITORY_ROOT,
 ) -> dict[str, Any]:
     output_dir = output_dir.expanduser().resolve()
     cache_root = cache_root.expanduser().resolve()
+    agent_root = _resolve_agent_root(agent_root)
     _locked_file(REQUIREMENTS_PATH, REQUIREMENTS_SHA256)
     _locked_file(TEST_SOURCE, TEST_SOURCE_SHA256)
-    _generate(output_dir, web_port, smoke_port)
+    _generate(
+        output_dir,
+        web_port,
+        smoke_port,
+        agent_root=agent_root,
+    )
 
     report_path = output_dir / ".arc" / "harness-report.json"
     harness_report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -275,12 +295,19 @@ def main() -> int:
     )
     parser.add_argument("--web-port", type=int, default=3601)
     parser.add_argument("--smoke-port", type=int, default=3602)
+    parser.add_argument(
+        "--agent-root",
+        type=Path,
+        default=REPOSITORY_ROOT,
+        help="Agent source or exact unpacked submission bundle containing main.py",
+    )
     args = parser.parse_args()
     proof = run_challenge(
         args.output_dir,
         args.cache,
         web_port=args.web_port,
         smoke_port=args.smoke_port,
+        agent_root=args.agent_root,
     )
     print(json.dumps(proof, ensure_ascii=False, indent=2))
     return 0

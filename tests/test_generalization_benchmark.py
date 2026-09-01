@@ -10,6 +10,7 @@ from benchmarks.run_generalization import (
     TEST_SOURCE,
     TEST_SOURCE_SHA256,
     _locked_file,
+    _resolve_agent_root,
 )
 from factory26_harness.requirements import (
     detect_domain,
@@ -43,6 +44,14 @@ class GeneralizationBenchmarkTests(unittest.TestCase):
             path.write_text("changed", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "locked hash"):
                 _locked_file(path, "0" * 64)
+
+    def test_exact_agent_root_must_contain_entrypoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with self.assertRaisesRegex(ValueError, "must contain main.py"):
+                _resolve_agent_root(root)
+            (root / "main.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
+            self.assertEqual(_resolve_agent_root(root), root.resolve())
 
 
 if __name__ == "__main__":

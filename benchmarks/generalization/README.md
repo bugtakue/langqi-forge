@@ -22,6 +22,7 @@ export OPENAI_BASE_URL='https://your-gateway.example/v1'
 export MODEL='your-model'
 
 .venv/bin/python -m benchmarks.run_generalization \
+  --agent-root /tmp/unpacked-exact-submission-bundle \
   --output-dir /tmp/langqi-unseen-change-control
 ```
 
@@ -29,4 +30,6 @@ The runner locks both inputs by SHA-256, requires the generic bounded coding
 route with at least one real edit loop, starts the generated application with a
 secret-free environment, executes five hidden browser checks using the pinned
 Playwright runtime, verifies source immutability, and appends the result to the
-run's sealed trace. A failure is retained and never represented as a pass.
+run's sealed trace. `--agent-root` lets the proof execute the exact unpacked zip
+rather than trusting the surrounding development checkout. A failure is
+retained and never represented as a pass.
