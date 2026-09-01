@@ -21,7 +21,7 @@ Langqi Forge 的目标不是“再包一层 Claude Code”，而是让软件工�
 | 层级 | 状态 | 能证明什么 |
 |---|---|---|
 | 2026-08-31 历史生产基线 | 真实调用阿里云百炼 `qwen-plus`；GitHub 101/101 + 改名对抗 101/101 + Spreadsheet 102/102 | 旧提交 `c93949a`在固定公开题上 304/304；见 [`evidence/final/`](evidence/final/README.md) |
-| 当前 v2 强化源码 | Python 124/124、Node 22/22；双域 dry-run 制品为 304/304 | 新身份边界、并发事务、锁定 Prompt/测试清单/Playwright 运行时、环境隔离、轨迹防泄露、独立验证器、第三域盲测通道和最小确定性比赛包通过本地回归 |
+| 当前 v2 强化源码 | Python 125/125、Node 22/22；双域 dry-run 制品为 304/304 | 新身份边界、并发事务、锁定 Prompt/测试清单/Playwright 运行时、环境隔离、轨迹防泄露、独立验证器、第三域盲测通道和最小确定性比赛包通过本地回归 |
 | v2 同版本生产证据 | [独立 evidence-v2 分支](https://github.com/bugtakue/langqi-forge/tree/evidence-v2/evidence/v2) | 该分支只接受由所声明源码 revision 的精确 zip 产生、并通过真实模型网关、三次顺序 GUI、v2 资格门和独立验证器的制品；链接不存在或资格失败时即不作当前生产声明 |
 
 上述结果只适用于已锁定哈希的公开任务，不等于隐藏题必过、Top 20 或获奖保证。
