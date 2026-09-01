@@ -45,6 +45,10 @@ BLOCKING_DIALOG_PATTERN = re.compile(
     r"(?<![A-Za-z0-9_$])(?:(?:window|globalThis)\s*\.\s*)?"
     r"(?:alert|confirm|prompt)\s*\("
 )
+GLUED_LABEL_VALUE_PATTERN = re.compile(
+    r":</(?:label|strong|b|span)><(?:span|strong|b)(?:\s|>)",
+    re.IGNORECASE,
+)
 INTERACTION_SOURCE_SUFFIXES = {".html", ".js", ".jsx", ".mjs", ".ts", ".tsx"}
 
 
@@ -204,6 +208,13 @@ def interaction_policy_check(root: Path) -> CheckResult:
             for match in BLOCKING_DIALOG_PATTERN.finditer(text):
                 line = text.count("\n", 0, match.start()) + 1
                 violations.append(f"{relative}:{line} uses a blocking browser dialog")
+                if len(violations) >= 20:
+                    break
+            for match in GLUED_LABEL_VALUE_PATTERN.finditer(text):
+                line = text.count("\n", 0, match.start()) + 1
+                violations.append(
+                    f"{relative}:{line} glues a colon label to its value without DOM whitespace"
+                )
                 if len(violations) >= 20:
                     break
             if len(violations) >= 20:

@@ -199,8 +199,9 @@ class ModelLoopTests(unittest.TestCase):
                     (root / "frontend" / "src" / "generated.txt").read_text(),
                     "generated\n",
                 )
-                self.assertEqual(client.total_prompt_tokens, 30)
-                self.assertEqual(client.total_completion_tokens, 15)
+                self.assertEqual(client.total_prompt_tokens, 40)
+                self.assertEqual(client.total_completion_tokens, 20)
+                self.assertEqual(result.turns, 4)
                 first_messages = _ModelHandler.payloads[0]["messages"]
                 self.assertIn("read_files", first_messages[0]["content"])
                 self.assertIn("at most 4 model turns", first_messages[1]["content"])
@@ -211,6 +212,15 @@ class ModelLoopTests(unittest.TestCase):
                         and "Turn-budget checkpoint: 3 model turns remain"
                         in message.get("content", "")
                         for message in second_messages
+                    )
+                )
+                final_messages = _ModelHandler.payloads[-1]["messages"]
+                self.assertTrue(
+                    any(
+                        message.get("role") == "user"
+                        and "requirement-by-requirement audit"
+                        in message.get("content", "")
+                        for message in final_messages
                     )
                 )
                 self.assertNotIn(

@@ -27,6 +27,9 @@ Hard rules:
 - Use visible labels, semantic buttons, `type="text"`, persistent DOM validation messages, and real disabled states.
 - Never use `alert()`, `confirm()`, or `prompt()` for product feedback. Put each action's error/status
   inside the form, card, dialog, row, or other semantic container that owns that action.
+- Browser assertions read normalized DOM text, not CSS gaps. Render human-readable `Label: value`
+  with literal DOM whitespace; adjacent tags such as `Label:</strong><span>value` are invalid.
+- Enforce workflow transitions and terminal states in backend logic as well as disabled UI controls.
 - Make the smallest coherent change. Do not rewrite unrelated working features.
 - Conserve the bounded model turns. One response may issue multiple independent tool calls. When
   source paths are already known, inspect them together with read_files instead of serial reads.
@@ -38,6 +41,17 @@ Hard rules:
 The harness will not accept completion unless the latest changed revision has a passing quick/full validation.
 When complete, return a short summary of files changed and any remaining risk.
 """
+
+ACCEPTANCE_AUDIT_PROMPT = """Do not summarize yet. Perform a final requirement-by-requirement audit against the code you actually wrote. You already have the edited code in this conversation, so do not re-read files unless necessary.
+
+Check all of these failure surfaces:
+1. Exact visible copy, accessible roles/names/labels, and literal DOM whitespace in `Label: value` text.
+2. Every action-specific error/status is inside its owning form/card/dialog/row, not a page-global node or browser dialog.
+3. Backend logic enforces authorization, allowed transitions, and terminal-state monotonicity; disabled buttons alone are insufficient.
+4. Arbitrary inputs, refresh/process persistence, invalid-action atomicity, and unchanged last-good state.
+5. Every scenario and every SHALL/must/contains/disabled requirement has a concrete implementation.
+
+If any gap exists, patch only that gap and run quick validation once. If none exists, return a short `AUDIT PASS` summary without tools."""
 
 STARTER_SOURCE_PATHS = (
     "frontend/src/app.js",
@@ -146,6 +160,7 @@ class CodingAgent:
         invalid_tool_turns = 0
         failed_tool_turns = 0
         total_tool_calls = 0
+        acceptance_audit_requested = False
         tool_schemas = self.tools.schemas()
         valid_tool_names = {
             str(item.get("function", {}).get("name") or "") for item in tool_schemas
@@ -158,12 +173,25 @@ class CodingAgent:
                 changed = tuple(sorted(self.tools.changed_files - changed_before))
                 has_required_change = bool(changed) or stage == "repair"
                 if has_required_change and self.tools.current_changes_validated:
+                    if stage == "implementation" and not acceptance_audit_requested:
+                        acceptance_audit_requested = True
+                        self.trace.record(
+                            "agent_acceptance_audit_requested",
+                            stage=stage,
+                            requirement_ids=requirement_ids,
+                            changed_files=changed,
+                        )
+                        messages.append(
+                            {"role": "user", "content": ACCEPTANCE_AUDIT_PROMPT}
+                        )
+                        continue
                     self.trace.record(
                         "agent_session_completed",
                         stage=stage,
                         requirement_ids=requirement_ids,
                         changed_files=changed,
                         summary=final_summary,
+                        acceptance_audit=acceptance_audit_requested,
                     )
                     return AgentRun(True, final_summary, changed, turn)
                 if not has_required_change:
@@ -281,6 +309,25 @@ class CodingAgent:
                     }
                 )
         changed = tuple(sorted(self.tools.changed_files - changed_before))
+        if (
+            stage == "implementation"
+            and acceptance_audit_requested
+            and changed
+            and self.tools.current_changes_validated
+        ):
+            final_summary = final_summary or (
+                "Acceptance audit completed; the final changed revision passed validation."
+            )
+            self.trace.record(
+                "agent_session_completed",
+                stage=stage,
+                requirement_ids=requirement_ids,
+                changed_files=changed,
+                summary=final_summary,
+                acceptance_audit=True,
+                completed_at_turn_budget=True,
+            )
+            return AgentRun(True, final_summary, changed, self.max_turns)
         self.trace.record(
             "agent_session_exhausted",
             stage=stage,

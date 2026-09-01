@@ -373,6 +373,14 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertTrue(interaction_policy_check(root).passed)
 
             app.write_text(
+                'row.innerHTML = "<strong>Requester:</strong><span>Alice</span>";\n',
+                encoding="utf-8",
+            )
+            glued = interaction_policy_check(root)
+            self.assertFalse(glued.passed)
+            self.assertIn("without DOM whitespace", glued.summary)
+
+            app.write_text(
                 'window.alert("Reviewer must differ from requester");\n'
                 'globalThis.confirm("Continue?");\n',
                 encoding="utf-8",
