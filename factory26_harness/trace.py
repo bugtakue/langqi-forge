@@ -30,7 +30,11 @@ _SENSITIVE_PARTS = (
 )
 _SECRET_TEXT_PATTERNS = (
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/=]{12,}"),
-    re.compile(r"(?i)\bBasic\s+[A-Za-z0-9+/=]{8,}"),
+    # A bare ``Basic <word>`` pattern corrupts ordinary prose such as
+    # "basic spreadsheet capability".  Structured Authorization fields are
+    # already redacted by key; this text rule is intentionally limited to an
+    # actual HTTP header rendering.
+    re.compile(r"(?i)\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/=]{8,}"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}"),
     re.compile(
         r"(?i)\b(?:OPENAI_API_KEY|DASHSCOPE_API_KEY|API_KEY|ACCESS_TOKEN|"
@@ -43,13 +47,9 @@ _SECRET_TEXT_PATTERNS = (
         r"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss|"
         r"amqp|amqps)://[^\s/@:]+:[^\s/@]+@[^\s]+"
     ),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\." r"[A-Za-z0-9_-]{8,}\b"),
     re.compile(
-        r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\."
-        r"[A-Za-z0-9_-]{8,}\b"
-    ),
-    re.compile(
-        r"\b(?:gh[opsu]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
-        r"LTAI[A-Za-z0-9]{12,})\b"
+        r"\b(?:gh[opsu]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|" r"LTAI[A-Za-z0-9]{12,})\b"
     ),
     re.compile(
         r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"
@@ -111,7 +111,10 @@ def _redact(value: Any, key: str = "") -> Any:
     if _sensitive_key(key):
         return "[REDACTED]"
     if isinstance(value, dict):
-        return {str(child_key): _redact(child_value, str(child_key)) for child_key, child_value in value.items()}
+        return {
+            str(child_key): _redact(child_value, str(child_key))
+            for child_key, child_value in value.items()
+        }
     if isinstance(value, list):
         return [_redact(item) for item in value]
     if isinstance(value, tuple):
@@ -119,6 +122,17 @@ def _redact(value: Any, key: str = "") -> Any:
     if isinstance(value, str):
         return _redact_text(value)
     return value
+
+
+def redact_sensitive_data(value: Any) -> Any:
+    """Return the same deterministic redaction projection used by traces.
+
+    Release artifacts that are cross-bound to a trace must persist this
+    projection too; otherwise a model-produced secret could leak in the
+    artifact and the redacted trace would no longer match it byte-for-byte.
+    """
+
+    return _redact(value)
 
 
 def _canonical(value: Any) -> bytes:

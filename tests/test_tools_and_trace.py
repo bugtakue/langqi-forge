@@ -15,6 +15,7 @@ from factory26_harness.impact import ChangeImpactGraph
 from factory26_harness.trace import (
     ProductionTrace,
     find_unredacted_secrets,
+    redact_sensitive_data,
     verify_trace_rows,
 )
 from factory26_harness.workspace_tools import WorkspaceTools
@@ -33,8 +34,14 @@ class ToolAndTraceTests(unittest.TestCase):
             root = Path(directory)
             trace = ProductionTrace(root / ".arc" / "trace.jsonl")
             tools = WorkspaceTools(root, trace, smoke_port=3911)
-            ok = json.loads(tools.execute("write_file", {"path": "frontend/src/app.js", "content": "ok\n"}))
-            denied = json.loads(tools.execute("write_file", {"path": "../escape.txt", "content": "bad"}))
+            ok = json.loads(
+                tools.execute(
+                    "write_file", {"path": "frontend/src/app.js", "content": "ok\n"}
+                )
+            )
+            denied = json.loads(
+                tools.execute("write_file", {"path": "../escape.txt", "content": "bad"})
+            )
             self.assertTrue(ok["ok"])
             self.assertFalse(denied["ok"])
             self.assertEqual(tools.changed_files, {"frontend/src/app.js"})
@@ -70,13 +77,44 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertNotIn("db-secret", row["payload"]["raw"])
             self.assertEqual(find_unredacted_secrets(row), [])
 
+    def test_redaction_preserves_basic_prose_but_removes_basic_auth(self) -> None:
+        prose = (
+            "Enterprise capability may be unnecessary for basic spreadsheet workflows"
+        )
+        self.assertEqual(redact_sensitive_data(prose), prose)
+        rendered = redact_sensitive_data("Authorization: Basic YWRtaW46c2VjcmV0")
+        self.assertNotIn("YWRtaW46c2VjcmV0", rendered)
+        self.assertIn("[REDACTED]", rendered)
+
+    def test_release_artifact_redaction_matches_trace_projection(self) -> None:
+        report = {
+            "planner_contract": {
+                "risks": [
+                    "basic spreadsheet workflows",
+                    "Authorization: Basic YWRtaW46c2VjcmV0",
+                ]
+            }
+        }
+        projected = redact_sensitive_data(report)
+        self.assertEqual(
+            projected["planner_contract"]["risks"][0],
+            "basic spreadsheet workflows",
+        )
+        self.assertNotIn(
+            "YWRtaW46c2VjcmV0",
+            projected["planner_contract"]["risks"][1],
+        )
+
     def test_trace_is_hash_chained_and_tampering_is_detected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "trace.jsonl"
             trace = ProductionTrace(path)
             trace.record("first", value=1)
             trace.record("second", value=2)
-            rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+            rows = [
+                json.loads(line)
+                for line in path.read_text(encoding="utf-8").splitlines()
+            ]
             verified = verify_trace_rows(rows)
             self.assertTrue(verified["valid"], verified)
             self.assertEqual(verified["sealed_rows"], 2)
@@ -155,24 +193,22 @@ class ToolAndTraceTests(unittest.TestCase):
                 tools = WorkspaceTools(
                     root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3913
                 )
-            secret = json.loads(
-                tools.execute("read_file", {"path": "backend/.env"})
-            )
+            secret = json.loads(tools.execute("read_file", {"path": "backend/.env"}))
             first = json.loads(
                 tools.execute(
                     "write_file", {"path": "frontend/a.js", "content": "12345678"}
                 )
             )
             second = json.loads(
-                tools.execute(
-                    "write_file", {"path": "frontend/b.js", "content": "x"}
-                )
+                tools.execute("write_file", {"path": "frontend/b.js", "content": "x"})
             )
             self.assertFalse(secret["ok"])
             self.assertTrue(first["ok"])
             self.assertFalse(second["ok"])
 
-    def test_control_files_case_variants_symlinks_and_control_paths_are_denied(self) -> None:
+    def test_control_files_case_variants_symlinks_and_control_paths_are_denied(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
             root = Path(directory)
             (root / "backend").mkdir()
@@ -195,17 +231,23 @@ class ToolAndTraceTests(unittest.TestCase):
                 result = json.loads(tools.execute("read_file", {"path": path}))
                 self.assertFalse(result["ok"], path)
 
-    def test_large_tool_results_remain_valid_json_and_noop_writes_do_not_count(self) -> None:
+    def test_large_tool_results_remain_valid_json_and_noop_writes_do_not_count(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             target = root / "frontend" / "large.txt"
             target.parent.mkdir(parents=True)
-            content = "".join(f"{index:04d} " + "x" * 100 + "\n" for index in range(500))
+            content = "".join(
+                f"{index:04d} " + "x" * 100 + "\n" for index in range(500)
+            )
             target.write_text(content, encoding="utf-8")
             tools = WorkspaceTools(
                 root, ProductionTrace(root / ".trace" / "trace.jsonl"), 3916
             )
-            result = json.loads(tools.execute("read_file", {"path": "frontend/large.txt"}))
+            result = json.loads(
+                tools.execute("read_file", {"path": "frontend/large.txt"})
+            )
             self.assertTrue(result["ok"])
             self.assertTrue(result["truncated"])
 
@@ -250,7 +292,9 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertTrue(result.passed, result.summary)
             self.assertEqual((frontend / "observed.txt").read_text(), "missing")
 
-    def test_package_policy_rejects_lifecycle_hooks_and_local_dependencies(self) -> None:
+    def test_package_policy_rejects_lifecycle_hooks_and_local_dependencies(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for name, script in (("frontend", "build"), ("backend", "start")):
@@ -280,7 +324,7 @@ class ToolAndTraceTests(unittest.TestCase):
                     {
                         "name": "frontend",
                         "private": True,
-                        "scripts": {"build": "node -e \"\""},
+                        "scripts": {"build": 'node -e ""'},
                     }
                 ),
                 encoding="utf-8",
@@ -290,7 +334,7 @@ class ToolAndTraceTests(unittest.TestCase):
                     {
                         "name": "backend",
                         "private": True,
-                        "scripts": {"start": "node -e \"\""},
+                        "scripts": {"start": 'node -e ""'},
                     }
                 ),
                 encoding="utf-8",
@@ -298,12 +342,8 @@ class ToolAndTraceTests(unittest.TestCase):
             tools = WorkspaceTools(
                 root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3914
             )
-            tools.execute(
-                "write_file", {"path": "frontend/new.js", "content": "one\n"}
-            )
-            validation = json.loads(
-                tools.execute("run_validation", {"scope": "quick"})
-            )
+            tools.execute("write_file", {"path": "frontend/new.js", "content": "one\n"})
+            validation = json.loads(tools.execute("run_validation", {"scope": "quick"}))
             self.assertTrue(validation["current_changes_validated"])
             tools.execute(
                 "replace_text",
@@ -321,7 +361,10 @@ class ToolAndTraceTests(unittest.TestCase):
             graph = ChangeImpactGraph(Path(directory) / "impact.json")
             graph.record_requirement_files(["R1"], ["frontend/src/app.js"])
             graph.record_requirement_files(["R2"], ["backend/server.mjs"])
-            self.assertEqual(graph.files_for_requirements(["R2", "R1"]), ["backend/server.mjs", "frontend/src/app.js"])
+            self.assertEqual(
+                graph.files_for_requirements(["R2", "R1"]),
+                ["backend/server.mjs", "frontend/src/app.js"],
+            )
 
 
 if __name__ == "__main__":

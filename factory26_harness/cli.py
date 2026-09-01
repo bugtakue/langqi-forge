@@ -40,7 +40,7 @@ from .submission_bundle import (
     require_external_output_directory,
     verify_source_manifest,
 )
-from .trace import ProductionTrace
+from .trace import ProductionTrace, redact_sensitive_data
 from .workspace_tools import WorkspaceTools
 
 DETERMINISTIC_DOMAINS = frozenset({"github", "sheet"})
@@ -158,9 +158,7 @@ def _transaction_checksum(transactions: list[dict[str, Any]]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _write_transaction_ledger(
-    path: Path, transactions: list[dict[str, Any]]
-) -> None:
+def _write_transaction_ledger(path: Path, transactions: list[dict[str, Any]]) -> None:
     _write_json(
         path,
         {
@@ -183,11 +181,19 @@ def _recover_open_transactions(
     try:
         payload = json.loads(ledger_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("transaction ledger is unreadable; refusing unsafe recovery") from exc
+        raise RuntimeError(
+            "transaction ledger is unreadable; refusing unsafe recovery"
+        ) from exc
     if payload.get("version") == 2 and payload.get("checksum") != _transaction_checksum(
-        [dict(item) for item in payload.get("transactions") or [] if isinstance(item, dict)]
+        [
+            dict(item)
+            for item in payload.get("transactions") or []
+            if isinstance(item, dict)
+        ]
     ):
-        raise RuntimeError("transaction ledger checksum is invalid; refusing unsafe recovery")
+        raise RuntimeError(
+            "transaction ledger checksum is invalid; refusing unsafe recovery"
+        )
     transactions = [
         dict(item)
         for item in payload.get("transactions") or []
@@ -195,15 +201,15 @@ def _recover_open_transactions(
     ]
     open_transactions = [item for item in transactions if item.get("status") == "open"]
     if open_transactions and not (output_dir / ".git").is_dir():
-        raise RuntimeError("an open transaction exists but its git checkpoint is unavailable")
+        raise RuntimeError(
+            "an open transaction exists but its git checkpoint is unavailable"
+        )
     for transaction in open_transactions:
         checkpoint = str(transaction.get("checkpoint_commit") or "")
         runtime.git.restore_paths(checkpoint, ("frontend", "backend"))
         transaction["status"] = "rolled_back_on_restart"
         transaction["recovery_run_id"] = run_id
-        transaction["recovered_at"] = time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
-        )
+        transaction["recovered_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         trace.record(
             "open_transaction_recovered",
             checkpoint_commit=checkpoint,
@@ -342,7 +348,8 @@ def _report(
         "checks": [result.as_dict() for result in checks],
         "all_local_checks_passed": all(result.passed for result in checks),
         "run_completed_successfully": all(result.passed for result in checks)
-        and not agent_failures,
+        and not agent_failures
+        and (dry_run or planner_status == "completed"),
         "behavioral_validation": {
             "state": "pending_black_box_evidence",
             "local_checks_are_behavioral_proof": False,
@@ -444,7 +451,9 @@ def main() -> int:
             *args.capability_capsule,
             *[
                 item.strip()
-                for item in os.environ.get("FACTORY26_CAPABILITY_CAPSULES", "").split(",")
+                for item in os.environ.get("FACTORY26_CAPABILITY_CAPSULES", "").split(
+                    ","
+                )
                 if item.strip()
             ],
         ]
@@ -468,7 +477,9 @@ def main() -> int:
             "reuse_skipped_revalidation": False,
         }
         _write_json(output_dir / ".arc" / "compiled-plan.json", plan)
-        _write_json(output_dir / ".arc" / "capability-coverage.json", coverage.as_dict())
+        _write_json(
+            output_dir / ".arc" / "capability-coverage.json", coverage.as_dict()
+        )
         trace.record("requirements_compiled", plan=plan)
         trace.record("capability_coverage_analyzed", coverage=coverage.as_dict())
         trace.record(
@@ -593,9 +604,7 @@ def main() -> int:
                 )
                 if kernel_approved:
                     if matched_capsules:
-                        execution_route = (
-                            "planner-approved-capability-memory-kernel"
-                        )
+                        execution_route = "planner-approved-capability-memory-kernel"
                         route_reason = (
                             "the coverage-blind planner approved the versioned kernel and a prior "
                             "falsifiable capability capsule matched; all validation remains enabled"
@@ -612,9 +621,7 @@ def main() -> int:
                         *contract.uncovered_requirement_ids,
                     }
                     nodes_for_agent = [
-                        node
-                        for node in nodes
-                        if node.req_id in uncovered_ids
+                        node for node in nodes if node.req_id in uncovered_ids
                     ]
                     coding_agent_enabled = True
                     if contract.domain == domain:
@@ -624,9 +631,7 @@ def main() -> int:
                             "a bounded coding agent receives uncovered nodes only"
                         )
                     else:
-                        execution_route = (
-                            "planner-disagreement-kernel-plus-delta-agent"
-                        )
+                        execution_route = "planner-disagreement-kernel-plus-delta-agent"
                         route_reason = (
                             "the planner disagreed with deterministic domain analysis while local "
                             "coverage found gaps; the stable kernel is retained and uncovered nodes "
@@ -729,16 +734,16 @@ def main() -> int:
                         node.req_id,
                         "covered by the materialized versioned capability kernel",
                     )
-            for index, group in enumerate(
-                batches(nodes_for_agent, args.batch_size), 1
-            ):
+            for index, group in enumerate(batches(nodes_for_agent, args.batch_size), 1):
                 ids = [node.req_id for node in group]
                 for node in group:
                     events.mark_implementation_started(node.req_id, f"batch {index}")
                 related = impact.files_for_requirements(ids)
                 checkpoint_head = runtime.git.current_head()
                 if not checkpoint_head:
-                    raise RuntimeError("cannot open an implementation transaction without a git checkpoint")
+                    raise RuntimeError(
+                        "cannot open an implementation transaction without a git checkpoint"
+                    )
                 transaction = {
                     "run_id": run_id,
                     "kind": "implementation_batch",
@@ -786,9 +791,7 @@ def main() -> int:
                     unexpected_paths = _unexpected_transaction_paths(runtime)
                     batch_completed = run.completed and not unexpected_paths
                     if unexpected_paths:
-                        transaction["policy_violation_paths"] = list(
-                            unexpected_paths
-                        )
+                        transaction["policy_violation_paths"] = list(unexpected_paths)
                         trace.record(
                             "agent_workspace_policy_violation",
                             requirement_ids=ids,
@@ -809,9 +812,7 @@ def main() -> int:
                     batch_completed = False
                     unexpected_paths = _unexpected_transaction_paths(runtime)
                 if not batch_completed:
-                    runtime.git.restore_paths(
-                        checkpoint_head, ("frontend", "backend")
-                    )
+                    runtime.git.restore_paths(checkpoint_head, ("frontend", "backend"))
                     if unexpected_paths:
                         runtime.git.restore_paths(checkpoint_head, unexpected_paths)
                     transaction["status"] = "rolled_back"
@@ -865,7 +866,9 @@ def main() -> int:
                 log(f"[repair] deterministic failure repair round {repair_round}")
                 checkpoint_head = runtime.git.current_head()
                 if not checkpoint_head:
-                    raise RuntimeError("cannot open a repair transaction without a git checkpoint")
+                    raise RuntimeError(
+                        "cannot open a repair transaction without a git checkpoint"
+                    )
                 transaction = {
                     "run_id": run_id,
                     "kind": "validation_repair",
@@ -908,9 +911,7 @@ def main() -> int:
                     transaction["status"] = "committed"
                     transaction["result_commit"] = runtime.git.current_head()
                 else:
-                    runtime.git.restore_paths(
-                        checkpoint_head, ("frontend", "backend")
-                    )
+                    runtime.git.restore_paths(checkpoint_head, ("frontend", "backend"))
                     if unexpected_paths:
                         runtime.git.restore_paths(checkpoint_head, unexpected_paths)
                     transaction["status"] = "rolled_back"
@@ -933,9 +934,10 @@ def main() -> int:
                     )
 
         local_passed = all(result.passed for result in checks)
-        run_successful = local_passed and not agent_failures
+        planner_succeeded = args.dry_run or planner_status == "completed"
+        run_successful = local_passed and not agent_failures and planner_succeeded
         for node in nodes:
-            if not local_passed or node.req_id in agent_failures:
+            if not run_successful or node.req_id in agent_failures:
                 events.mark_test_failed(
                     node.req_id, "local contract checks or implementation batch failed"
                 )
@@ -956,27 +958,29 @@ def main() -> int:
         runtime.git.commit("chore: final deterministic validation")
 
         application_source = application_source_manifest(output_dir)
-        report = _report(
-            started=started,
-            nodes=nodes,
-            checks=checks,
-            model=model,
-            agent_failures=sorted(set(agent_failures)),
-            dry_run=args.dry_run,
-            domain=domain,
-            execution_route=execution_route,
-            agent_iterations=planner_iterations + coding_agent_iterations,
-            planner_status=planner_status,
-            planner_contract=planner_contract,
-            planner_iterations=planner_iterations,
-            coding_agent_iterations=coding_agent_iterations,
-            requirement_sha256=requirement_sha256,
-            run_id=run_id,
-            source_identity=source_identity,
-            coverage=coverage,
-            transactions=transactions,
-            application_source=application_source,
-            capability_memory=matched_capsules,
+        report = redact_sensitive_data(
+            _report(
+                started=started,
+                nodes=nodes,
+                checks=checks,
+                model=model,
+                agent_failures=sorted(set(agent_failures)),
+                dry_run=args.dry_run,
+                domain=domain,
+                execution_route=execution_route,
+                agent_iterations=planner_iterations + coding_agent_iterations,
+                planner_status=planner_status,
+                planner_contract=planner_contract,
+                planner_iterations=planner_iterations,
+                coding_agent_iterations=coding_agent_iterations,
+                requirement_sha256=requirement_sha256,
+                run_id=run_id,
+                source_identity=source_identity,
+                coverage=coverage,
+                transactions=transactions,
+                application_source=application_source,
+                capability_memory=matched_capsules,
+            )
         )
         _write_json(output_dir / ".arc" / "harness-report.json", report)
         trace.record("run_completed", report=report)
@@ -991,7 +995,14 @@ def main() -> int:
         if artifacts_dir:
             _write_json(
                 Path(artifacts_dir) / "preview-ready.json",
-                {"ready": local_passed, "reason": "harness completed"},
+                {
+                    "ready": run_successful,
+                    "reason": (
+                        "harness completed"
+                        if run_successful
+                        else "model planning or local validation failed"
+                    ),
+                },
             )
         log(
             f"[done] run {'passed' if run_successful else 'failed'} in {report['duration_seconds']}s"

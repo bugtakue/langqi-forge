@@ -243,6 +243,7 @@ class DryRunIntegrationTests(unittest.TestCase):
                 temporary = Path(directory)
                 requirements = temporary / "requirements"
                 output = temporary / "output"
+                artifacts = temporary / "artifacts"
                 requirements.mkdir()
                 (requirements / "requirements.yaml").write_text(
                     """id: github-app
@@ -262,6 +263,7 @@ children:
                     "OPENAI_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1",
                     "MODEL": "planner-test-model",
                     "FACTORY26_MAX_MODEL_REQUESTS": "1",
+                    "ARCBENCH_ARTIFACTS_DIR": str(artifacts),
                 }
                 command = [
                     sys.executable,
@@ -329,6 +331,10 @@ children:
                         encoding="utf-8"
                     )
                 )
+                preview = json.loads(
+                    (artifacts / "preview-ready.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(preview["ready"], expected_returncode == 0)
                 report["_test_trace_rows"] = [
                     json.loads(line)
                     for line in (
@@ -795,8 +801,10 @@ children:
     def test_malformed_planner_contract_uses_available_kernel_but_fails_release_route(
         self,
     ) -> None:
-        report = self._run_github_with_planner(_MalformedPlannerHandler)
-        self.assertTrue(report["run_completed_successfully"])
+        report = self._run_github_with_planner(
+            _MalformedPlannerHandler, expected_returncode=1
+        )
+        self.assertFalse(report["run_completed_successfully"])
         self.assertEqual(report["planner_status"], "failed-after-one-attempt")
         self.assertEqual(
             report["execution_route"],
