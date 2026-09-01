@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "run_id": "ada86423-46c3-4c5b-a564-ba9f0399a8ba",
+  "status": "completed",
+  "contract": {
+    "domain": "github",
+    "kernel_eligible": true,
+    "capability_tags": [
+      "authentication",
+      "organization_permissions",
+      "repository_lifecycle",
+      "code_and_branches",
+      "issues",
+      "pull_requests",
+      "branch_protection"
+    ],
+    "risks": [
+      "Authentication flow gaps may allow unauthorized access to protected resources",
+      "Organization permission inheritance could create unintended access escalation paths"
+    ],
+    "validation_focus": [
+      "Account registration and password recovery flows",
+      "Organization team membership and repository access controls",
+      "Branch protection rule enforcement"
+    ],
+    "rationale": "Candidate domain matches requirement scope for GitHub platform. Covers authentication, organization management, repository operations, issues, and pull requests. All requirements map to available capabilities.",
+    "uncovered_requirement_ids": [],
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "execution_route": "planner-approved-deterministic-kernel"
+}

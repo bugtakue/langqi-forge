@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "source_run_id": "ada86423-46c3-4c5b-a564-ba9f0399a8ba",
+  "task_id": "github",
+  "run_label": "github.adversarial",
+  "fixture_profile": "adversarial",
+  "fully_parallel": true,
+  "workers": 4,
+  "grep": null,
+  "exit_code": 0,
+  "duration_seconds": 11.329,
+  "stats": {
+    "startTime": "2026-09-01T06:54:37.125Z",
+    "duration": 11009.753999999999,
+    "expected": 101,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "failure_count": 0,
+  "repair_packets": [],
+  "application_source_sha256": "6dc5f1b9c36ae6856c61619426080b1c7a958e8dd1cc540e3dc6e211c1b654b7",
+  "application_source_file_count": 13,
+  "test_bundle_sha256": "7ee72cbedf9c21c6be087867512c2a6259c16f4cdbf0969f46203c7f3d07ed77",
+  "test_bundle_file_count": 48,
+  "public_task_manifest_sha256": "655e2317fb83153d2339573e36f083363d141ed5284aa59a79d8fdd2dabd31ab",
+  "requirements_sha256": "a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959",
+  "playwright_report_sha256": "6d6b37c893ef332847f1f687c84c1c3bc4d2731aaaa8a9327c76b4190b2863e0",
+  "playwright_report_contract": {
+    "test_count": 101,
+    "test_file_count": 47,
+    "inventory_sha256": "e09e33f994430d1d2efe9b89ebc7c60504bcd893afdf7f64601e686f23812118",
+    "status_counts": {
+      "expected": 101,
+      "unexpected": 0,
+      "skipped": 0,
+      "flaky": 0
+    }
+  },
+  "playwright_runtime": {
+    "version": "1.62.1",
+    "cli_sha256": "79e23e6a249176295b8490567daa7717448a75866d6ea6f6b296ff3d23305c69",
+    "runtime_file_count": 184,
+    "runtime_sha256": "79989525e1b186199504e4c47854bf481e8fba3b092669144d30c6c10dadd7df"
+  },
+  "fixture_contract_sha256": "d4ccd74779fe5011767db50a0d9b3340c8dc5be689859967572ecc6750641abd"
+}

@@ -1,0 +1,19 @@
+{
+  "raw_playwright_sha256": "e01ce2c663afc91fca57f1e7f782998d102fdaed3f2d82f202da4494bc078b68",
+  "replacement_tokens": [
+    "<harness-repository>",
+    "<submission-source>",
+    "<run-b-generated-project>"
+  ],
+  "sanitized_playwright_sha256": "a2c25bce600a156e2f7ff78555279a61b9ead8ee687604e4a064ec4f44afa1ff",
+  "trace": {
+    "rows": 60,
+    "sanitized_head": "4de74cc9c38a56969f4cfe807620d46d8b47fc06f6d77d07d75920d183cefc0c",
+    "sanitized_sha256": "902772c205444759ecf75539fc1df9dd8481dec6b85548e37a69991b88711922",
+    "source_head": "76f6172e57ee025482134c70667712aed034826068ada415e7a9a446eece7225",
+    "source_sha256": "ebe0231a56e69f735ad9fbf41df171b5395dca6cbe9131663e74fc51ef196700",
+    "transformation": "deterministic-path-redaction-and-reseal-v2"
+  },
+  "transformation": "deterministic-path-redaction; trace rows resealed after redaction",
+  "version": 1
+}

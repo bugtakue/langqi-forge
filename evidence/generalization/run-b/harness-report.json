@@ -1,0 +1,217 @@
+{
+  "version": 2,
+  "strategy": "one-planner-call-then-deterministic-kernel-or-targeted-repair",
+  "run_id": "0ac1ce91-25c9-4b03-a963-3625c3b68c1f",
+  "source_identity": {
+    "revision": "d0474d789c583b3c0d0dfbd133c4af8df270cfed",
+    "worktree_clean": true,
+    "source": "verified-submission-manifest",
+    "manifest_sha256": "7c824ae60ac8792e7d8fccd811695196c1c5956ca68fd1180bdb121403f16db9"
+  },
+  "duration_seconds": 69.756,
+  "requirement_count": 2,
+  "requirement_sha256": "24bb00980efa8b0ad98088d91cebce74bf5d851f90f4d7025fbee2cef0b7597c",
+  "application_source": {
+    "algorithm": "sha256-canonical-file-list-v1",
+    "sha256": "af01387c67f3f776c553c813d8cbc791b8e7df3fcd65f46524093c2b865ce6f1",
+    "file_count": 7,
+    "files": [
+      {
+        "path": "backend/package.json",
+        "bytes": 156,
+        "sha256": "c2adbdaa9c7547f422fec224382e1ff4e5db27260fb171099d0a85c17fc3073c"
+      },
+      {
+        "path": "backend/server.mjs",
+        "bytes": 3002,
+        "sha256": "6e847172f895d3057a8c9262d56db86d3cebdfe6d2f11e2be592880a66e2342b"
+      },
+      {
+        "path": "frontend/build.mjs",
+        "bytes": 326,
+        "sha256": "5143679bda0b38c88018ecd65d1b33bd1b68b95e523201a6e88af3a67d44804c"
+      },
+      {
+        "path": "frontend/package.json",
+        "bytes": 156,
+        "sha256": "ebdd05754f9a69bf4778654ef2622c8a7c2a2c2edf832aa8d2877f6323eccf53"
+      },
+      {
+        "path": "frontend/src/app.js",
+        "bytes": 6254,
+        "sha256": "23af59a172468cb19221c87bad99309313a17786c9ea024379143752a042fc5a"
+      },
+      {
+        "path": "frontend/src/index.html",
+        "bytes": 1737,
+        "sha256": "7b982a77fff338cf1182e74836bb1a8f5012ec4e1534e8c609fa0faea4c654a5"
+      },
+      {
+        "path": "frontend/src/styles.css",
+        "bytes": 1364,
+        "sha256": "be0bab75fac2f84cc016e9895a09a0c282f853fd2d4a035769265df988ce405a"
+      }
+    ]
+  },
+  "dry_run": false,
+  "detected_domain": "generic",
+  "execution_route": "planner-routed-bounded-code-agent",
+  "agent_iterations": 9,
+  "planner_status": "completed",
+  "planner_contract": {
+    "domain": "generic",
+    "kernel_eligible": false,
+    "capability_tags": [],
+    "risks": [
+      "No domain-specific capabilities leveraged for change control workflow",
+      "Generic implementation may lack specialized approval tracking features"
+    ],
+    "validation_focus": [
+      "Change request form submission handling",
+      "Approval workflow enforcement",
+      "State preservation after updates"
+    ],
+    "rationale": "Candidate domain is generic with no specific capabilities for change control workflows. Requirements involve form submissions and approval processes that need general web application capabilities rather than domain-specific ones.",
+    "uncovered_requirement_ids": [
+      "REQ-GEN-1",
+      "REQ-GEN-2"
+    ],
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "planner_iterations": 1,
+  "coding_agent_iterations": 8,
+  "manual_interventions": 0,
+  "agent_failures": [],
+  "checks": [
+    {
+      "name": "structure",
+      "passed": true,
+      "summary": "structure complete",
+      "related_files": [
+        "frontend/package.json",
+        "backend/package.json"
+      ],
+      "duration_seconds": 2.5541987270116806e-05
+    },
+    {
+      "name": "package_policy",
+      "passed": true,
+      "summary": "package policy passed",
+      "related_files": [
+        "frontend/package.json",
+        "backend/package.json"
+      ],
+      "duration_seconds": 0.00011170899961143732
+    },
+    {
+      "name": "interaction_policy",
+      "passed": true,
+      "summary": "interaction policy passed",
+      "related_files": [
+        "frontend/src/app.js",
+        "frontend/src/index.html"
+      ],
+      "duration_seconds": 0.0006751670152880251
+    },
+    {
+      "name": "frontend_build",
+      "passed": true,
+      "summary": "frontend build passed",
+      "related_files": [
+        "frontend/package.json",
+        "frontend/src",
+        "frontend/build.mjs"
+      ],
+      "duration_seconds": 0.16896654095035046
+    },
+    {
+      "name": "startup_health",
+      "passed": true,
+      "summary": "health endpoint ready",
+      "related_files": [
+        "backend/package.json",
+        "backend/server.mjs",
+        "frontend/dist"
+      ],
+      "duration_seconds": 0.26071245898492634
+    }
+  ],
+  "all_local_checks_passed": true,
+  "run_completed_successfully": true,
+  "behavioral_validation": {
+    "state": "pending_black_box_evidence",
+    "local_checks_are_behavioral_proof": false,
+    "required_next_evidence": "independent black-box acceptance contract"
+  },
+  "model_usage": {
+    "prompt_tokens": 54416,
+    "completion_tokens": 3854,
+    "request_count": 9,
+    "http_attempt_count": 9
+  },
+  "model_gateway": {
+    "provenance": "alibaba-cloud-bailian",
+    "endpoint_host": "dashscope.aliyuncs.com",
+    "model": "qwen3-coder-plus"
+  },
+  "capability_coverage": {
+    "version": 2,
+    "domain": "generic",
+    "kernel_eligible": false,
+    "required_capabilities": [],
+    "implemented_capabilities": [],
+    "missing_capabilities": [],
+    "covered_requirement_ids": [],
+    "uncovered_requirement_ids": [
+      "REQ-GEN-1",
+      "REQ-GEN-2"
+    ],
+    "capability_evidence": {},
+    "requirements": [
+      {
+        "requirement_id": "REQ-GEN-1",
+        "capabilities": [],
+        "matched_patterns": [],
+        "implemented": false
+      },
+      {
+        "requirement_id": "REQ-GEN-2",
+        "capabilities": [],
+        "matched_patterns": [],
+        "implemented": false
+      }
+    ]
+  },
+  "capability_memory": {
+    "matched_capsules": [],
+    "reuse_skipped_revalidation": false
+  },
+  "transaction_safety": {
+    "batch_count": 1,
+    "committed": 1,
+    "rolled_back": 0,
+    "transactions": [
+      {
+        "run_id": "0ac1ce91-25c9-4b03-a963-3625c3b68c1f",
+        "kind": "implementation_batch",
+        "index": 1,
+        "requirement_ids": [
+          "REQ-GEN-1",
+          "REQ-GEN-2"
+        ],
+        "checkpoint_commit": "3199defc2f74064b517fd795ec41dc88f8b2309f",
+        "status": "committed",
+        "changed_files": [
+          "backend/data/state.json",
+          "backend/server.mjs",
+          "frontend/src/app.js",
+          "frontend/src/index.html",
+          "frontend/src/styles.css"
+        ],
+        "result_commit": "766a2c6e832b3bd0921040621136036877a57236"
+      }
+    ]
+  },
+  "claim_boundary": "Local checks prove packaging/build/startup only; hidden GUI score is unknown until ARC-Bench evaluates it."
+}

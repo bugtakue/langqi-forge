@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "run_id": "5fb1a9b8-83ce-45a3-a5b5-8aff3f1528e7",
+  "status": "completed",
+  "contract": {
+    "domain": "github",
+    "kernel_eligible": true,
+    "capability_tags": [
+      "actions_workflows",
+      "audit_log",
+      "authentication",
+      "branch_protection",
+      "code_and_branches",
+      "enterprise_identity",
+      "fine_grained_data_permissions",
+      "issue_forms",
+      "issues",
+      "organization_permissions",
+      "pull_requests",
+      "repository_lifecycle",
+      "repository_relations",
+      "rulesets_codeowners"
+    ],
+    "risks": [
+      "permission and persistence boundaries"
+    ],
+    "validation_focus": [
+      "complete locked browser suite"
+    ],
+    "rationale": "Every requested behavior maps to the supplied closed-world capability catalog.",
+    "uncovered_requirement_ids": [],
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "execution_route": "planner-approved-deterministic-kernel"
+}

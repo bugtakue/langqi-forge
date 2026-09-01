@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "claim": "independent unseen-domain generalization proof; not an official score",
+  "passed": true,
+  "run_id": "3fef9c10-f7f9-4d26-ac5b-15bf1907b685",
+  "source_revision": "d0474d789c583b3c0d0dfbd133c4af8df270cfed",
+  "requirements_sha256": "24bb00980efa8b0ad98088d91cebce74bf5d851f90f4d7025fbee2cef0b7597c",
+  "test_source_sha256": "eef8ca61fd25092b6e084c6189586577eb0d7910deaba8b67ccad27f34887ba0",
+  "playwright_report_sha256": "5d06fe4adb32498fc91c66116560dce0dd56611fe60801c54954399f19b57f7e",
+  "playwright_report_contract": {
+    "test_count": 5,
+    "test_file_count": 1,
+    "inventory_sha256": "e4e415ab4c80d4db880a94de91304ddb1323974c23944a5c971e1943f88df1f8",
+    "status_counts": {
+      "expected": 5,
+      "unexpected": 0,
+      "skipped": 0,
+      "flaky": 0
+    }
+  },
+  "playwright_runtime": {
+    "version": "1.62.1",
+    "cli_sha256": "79e23e6a249176295b8490567daa7717448a75866d6ea6f6b296ff3d23305c69",
+    "runtime_file_count": 184,
+    "runtime_sha256": "79989525e1b186199504e4c47854bf481e8fba3b092669144d30c6c10dadd7df"
+  },
+  "application_source": {
+    "algorithm": "sha256-canonical-file-list-v1",
+    "sha256": "e45d6a16ac669a9f234a1bd8d41e764e8f955eaf217d038e4b6d2eff0e70d43c",
+    "file_count": 7,
+    "files": [
+      {
+        "path": "backend/package.json",
+        "bytes": 156,
+        "sha256": "c2adbdaa9c7547f422fec224382e1ff4e5db27260fb171099d0a85c17fc3073c"
+      },
+      {
+        "path": "backend/server.mjs",
+        "bytes": 3366,
+        "sha256": "b3ff89cedbe17dba2a3244d340f93691385d388f1e496c40035693c98fbabbf5"
+      },
+      {
+        "path": "frontend/build.mjs",
+        "bytes": 326,
+        "sha256": "5143679bda0b38c88018ecd65d1b33bd1b68b95e523201a6e88af3a67d44804c"
+      },
+      {
+        "path": "frontend/package.json",
+        "bytes": 156,
+        "sha256": "ebdd05754f9a69bf4778654ef2622c8a7c2a2c2edf832aa8d2877f6323eccf53"
+      },
+      {
+        "path": "frontend/src/app.js",
+        "bytes": 5698,
+        "sha256": "3e9cb9400a1345ebe06f6f5780a697f455e1218ba5ab5325021fda8864da2b14"
+      },
+      {
+        "path": "frontend/src/index.html",
+        "bytes": 1756,
+        "sha256": "096ae598af2f8fbe123c73975a31ae2d68275a81d649f9c747a3a49ad933f2f2"
+      },
+      {
+        "path": "frontend/src/styles.css",
+        "bytes": 751,
+        "sha256": "b13d7f47a9a1254308ce37f97c1ad4b7388b5e21abe10ffa93dd2fab28b45dad"
+      }
+    ]
+  },
+  "model_gateway": {
+    "provenance": "alibaba-cloud-bailian",
+    "endpoint_host": "dashscope.aliyuncs.com",
+    "model": "qwen3-coder-plus"
+  },
+  "model_usage": {
+    "prompt_tokens": 87039,
+    "completion_tokens": 4536,
+    "request_count": 13,
+    "http_attempt_count": 13
+  },
+  "planner_iterations": 1,
+  "coding_agent_iterations": 12,
+  "manual_interventions": 0,
+  "execution_route": "planner-routed-bounded-code-agent",
+  "duration_seconds": 2.106,
+  "exit_code": 0,
+  "stats": {
+    "startTime": "2026-09-01T06:58:09.593Z",
+    "duration": 1774.8850000000002,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "failure_count": 0
+}

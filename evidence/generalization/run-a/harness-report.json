@@ -1,0 +1,216 @@
+{
+  "version": 2,
+  "strategy": "one-planner-call-then-deterministic-kernel-or-targeted-repair",
+  "run_id": "3fef9c10-f7f9-4d26-ac5b-15bf1907b685",
+  "source_identity": {
+    "revision": "d0474d789c583b3c0d0dfbd133c4af8df270cfed",
+    "worktree_clean": true,
+    "source": "verified-submission-manifest",
+    "manifest_sha256": "7c824ae60ac8792e7d8fccd811695196c1c5956ca68fd1180bdb121403f16db9"
+  },
+  "duration_seconds": 69.568,
+  "requirement_count": 2,
+  "requirement_sha256": "24bb00980efa8b0ad98088d91cebce74bf5d851f90f4d7025fbee2cef0b7597c",
+  "application_source": {
+    "algorithm": "sha256-canonical-file-list-v1",
+    "sha256": "e45d6a16ac669a9f234a1bd8d41e764e8f955eaf217d038e4b6d2eff0e70d43c",
+    "file_count": 7,
+    "files": [
+      {
+        "path": "backend/package.json",
+        "bytes": 156,
+        "sha256": "c2adbdaa9c7547f422fec224382e1ff4e5db27260fb171099d0a85c17fc3073c"
+      },
+      {
+        "path": "backend/server.mjs",
+        "bytes": 3366,
+        "sha256": "b3ff89cedbe17dba2a3244d340f93691385d388f1e496c40035693c98fbabbf5"
+      },
+      {
+        "path": "frontend/build.mjs",
+        "bytes": 326,
+        "sha256": "5143679bda0b38c88018ecd65d1b33bd1b68b95e523201a6e88af3a67d44804c"
+      },
+      {
+        "path": "frontend/package.json",
+        "bytes": 156,
+        "sha256": "ebdd05754f9a69bf4778654ef2622c8a7c2a2c2edf832aa8d2877f6323eccf53"
+      },
+      {
+        "path": "frontend/src/app.js",
+        "bytes": 5698,
+        "sha256": "3e9cb9400a1345ebe06f6f5780a697f455e1218ba5ab5325021fda8864da2b14"
+      },
+      {
+        "path": "frontend/src/index.html",
+        "bytes": 1756,
+        "sha256": "096ae598af2f8fbe123c73975a31ae2d68275a81d649f9c747a3a49ad933f2f2"
+      },
+      {
+        "path": "frontend/src/styles.css",
+        "bytes": 751,
+        "sha256": "b13d7f47a9a1254308ce37f97c1ad4b7388b5e21abe10ffa93dd2fab28b45dad"
+      }
+    ]
+  },
+  "dry_run": false,
+  "detected_domain": "generic",
+  "execution_route": "planner-routed-bounded-code-agent",
+  "agent_iterations": 13,
+  "planner_status": "completed",
+  "planner_contract": {
+    "domain": "generic",
+    "kernel_eligible": false,
+    "capability_tags": [],
+    "risks": [
+      "UI components may not match exact labeling requirements",
+      "Approval workflow enforcement might be insufficient"
+    ],
+    "validation_focus": [
+      "Form field labels and headings",
+      "Approval process controls",
+      "State preservation mechanisms"
+    ],
+    "rationale": "Requirements specify exact UI elements and approval workflows that are not covered by the generic domain contract. The root indicates this is a generalization outside specific domains.",
+    "uncovered_requirement_ids": [
+      "REQ-GEN-1",
+      "REQ-GEN-2"
+    ],
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "planner_iterations": 1,
+  "coding_agent_iterations": 12,
+  "manual_interventions": 0,
+  "agent_failures": [],
+  "checks": [
+    {
+      "name": "structure",
+      "passed": true,
+      "summary": "structure complete",
+      "related_files": [
+        "frontend/package.json",
+        "backend/package.json"
+      ],
+      "duration_seconds": 2.3333996068686247e-05
+    },
+    {
+      "name": "package_policy",
+      "passed": true,
+      "summary": "package policy passed",
+      "related_files": [
+        "frontend/package.json",
+        "backend/package.json"
+      ],
+      "duration_seconds": 0.00010825000936165452
+    },
+    {
+      "name": "interaction_policy",
+      "passed": true,
+      "summary": "interaction policy passed",
+      "related_files": [
+        "frontend/src/app.js",
+        "frontend/src/index.html"
+      ],
+      "duration_seconds": 0.0005742909852415323
+    },
+    {
+      "name": "frontend_build",
+      "passed": true,
+      "summary": "frontend build passed",
+      "related_files": [
+        "frontend/package.json",
+        "frontend/src",
+        "frontend/build.mjs"
+      ],
+      "duration_seconds": 0.15543099999194965
+    },
+    {
+      "name": "startup_health",
+      "passed": true,
+      "summary": "health endpoint ready",
+      "related_files": [
+        "backend/package.json",
+        "backend/server.mjs",
+        "frontend/dist"
+      ],
+      "duration_seconds": 0.2606528750038706
+    }
+  ],
+  "all_local_checks_passed": true,
+  "run_completed_successfully": true,
+  "behavioral_validation": {
+    "state": "pending_black_box_evidence",
+    "local_checks_are_behavioral_proof": false,
+    "required_next_evidence": "independent black-box acceptance contract"
+  },
+  "model_usage": {
+    "prompt_tokens": 87039,
+    "completion_tokens": 4536,
+    "request_count": 13,
+    "http_attempt_count": 13
+  },
+  "model_gateway": {
+    "provenance": "alibaba-cloud-bailian",
+    "endpoint_host": "dashscope.aliyuncs.com",
+    "model": "qwen3-coder-plus"
+  },
+  "capability_coverage": {
+    "version": 2,
+    "domain": "generic",
+    "kernel_eligible": false,
+    "required_capabilities": [],
+    "implemented_capabilities": [],
+    "missing_capabilities": [],
+    "covered_requirement_ids": [],
+    "uncovered_requirement_ids": [
+      "REQ-GEN-1",
+      "REQ-GEN-2"
+    ],
+    "capability_evidence": {},
+    "requirements": [
+      {
+        "requirement_id": "REQ-GEN-1",
+        "capabilities": [],
+        "matched_patterns": [],
+        "implemented": false
+      },
+      {
+        "requirement_id": "REQ-GEN-2",
+        "capabilities": [],
+        "matched_patterns": [],
+        "implemented": false
+      }
+    ]
+  },
+  "capability_memory": {
+    "matched_capsules": [],
+    "reuse_skipped_revalidation": false
+  },
+  "transaction_safety": {
+    "batch_count": 1,
+    "committed": 1,
+    "rolled_back": 0,
+    "transactions": [
+      {
+        "run_id": "3fef9c10-f7f9-4d26-ac5b-15bf1907b685",
+        "kind": "implementation_batch",
+        "index": 1,
+        "requirement_ids": [
+          "REQ-GEN-1",
+          "REQ-GEN-2"
+        ],
+        "checkpoint_commit": "1af660fff5679c9ac130d6c761dabbc28aa45e4c",
+        "status": "committed",
+        "changed_files": [
+          "backend/data/state.json",
+          "backend/server.mjs",
+          "frontend/src/app.js",
+          "frontend/src/index.html"
+        ],
+        "result_commit": "41fc99e2f18791136f65c81e8431311e5a5beac5"
+      }
+    ]
+  },
+  "claim_boundary": "Local checks prove packaging/build/startup only; hidden GUI score is unknown until ARC-Bench evaluates it."
+}

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>Langqi Forge / 琅岐铸造 · Judge Report</title>
+<style>
+:root{--ink:#151918;--muted:#68716d;--line:#d9dfdc;--paper:#f5f7f5;--white:#fff;--green:#087f5b;--amber:#a35b00;--red:#b42318;--navy:#153b50}
+*{box-sizing:border-box} body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"PingFang SC",sans-serif;letter-spacing:0}
+main{max-width:1240px;margin:auto;padding:32px 24px 64px} header{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;border-bottom:2px solid var(--ink);padding-bottom:20px}
+.brand{font-size:14px;font-weight:800} h1{font-size:36px;line-height:1.05;margin:8px 0 0;letter-spacing:0} .subtitle{color:var(--muted);max-width:700px;margin:10px 0 0}
+.status{display:inline-flex;align-items:center;border:1px solid currentColor;padding:4px 8px;font:700 11px/1 ui-monospace,monospace;white-space:nowrap} .ok{color:var(--green)} .warn{color:var(--amber)} .bad{color:var(--red)}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);background:var(--ink);color:white;margin:22px 0} .metric{padding:18px 20px;border-right:1px solid #3c4441} .metric:last-child{border:0} .metric b{font-size:28px;display:block} .metric span{color:#bcc6c2;font-size:12px}
+.pipeline{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin:0 0 22px} .pipeline div{background:var(--white);padding:13px} .pipeline b{display:block;color:var(--navy)} .pipeline span{font-size:11px;color:var(--muted)}
+.domains{display:grid;grid-template-columns:1fr 1fr;gap:18px} .domain-card{background:var(--white);border:1px solid var(--line);padding:20px;min-width:0} .domain-head{display:flex;justify-content:space-between;gap:16px;align-items:start} .eyebrow{font:700 10px/1 ui-monospace,monospace;color:var(--muted);margin:0 0 7px} h2{font-size:24px;margin:0} h3{font-size:12px;text-transform:uppercase;margin:20px 0 8px;color:var(--navy)}
+.facts{display:grid;grid-template-columns:1fr 1fr;margin:18px 0 0;border-top:1px solid var(--line);border-left:1px solid var(--line)} .facts div{padding:10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0} dt{font-size:10px;color:var(--muted);text-transform:uppercase} dd{margin:3px 0 0;font-weight:650;overflow-wrap:anywhere}
+.proof{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;list-style:none;padding:1px;margin:0;background:var(--line)} .proof li{display:flex;flex-direction:column;gap:3px;background:#fbfcfb;padding:10px;min-width:0} .proof span{font:700 9px/1 ui-monospace,monospace;color:var(--navy)} .proof strong{font-size:11px;overflow-wrap:anywhere} .proof small{font:9px/1.4 ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}
+table{width:100%;border-collapse:collapse;font-size:12px} th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)} th{color:var(--muted);font-size:10px;text-transform:uppercase} .run-name small{display:block;color:var(--muted);font-size:10px} .eval-table{min-width:0;max-width:100%}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:16px} ul{list-style:none;padding:0;margin:0} .chips{display:flex;gap:5px;flex-wrap:wrap} .chips li{border:1px solid #b7c6bf;background:#f3faf6;padding:3px 6px;font:10px/1.3 ui-monospace,monospace} .events li{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);font:10px/1.7 ui-monospace,monospace;gap:8px} .events span{overflow-wrap:anywhere}
+.capsule{margin-top:18px;padding:11px;background:#f0f4f6;border-left:3px solid var(--navy)} .capsule strong{display:block;font-size:11px} code{font-size:10px;overflow-wrap:anywhere} .hash{font:10px/1.5 ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere;margin:14px 0 0}
+.boundary{margin-top:20px;border:1px solid var(--amber);padding:14px;background:#fff8ed;color:#633600}
+@media(max-width:900px){.domains{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.pipeline{grid-template-columns:1fr 1fr 1fr}}
+@media(max-width:560px){main{padding:20px 12px 40px}header{align-items:start;flex-direction:column}h1{font-size:28px}.metrics,.facts,.split{grid-template-columns:1fr}.proof{grid-template-columns:1fr 1fr}.pipeline{grid-template-columns:1fr 1fr}.metric{border-bottom:1px solid #3c4441}.eval-table thead{display:none}.eval-table table,.eval-table tbody,.eval-table tr,.eval-table td{display:block;width:100%}.eval-table tr{border:1px solid var(--line);padding:4px 8px;margin-bottom:8px}.eval-table td{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;text-align:right;border-bottom:1px dotted var(--line);overflow-wrap:anywhere}.eval-table td:last-child{border-bottom:0}.eval-table td::before{content:attr(data-label);color:var(--muted);font-size:10px;text-transform:uppercase;text-align:left}.run-name{text-align:right;min-width:0}}
+</style>
+</head>
+<body><main>
+<header><div><div class="brand">LANGQI FORGE / 琅岐铸造</div><h1>Evidence before confidence.</h1><p class="subtitle">一次受约束的模型决策，把需求路由到可运行内核；失败变成最小反例，全绿才铸成能力胶囊，下次复用仍不免检。</p></div><span class="status ok">QUALIFIED</span></header>
+<section class="metrics">
+  <div class="metric"><b>304 / 304</b><span>locked public GUI</span></div>
+  <div class="metric"><b>71</b><span>compiled atomic requirements</span></div>
+  <div class="metric"><b>4568 + 413</b><span>planner input + output tokens</span></div>
+  <div class="metric"><b>0</b><span>manual interventions</span></div>
+</section>
+<section class="pipeline">
+  <div><b>01 Compile</b><span>deterministic requirements</span></div><div><b>02 Decide</b><span>forced model tool call</span></div><div><b>03 Route</b><span>closed-world coverage</span></div><div><b>04 Build</b><span>kernel or bounded delta</span></div><div><b>05 Falsify</b><span>baseline + adversarial GUI</span></div><div><b>06 Remember</b><span>capsule, never skip recheck</span></div>
+</section>
+<div class="domains">
+    <section class="domain-card">
+      <div class="domain-head">
+        <div><p class="eyebrow">MODEL-BACKED RUN</p><h2>GITHUB</h2></div>
+        <span class="status ok">completed</span>
+      </div>
+      <dl class="facts">
+        <div><dt>Route</dt><dd>planner-approved-deterministic-kernel</dd></div>
+        <div><dt>Requirements</dt><dd>47</dd></div>
+        <div><dt>Generate</dt><dd>5.747s</dd></div>
+        <div><dt>Agent turns</dt><dd>1 planner / 0 coding</dd></div>
+        <div><dt>Model</dt><dd>qwen3-coder-plus</dd></div>
+        <div><dt>Tokens</dt><dd>2718 in / 184 out</dd></div>
+      </dl>
+      <h3>90-second audit path</h3>
+      <ol class="proof"><li><span>01 INPUT</span><strong>47 atomic requirements</strong><small>16 dependency batches · req a4ba2c2e1bd6…</small></li><li><span>02 MODEL</span><strong>1 forced planner tool call</strong><small>prompt e4ffb7dec1af… · tool select_build_contract</small></li><li><span>03 ROUTE</span><strong>planner-approved-deterministic-kernel</strong><small>7 closed-world capabilities · uncovered 0</small></li><li><span>04 BUILD</span><strong>13 source files</strong><small>0 coding turns · source 6dc5f1b9c36a…</small></li><li><span>05 FALSIFY</span><strong>202 / 202 locked GUI</strong><small>5/5 local checks · 2 immutable profiles</small></li><li><span>06 SEAL</span><strong>28 hash-chained events</strong><small>manual 0 · capsule b0121abc8111…</small></li></ol>
+      <h3>Locked GUI evaluations</h3>
+      <div class="eval-table"><table><thead><tr><th>Run</th><th>Score</th><th>Workers</th><th>Wall</th><th>Proof</th><th>Gate</th></tr></thead>
+      <tbody><tr><td data-label="Run"><span class="run-name"><strong>github</strong><small>baseline</small></span></td><td data-label="Score">101 / 101</td><td data-label="Workers">4</td><td data-label="Wall">17.728s</td><td data-label="Proof"><span class="run-name"><strong>PW 1.62.1</strong><small>inventory e09e33f99443…</small></span></td><td data-label="Gate"><span class="status ok">GREEN</span></td></tr><tr><td data-label="Run"><span class="run-name"><strong>github.adversarial</strong><small>adversarial</small></span></td><td data-label="Score">101 / 101</td><td data-label="Workers">4</td><td data-label="Wall">11.329s</td><td data-label="Proof"><span class="run-name"><strong>PW 1.62.1</strong><small>inventory e09e33f99443…</small></span></td><td data-label="Gate"><span class="status ok">GREEN</span></td></tr></tbody></table></div>
+      <div class="split">
+        <div><h3>Closed-world capabilities</h3><ul class="chips"><li>authentication</li><li>branch_protection</li><li>code_and_branches</li><li>issues</li><li>organization_permissions</li><li>pull_requests</li><li>repository_lifecycle</li></ul></div>
+        <div><h3>Sealed trace</h3><ul class="events"><li><span>requirements_compiled</span><strong>1</strong></li><li><span>model_request</span><strong>1</strong></li><li><span>model_response</span><strong>1</strong></li><li><span>agent_tool_call</span><strong>1</strong></li><li><span>execution_route_selected</span><strong>1</strong></li><li><span>deterministic_scaffold</span><strong>1</strong></li><li><span>validation_result</span><strong>5</strong></li><li><span>public_evaluation_completed</span><strong>2</strong></li><li><span>capability_capsule_forged</span><strong>1</strong></li><li><span>human_intervention_checkpoint</span><strong>1</strong></li><li><span>run_completed</span><strong>1</strong></li></ul></div>
+      </div>
+      <div class="capsule"><strong>Capability capsule</strong><code>b0121abc8111… · profiles: adversarial, baseline · revalidation skipped: false</code></div>
+      <p class="hash">run ada86423-46c… · source d0474d789c58… · trace 213f495c44a0…</p>
+    </section>
+
+    <section class="domain-card">
+      <div class="domain-head">
+        <div><p class="eyebrow">MODEL-BACKED RUN</p><h2>SHEET</h2></div>
+        <span class="status ok">completed</span>
+      </div>
+      <dl class="facts">
+        <div><dt>Route</dt><dd>planner-approved-deterministic-kernel</dd></div>
+        <div><dt>Requirements</dt><dd>24</dd></div>
+        <div><dt>Generate</dt><dd>4.401s</dd></div>
+        <div><dt>Agent turns</dt><dd>1 planner / 0 coding</dd></div>
+        <div><dt>Model</dt><dd>qwen3-coder-plus</dd></div>
+        <div><dt>Tokens</dt><dd>1850 in / 229 out</dd></div>
+      </dl>
+      <h3>90-second audit path</h3>
+      <ol class="proof"><li><span>01 INPUT</span><strong>24 atomic requirements</strong><small>8 dependency batches · req 9f2bfd7a9242…</small></li><li><span>02 MODEL</span><strong>1 forced planner tool call</strong><small>prompt 3932d5434b78… · tool select_build_contract</small></li><li><span>03 ROUTE</span><strong>planner-approved-deterministic-kernel</strong><small>8 closed-world capabilities · uncovered 0</small></li><li><span>04 BUILD</span><strong>11 source files</strong><small>0 coding turns · source 6f80e1c9f366…</small></li><li><span>05 FALSIFY</span><strong>102 / 102 locked GUI</strong><small>5/5 local checks · 1 immutable profiles</small></li><li><span>06 SEAL</span><strong>26 hash-chained events</strong><small>manual 0 · capsule ecca4f65ccb4…</small></li></ol>
+      <h3>Locked GUI evaluations</h3>
+      <div class="eval-table"><table><thead><tr><th>Run</th><th>Score</th><th>Workers</th><th>Wall</th><th>Proof</th><th>Gate</th></tr></thead>
+      <tbody><tr><td data-label="Run"><span class="run-name"><strong>sheet</strong><small>baseline</small></span></td><td data-label="Score">102 / 102</td><td data-label="Workers">4</td><td data-label="Wall">23.254s</td><td data-label="Proof"><span class="run-name"><strong>PW 1.62.1</strong><small>inventory 9ef10bed3f46…</small></span></td><td data-label="Gate"><span class="status ok">GREEN</span></td></tr></tbody></table></div>
+      <div class="split">
+        <div><h3>Closed-world capabilities</h3><ul class="chips"><li>cell_editing</li><li>clipboard_and_history</li><li>formulas</li><li>pivot_tables</li><li>sorting_and_filtering</li><li>validation_and_references</li><li>workbook_lifecycle</li><li>worksheet_structure</li></ul></div>
+        <div><h3>Sealed trace</h3><ul class="events"><li><span>requirements_compiled</span><strong>1</strong></li><li><span>model_request</span><strong>1</strong></li><li><span>model_response</span><strong>1</strong></li><li><span>agent_tool_call</span><strong>1</strong></li><li><span>execution_route_selected</span><strong>1</strong></li><li><span>deterministic_scaffold</span><strong>1</strong></li><li><span>validation_result</span><strong>5</strong></li><li><span>public_evaluation_completed</span><strong>1</strong></li><li><span>capability_capsule_forged</span><strong>1</strong></li><li><span>human_intervention_checkpoint</span><strong>1</strong></li><li><span>run_completed</span><strong>1</strong></li></ul></div>
+      </div>
+      <div class="capsule"><strong>Capability capsule</strong><code>ecca4f65ccb4… · profiles: baseline · revalidation skipped: false</code></div>
+      <p class="hash">run 202cd502-c8c… · source d0474d789c58… · trace 06ea6383f1ab…</p>
+    </section>
+    </div>
+<aside class="boundary"><strong>Claim boundary.</strong> This view is derived from sealed local artifacts. Public GUI success does not guarantee hidden tests, Top 20, or an award.</aside>
+</main></body></html>

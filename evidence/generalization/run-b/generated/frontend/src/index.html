@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Generated application</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="brand" href="/">Generated application</a>
+      <nav aria-label="Primary navigation">
+        <button type="button" id="refresh-button">Refresh</button>
+      </nav>
+    </header>
+    <main id="app" class="app-shell">
+      <h1>Change Control</h1>
+      <p id="status" role="status">Ready</p>
+      <section class="panel" aria-labelledby="change-form-heading">
+        <h2 id="change-form-heading">Submit Change Request</h2>
+        <form id="change-form" novalidate>
+          <label for="requester">Requester</label>
+          <input id="requester" name="requester" type="text" autocomplete="off" />
+          
+          <label for="summary">Change summary</label>
+          <input id="summary" name="summary" type="text" autocomplete="off" />
+          
+          <label for="risk">Risk</label>
+          <select id="risk" name="risk">
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+          </select>
+          
+          <p id="change-error" class="error" role="alert"></p>
+          <button type="submit">Submit change</button>
+        </form>
+      </section>
+      
+      <section class="panel" aria-labelledby="requests-heading">
+        <h2 id="requests-heading">Change Requests</h2>
+        <div id="requests-container"></div>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

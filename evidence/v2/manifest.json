@@ -1,0 +1,130 @@
+{
+  "version": 2,
+  "generated_at": "2026-09-01T06:55:46.090640+00:00",
+  "scope": "exact source-bound production evidence plus a separately resealed, path-sanitized trace; public task source is intentionally excluded",
+  "trace_exports": {
+    "github": {
+      "rows": 28,
+      "transformation": "deterministic-path-redaction-and-reseal-v2",
+      "source_sha256": "53e526f886dd06c1f369fb6cc4018729fa3bfc4860ea3cc7aa981697fc637dd6",
+      "source_head": "213f495c44a09c5a2901062efe79300bd95cfbb4a0b34a249fe49b278ddb5e2c",
+      "sanitized_sha256": "d2449bff2f5d6c7f38b44a9e1e35056a6a18515bdcf1b40b123e4c0829173845",
+      "sanitized_head": "09c14fe989000556feb29c08fe70cd8063c8f59e4a7f3d48fe50a914d219f856"
+    },
+    "sheet": {
+      "rows": 26,
+      "transformation": "deterministic-path-redaction-and-reseal-v2",
+      "source_sha256": "35f48be4ec4dec5aa5311ad113c35ebd1ac65d4619b1f05420934b5c7e1e5e5a",
+      "source_head": "06ea6383f1ab3912e831a679a3128c062ed154d1b7a7519a328166879b279372",
+      "sanitized_sha256": "464cc6aa3172339dddc2ca972fc21d5a2e0621dc912b4695168b19ebfa30c58f",
+      "sanitized_head": "54122cb976076af9d39cbdb1198bc0b224ab431ca866e84907b1f2359e1cc544"
+    }
+  },
+  "files": [
+    {
+      "path": "github/capability-capsule.json",
+      "sha256": "fc06ba779df38df9b1e7373bb84e82b233188abcf51028e10863944b983381a0",
+      "bytes": 8021
+    },
+    {
+      "path": "github/compiled-plan.json",
+      "sha256": "474e5b3b8a972f79da259d74220f9948a8a3a657d5ee87dd43a317267b012baf",
+      "bytes": 40777
+    },
+    {
+      "path": "github/github.adversarial.feedback.json",
+      "sha256": "f95a0c8ec2e843a30f055327d99bb6a71af0f0e882f72f1cfff5c71bfaeef8ae",
+      "bytes": 1706
+    },
+    {
+      "path": "github/github.adversarial.playwright.json",
+      "sha256": "6d6b37c893ef332847f1f687c84c1c3bc4d2731aaaa8a9327c76b4190b2863e0",
+      "bytes": 120622
+    },
+    {
+      "path": "github/github.feedback.json",
+      "sha256": "161f24b9bbf9b24f0b6b8e66e445f08e51da7a8fc1fdabb2a41d45c80cf9cd0e",
+      "bytes": 1682
+    },
+    {
+      "path": "github/github.playwright.json",
+      "sha256": "926e7fbc4f3854d6045ab395347309426f414f3d7e14f26cbcaf29b648b4bc7e",
+      "bytes": 120620
+    },
+    {
+      "path": "github/harness-report.json",
+      "sha256": "c8a8663d58d166aa76df697a79caa0c1d2a59c12933357f22145349f341f5f55",
+      "bytes": 42302
+    },
+    {
+      "path": "github/planner-contract.json",
+      "sha256": "2ce87d32039a739bfc11829c09c7e163941a7180e5e98bbe47dd178212e2cbea",
+      "bytes": 1169
+    },
+    {
+      "path": "github/production-trace.jsonl",
+      "sha256": "53e526f886dd06c1f369fb6cc4018729fa3bfc4860ea3cc7aa981697fc637dd6",
+      "bytes": 134122
+    },
+    {
+      "path": "github/production-trace.sanitized.jsonl",
+      "sha256": "d2449bff2f5d6c7f38b44a9e1e35056a6a18515bdcf1b40b123e4c0829173845",
+      "bytes": 130304
+    },
+    {
+      "path": "github/run-envelope.json",
+      "sha256": "c67cdfe20ed85c9084a63b1ce9428de8f19eb2dcdb2ae0c56bcad47fbcadaf01",
+      "bytes": 5312
+    },
+    {
+      "path": "qualification.json",
+      "sha256": "b38a347da25ee46e65ed20ea7ddd47ec786ca1d3eb3c760076007dd8dcdd8575",
+      "bytes": 543517
+    },
+    {
+      "path": "sheet/capability-capsule.json",
+      "sha256": "9ffd2a5b79b8a969c78ae7bbb36a1206b1bda77332617cf93ed5eb7bd1993528",
+      "bytes": 6524
+    },
+    {
+      "path": "sheet/compiled-plan.json",
+      "sha256": "30dcb584f2063d2450d74b1b50685cae8d461509fe3ca76ea13f991bc31a17fb",
+      "bytes": 21545
+    },
+    {
+      "path": "sheet/harness-report.json",
+      "sha256": "da98e6609270fdc4d115fb31ffc846c550c3f977abb2d77477533788001ec928",
+      "bytes": 24124
+    },
+    {
+      "path": "sheet/planner-contract.json",
+      "sha256": "263a1c5f6a50d9a5dc56dacd7f807cf5e7ad6dee3fe0546a5299428ed1cd6746",
+      "bytes": 1276
+    },
+    {
+      "path": "sheet/production-trace.jsonl",
+      "sha256": "35f48be4ec4dec5aa5311ad113c35ebd1ac65d4619b1f05420934b5c7e1e5e5a",
+      "bytes": 76734
+    },
+    {
+      "path": "sheet/production-trace.sanitized.jsonl",
+      "sha256": "464cc6aa3172339dddc2ca972fc21d5a2e0621dc912b4695168b19ebfa30c58f",
+      "bytes": 73971
+    },
+    {
+      "path": "sheet/run-envelope.json",
+      "sha256": "f7e5bb5632ab72270089ea482b819a71a0c9505495a19a92c41a2a5014907040",
+      "bytes": 3982
+    },
+    {
+      "path": "sheet/sheet.feedback.json",
+      "sha256": "67de56fab0abbae146cc6de33bb03a7ca8add9ca49055c8515da26bb9353d3d0",
+      "bytes": 1689
+    },
+    {
+      "path": "sheet/sheet.playwright.json",
+      "sha256": "6a4f4b68c72582360123b26161bc68522b4e3dae0ae744fbd3346e418752e45b",
+      "bytes": 117095
+    }
+  ]
+}

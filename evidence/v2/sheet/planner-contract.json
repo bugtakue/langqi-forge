@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "run_id": "202cd502-c8c8-4e8d-af95-5d338a870a4a",
+  "status": "completed",
+  "contract": {
+    "domain": "sheet",
+    "kernel_eligible": true,
+    "capability_tags": [
+      "cell_editing",
+      "clipboard_and_history",
+      "formulas",
+      "pivot_tables",
+      "sorting_and_filtering",
+      "validation_and_references",
+      "workbook_lifecycle",
+      "worksheet_structure"
+    ],
+    "risks": [
+      "Enterprise compute engine capability unused but defined in contract",
+      "Domain exclusions may not cover all enterprise features that could be mistakenly implemented"
+    ],
+    "validation_focus": [
+      "Verify all workbook lifecycle operations work end-to-end",
+      "Confirm formula calculation and recalculation triggers function correctly",
+      "Test structural changes don't break existing references"
+    ],
+    "rationale": "Candidate domain 'sheet' matches root requirement for online spreadsheet. All atomic requirements covered by contract capabilities except enterprise_compute_engine which is excluded by domain_exclusions. Contract covers core spreadsheet fun",
+    "uncovered_requirement_ids": [],
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "execution_route": "planner-approved-deterministic-kernel"
+}

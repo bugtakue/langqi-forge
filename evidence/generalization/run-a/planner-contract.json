@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "run_id": "3fef9c10-f7f9-4d26-ac5b-15bf1907b685",
+  "status": "completed",
+  "contract": {
+    "domain": "generic",
+    "kernel_eligible": false,
+    "capability_tags": [],
+    "risks": [
+      "UI components may not match exact labeling requirements",
+      "Approval workflow enforcement might be insufficient"
+    ],
+    "validation_focus": [
+      "Form field labels and headings",
+      "Approval process controls",
+      "State preservation mechanisms"
+    ],
+    "rationale": "Requirements specify exact UI elements and approval workflows that are not covered by the generic domain contract. The root indicates this is a generalization outside specific domains.",
+    "uncovered_requirement_ids": [
+      "REQ-GEN-1",
+      "REQ-GEN-2"
+    ],
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "execution_route": "planner-routed-bounded-code-agent"
+}

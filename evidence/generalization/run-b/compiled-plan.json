@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "strategy": "deterministic-foundation-then-small-batches",
+  "requirement_count": 2,
+  "batch_size": 2,
+  "batches": [
+    {
+      "index": 1,
+      "requirement_ids": [
+        "REQ-GEN-1",
+        "REQ-GEN-2"
+      ],
+      "dependencies": [
+        "REQ-GEN-1"
+      ]
+    }
+  ],
+  "detected_domain": "generic",
+  "requirement_sha256": "24bb00980efa8b0ad98088d91cebce74bf5d851f90f4d7025fbee2cef0b7597c",
+  "run_id": "0ac1ce91-25c9-4b03-a963-3625c3b68c1f",
+  "capability_coverage": {
+    "version": 2,
+    "domain": "generic",
+    "kernel_eligible": false,
+    "required_capabilities": [],
+    "implemented_capabilities": [],
+    "missing_capabilities": [],
+    "covered_requirement_ids": [],
+    "uncovered_requirement_ids": [
+      "REQ-GEN-1",
+      "REQ-GEN-2"
+    ],
+    "capability_evidence": {},
+    "requirements": [
+      {
+        "requirement_id": "REQ-GEN-1",
+        "capabilities": [],
+        "matched_patterns": [],
+        "implemented": false
+      },
+      {
+        "requirement_id": "REQ-GEN-2",
+        "capabilities": [],
+        "matched_patterns": [],
+        "implemented": false
+      }
+    ]
+  },
+  "capability_memory": {
+    "matched_capsules": [],
+    "reuse_skipped_revalidation": false
+  },
+  "execution_route": "planner-routed-bounded-code-agent",
+  "planner_status": "completed",
+  "planner_contract": {
+    "domain": "generic",
+    "kernel_eligible": false,
+    "capability_tags": [],
+    "risks": [
+      "No domain-specific capabilities leveraged for change control workflow",
+      "Generic implementation may lack specialized approval tracking features"
+    ],
+    "validation_focus": [
+      "Change request form submission handling",
+      "Approval workflow enforcement",
+      "State preservation after updates"
+    ],
+    "rationale": "Candidate domain is generic with no specific capabilities for change control workflows. Requirements involve form submissions and approval processes that need general web application capabilities rather than domain-specific ones.",
+    "uncovered_requirement_ids": [
+      "REQ-GEN-1",
+      "REQ-GEN-2"
+    ],
+    "decision_mode": "tool_call",
+    "iterations": 1
+  }
+}

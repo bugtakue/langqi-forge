@@ -1,0 +1,121 @@
+{
+  "algorithm": "sha256",
+  "files": [
+    {
+      "bytes": 1090,
+      "path": "README.md",
+      "sha256": "bb88eb9e52cfeefc99b66789d32a6333f326baef621cd4463be50eb0040f0946"
+    },
+    {
+      "bytes": 40575,
+      "path": "compiled-plan.json",
+      "sha256": "d6e1cba1bc37c73237bb7dc97699cde57568f6c5f46fc09b4306b14f809c0778"
+    },
+    {
+      "bytes": 5251,
+      "path": "generated/backend/auth.mjs",
+      "sha256": "d4147114aaf33c9bbadb130a559d3340cda28cf591ef5a9d0cd3147edfb7bdac"
+    },
+    {
+      "bytes": 6794,
+      "path": "generated/backend/authorization.mjs",
+      "sha256": "5407b96c1b6ae66aff7cf2ba9bbcc29d9cee7b44dc8e4fe0c1f813f39de3cfac"
+    },
+    {
+      "bytes": 50750,
+      "path": "generated/backend/enterprise.mjs",
+      "sha256": "734d7caf2590958cd415753e7f6d4ab8df1091d1dc1358139965f2859e46a74d"
+    },
+    {
+      "bytes": 217,
+      "path": "generated/backend/package-lock.json",
+      "sha256": "c1d7679d4c37238e666aa57ef8ddb66c7e463706a2bcd376c686ae98d6e49739"
+    },
+    {
+      "bytes": 156,
+      "path": "generated/backend/package.json",
+      "sha256": "51a972aee3a8c11f9f10719807155f4f6c5ce9a73c8f7d9a18b6ce88320db6ed"
+    },
+    {
+      "bytes": 41705,
+      "path": "generated/backend/server.mjs",
+      "sha256": "0cda2617927b381182a21a751f85334fee5e85b826584701efb948d14e6bb1de"
+    },
+    {
+      "bytes": 346,
+      "path": "generated/frontend/build.mjs",
+      "sha256": "a8b759e06003f141f384e6d6bf66fcc3572ec920f613fe149d9eacf24dc7ee47"
+    },
+    {
+      "bytes": 219,
+      "path": "generated/frontend/package-lock.json",
+      "sha256": "759d5b8281b8d857f836176382ec19a401d858100daf18c33b8861cecf323746"
+    },
+    {
+      "bytes": 156,
+      "path": "generated/frontend/package.json",
+      "sha256": "1019d6323736b9742aaf9de49db05e3f604238f4c0c87caaca204de9658c06c3"
+    },
+    {
+      "bytes": 94871,
+      "path": "generated/frontend/src/app.js",
+      "sha256": "4291e40df609ecbff66e0bbb4042dc16998bd2f97f112dee806775147fc5f9a6"
+    },
+    {
+      "bytes": 36821,
+      "path": "generated/frontend/src/enterprise.js",
+      "sha256": "03f04166ddfa5db8a88fffadd9f696fc321768cda55ecb0f1b9ed6e2953234eb"
+    },
+    {
+      "bytes": 377,
+      "path": "generated/frontend/src/index.html",
+      "sha256": "7f54113deb915b18bfe032cadb6a9a180d72aafcc1b59d2fe6d9fc7971d829a0"
+    },
+    {
+      "bytes": 5369,
+      "path": "generated/frontend/src/styles.css",
+      "sha256": "1512c5020f9d217453a8cb22824385ecf2e6a2f90c38e1312eedd26dcc02df14"
+    },
+    {
+      "bytes": 42101,
+      "path": "harness-report.json",
+      "sha256": "18932f17b10231db9b696de36868227b9bf43d1bad5cb743681d3c53b06cc33d"
+    },
+    {
+      "bytes": 967,
+      "path": "planner-contract.json",
+      "sha256": "c263e29908f95af989a07d8fd8c3ff9549ec3eddc4d365e2922db7b326151427"
+    },
+    {
+      "bytes": 118868,
+      "path": "playwright-report.json",
+      "sha256": "15f42ebfa1105ba382d7fdd672ca1979822bae803dae41c3a8a3c3870218736c"
+    },
+    {
+      "bytes": 160,
+      "path": "preflight.json",
+      "sha256": "4ad6e292d3dda7407a10ca109a3b42426e56c1cfb7305de9c6b303b1e94f8ba6"
+    },
+    {
+      "bytes": 126810,
+      "path": "production-trace.jsonl",
+      "sha256": "93d73f4132b65e1d5247ca812eac0a89afdc854596c90a87405ae45b5857bf62"
+    },
+    {
+      "bytes": 2878,
+      "path": "proof.json",
+      "sha256": "fd67d5558f88a18f846f0ecff27a8d8ca1fe5f12cac66b4a3e1cad1be9c7c7ef"
+    },
+    {
+      "bytes": 2974,
+      "path": "run-envelope.json",
+      "sha256": "6aa22ed856c01509fb2aba3748e7ba747a6744f0b23b09a9cbc9d02f26b1aca7"
+    },
+    {
+      "bytes": 8116,
+      "path": "submission-source.json",
+      "sha256": "7c824ae60ac8792e7d8fccd811695196c1c5956ca68fd1180bdb121403f16db9"
+    }
+  ],
+  "version": 1
+}

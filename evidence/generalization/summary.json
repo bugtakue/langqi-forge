@@ -1,0 +1,54 @@
+{
+  "application_sources_distinct": true,
+  "claim": "two independent same-revision unseen-domain passes; not an official score",
+  "hidden_test_sha256": "eef8ca61fd25092b6e084c6189586577eb0d7910deaba8b67ccad27f34887ba0",
+  "requirements_sha256": "24bb00980efa8b0ad98088d91cebce74bf5d851f90f4d7025fbee2cef0b7597c",
+  "runs": [
+    {
+      "application_source_sha256": "e45d6a16ac669a9f234a1bd8d41e764e8f955eaf217d038e4b6d2eff0e70d43c",
+      "coding_agent_iterations": 12,
+      "completion_tokens": 4536,
+      "label": "run-a",
+      "manual_interventions": 0,
+      "model": "qwen3-coder-plus",
+      "model_requests": 13,
+      "passed": true,
+      "prompt_tokens": 87039,
+      "provider": "alibaba-cloud-bailian",
+      "run_id": "3fef9c10-f7f9-4d26-ac5b-15bf1907b685",
+      "tests": {
+        "duration": 1774.8850000000002,
+        "expected": 5,
+        "flaky": 0,
+        "skipped": 0,
+        "startTime": "2026-09-01T06:58:09.593Z",
+        "unexpected": 0
+      }
+    },
+    {
+      "application_source_sha256": "af01387c67f3f776c553c813d8cbc791b8e7df3fcd65f46524093c2b865ce6f1",
+      "coding_agent_iterations": 8,
+      "completion_tokens": 3854,
+      "label": "run-b",
+      "manual_interventions": 0,
+      "model": "qwen3-coder-plus",
+      "model_requests": 9,
+      "passed": true,
+      "prompt_tokens": 54416,
+      "provider": "alibaba-cloud-bailian",
+      "run_id": "0ac1ce91-25c9-4b03-a963-3625c3b68c1f",
+      "tests": {
+        "duration": 1620.225,
+        "expected": 5,
+        "flaky": 0,
+        "skipped": 0,
+        "startTime": "2026-09-01T06:59:52.166Z",
+        "unexpected": 0
+      }
+    }
+  ],
+  "source_revision": "d0474d789c583b3c0d0dfbd133c4af8df270cfed",
+  "submission_contract_sha256": "1c6fe8ecee667140899c69f2d94034df85e28f443ebc7ae6fe16978dc5db69eb",
+  "submission_zip_sha256": "a897cb3ed11833bfd76bf3a9f80ff930a49d9b30714a5f1fc87c14d510444869",
+  "version": 1
+}

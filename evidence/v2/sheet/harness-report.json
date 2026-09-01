@@ -1,0 +1,739 @@
+{
+  "version": 2,
+  "strategy": "one-planner-call-then-deterministic-kernel-or-targeted-repair",
+  "run_id": "202cd502-c8c8-4e8d-af95-5d338a870a4a",
+  "source_identity": {
+    "revision": "d0474d789c583b3c0d0dfbd133c4af8df270cfed",
+    "worktree_clean": true,
+    "source": "verified-submission-manifest",
+    "manifest_sha256": "7c824ae60ac8792e7d8fccd811695196c1c5956ca68fd1180bdb121403f16db9"
+  },
+  "duration_seconds": 4.401,
+  "requirement_count": 24,
+  "requirement_sha256": "9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494",
+  "application_source": {
+    "algorithm": "sha256-canonical-file-list-v1",
+    "sha256": "6f80e1c9f366c18386b5d135ed7f628749e4201f1e85875550816761f5e4c7e0",
+    "file_count": 11,
+    "files": [
+      {
+        "path": "backend/compute.mjs",
+        "bytes": 34299,
+        "sha256": "1001cdbbff5b962800c530f28ce833d817f6f9ac0c4d58c19eb0441dfae3e3d8"
+      },
+      {
+        "path": "backend/package-lock.json",
+        "bytes": 209,
+        "sha256": "43d62d58fc1b42af0ba1d2ee49c8a23b2cbbf2a3ae56146ecaf5e63685918e51"
+      },
+      {
+        "path": "backend/package.json",
+        "bytes": 152,
+        "sha256": "696bebcddac653a24a9f9d13f9c57bf94f04567ac9c54899ef865eca3433f8b3"
+      },
+      {
+        "path": "backend/server.mjs",
+        "bytes": 13845,
+        "sha256": "188e11f795d4daad569b2b97ea4e6eb908c1e837314b81436ef7f3e1060b3c59"
+      },
+      {
+        "path": "frontend/build.mjs",
+        "bytes": 332,
+        "sha256": "b790ff57db54e53787c31dc8228a1f864b5e0f3dbe839b8f31d9fbfed188302e"
+      },
+      {
+        "path": "frontend/package-lock.json",
+        "bytes": 211,
+        "sha256": "ba302989cc0df775de33563484f0b133ad17ccf4d15f65f6ec72e329c7d4fb8e"
+      },
+      {
+        "path": "frontend/package.json",
+        "bytes": 152,
+        "sha256": "1d936b112e6aeaf580fbd10ecee892c6629c8a04079569a58e71a7036f597de8"
+      },
+      {
+        "path": "frontend/src/app.js",
+        "bytes": 68161,
+        "sha256": "fe6892e1f4cdb5d4f999f11736dfbe410208f708c718aaf5d4cc96cfa9691558"
+      },
+      {
+        "path": "frontend/src/compute.js",
+        "bytes": 40266,
+        "sha256": "3d5fbd435f174bd662d61252e67ae8d607f43013a1f58425d5f7ee9704a47873"
+      },
+      {
+        "path": "frontend/src/index.html",
+        "bytes": 363,
+        "sha256": "b5cf529e197e29f4a63158f961d03a61adf68c8c134f388530d681d6034ec84d"
+      },
+      {
+        "path": "frontend/src/styles.css",
+        "bytes": 17229,
+        "sha256": "f6bcd28514cd8aeb17c1a1981d2b7f2726df4ad624504bed662f2b55f9df295b"
+      }
+    ]
+  },
+  "dry_run": false,
+  "detected_domain": "sheet",
+  "execution_route": "planner-approved-deterministic-kernel",
+  "agent_iterations": 1,
+  "planner_status": "completed",
+  "planner_contract": {
+    "domain": "sheet",
+    "kernel_eligible": true,
+    "capability_tags": [
+      "cell_editing",
+      "clipboard_and_history",
+      "formulas",
+      "pivot_tables",
+      "sorting_and_filtering",
+      "validation_and_references",
+      "workbook_lifecycle",
+      "worksheet_structure"
+    ],
+    "risks": [
+      "Enterprise compute engine capability unused but defined in contract",
+      "Domain exclusions may not cover all enterprise features that could be mistakenly implemented"
+    ],
+    "validation_focus": [
+      "Verify all workbook lifecycle operations work end-to-end",
+      "Confirm formula calculation and recalculation triggers function correctly",
+      "Test structural changes don't break existing references"
+    ],
+    "rationale": "Candidate domain 'sheet' matches root requirement for online spreadsheet. All atomic requirements covered by contract capabilities except enterprise_compute_engine which is excluded by domain_exclusions. Contract covers core spreadsheet fun",
+    "uncovered_requirement_ids": [],
+    "decision_mode": "tool_call",
+    "iterations": 1
+  },
+  "planner_iterations": 1,
+  "coding_agent_iterations": 0,
+  "manual_interventions": 0,
+  "agent_failures": [],
+  "checks": [
+    {
+      "name": "structure",
+      "passed": true,
+      "summary": "structure complete",
+      "related_files": [
+        "frontend/package.json",
+        "backend/package.json"
+      ],
+      "duration_seconds": 8.316599996760488e-05
+    },
+    {
+      "name": "package_policy",
+      "passed": true,
+      "summary": "package policy passed",
+      "related_files": [
+        "frontend/package.json",
+        "backend/package.json"
+      ],
+      "duration_seconds": 0.00010970805305987597
+    },
+    {
+      "name": "interaction_policy",
+      "passed": true,
+      "summary": "interaction policy passed",
+      "related_files": [
+        "frontend/src/app.js",
+        "frontend/src/compute.js",
+        "frontend/src/index.html"
+      ],
+      "duration_seconds": 0.006758374976925552
+    },
+    {
+      "name": "frontend_build",
+      "passed": true,
+      "summary": "frontend build passed",
+      "related_files": [
+        "frontend/package.json",
+        "frontend/src",
+        "frontend/build.mjs"
+      ],
+      "duration_seconds": 0.14725791703676805
+    },
+    {
+      "name": "startup_health",
+      "passed": true,
+      "summary": "health endpoint ready",
+      "related_files": [
+        "backend/package.json",
+        "backend/server.mjs",
+        "frontend/dist"
+      ],
+      "duration_seconds": 0.2631164590129629
+    }
+  ],
+  "all_local_checks_passed": true,
+  "run_completed_successfully": true,
+  "behavioral_validation": {
+    "state": "pending_black_box_evidence",
+    "local_checks_are_behavioral_proof": false,
+    "required_next_evidence": "locked public Playwright evaluation"
+  },
+  "model_usage": {
+    "prompt_tokens": 1850,
+    "completion_tokens": 229,
+    "request_count": 1,
+    "http_attempt_count": 1
+  },
+  "model_gateway": {
+    "provenance": "alibaba-cloud-bailian",
+    "endpoint_host": "dashscope.aliyuncs.com",
+    "model": "qwen3-coder-plus"
+  },
+  "capability_coverage": {
+    "version": 2,
+    "domain": "sheet",
+    "kernel_eligible": true,
+    "required_capabilities": [
+      "cell_editing",
+      "clipboard_and_history",
+      "formulas",
+      "pivot_tables",
+      "sorting_and_filtering",
+      "validation_and_references",
+      "workbook_lifecycle",
+      "worksheet_structure"
+    ],
+    "implemented_capabilities": [
+      "cell_editing",
+      "clipboard_and_history",
+      "formulas",
+      "pivot_tables",
+      "sorting_and_filtering",
+      "validation_and_references",
+      "workbook_lifecycle",
+      "worksheet_structure"
+    ],
+    "missing_capabilities": [],
+    "covered_requirement_ids": [
+      "REQ-1-1-1",
+      "REQ-1-2-1",
+      "REQ-1-2-2",
+      "REQ-1-3-1",
+      "REQ-1-3-2",
+      "REQ-2-1-3",
+      "REQ-2-1-1",
+      "REQ-2-2-1",
+      "REQ-2-2-2",
+      "REQ-3-1-1",
+      "REQ-3-1-2",
+      "REQ-3-1-3",
+      "REQ-3-2-1",
+      "REQ-3-2-2",
+      "REQ-4-1-1",
+      "REQ-4-2-1",
+      "REQ-4-2-2",
+      "REQ-4-1-2",
+      "REQ-5-1-2",
+      "REQ-5-2-1",
+      "REQ-2-1-2",
+      "REQ-5-1-1",
+      "REQ-5-3-1",
+      "REQ-2-1-4"
+    ],
+    "uncovered_requirement_ids": [],
+    "capability_evidence": {
+      "cell_editing": {
+        "version": "1",
+        "implemented": true,
+        "description": "Grid selection and cell editing through grid or formula bar.",
+        "behavior_clauses": [
+          "Grid selection and cell editing through grid or formula bar."
+        ],
+        "exclusions": [
+          "No sharing, charts, macros, version history, external connector, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/sheet/backend/server.mjs",
+          "factory26_harness/templates/sheet/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC Spreadsheet 102-test suite"
+        ]
+      },
+      "clipboard_and_history": {
+        "version": "1",
+        "implemented": true,
+        "description": "Clipboard interoperability and undo/redo history.",
+        "behavior_clauses": [
+          "Clipboard interoperability and undo/redo history."
+        ],
+        "exclusions": [
+          "No sharing, charts, macros, version history, external connector, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/sheet/backend/server.mjs",
+          "factory26_harness/templates/sheet/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC Spreadsheet 102-test suite"
+        ]
+      },
+      "formulas": {
+        "version": "1",
+        "implemented": true,
+        "description": "Formula parsing, recalculation, references, and error propagation.",
+        "behavior_clauses": [
+          "Formula parsing, recalculation, references, and error propagation."
+        ],
+        "exclusions": [
+          "No sharing, charts, macros, version history, external connector, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/sheet/backend/server.mjs",
+          "factory26_harness/templates/sheet/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC Spreadsheet 102-test suite"
+        ]
+      },
+      "pivot_tables": {
+        "version": "1",
+        "implemented": true,
+        "description": "Basic pivot creation, aggregation, and refresh.",
+        "behavior_clauses": [
+          "Basic pivot creation, aggregation, and refresh."
+        ],
+        "exclusions": [
+          "No sharing, charts, macros, version history, external connector, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/sheet/backend/server.mjs",
+          "factory26_harness/templates/sheet/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC Spreadsheet 102-test suite"
+        ]
+      },
+      "sorting_and_filtering": {
+        "version": "1",
+        "implemented": true,
+        "description": "Stable sort and persistent filter rules.",
+        "behavior_clauses": [
+          "Stable sort and persistent filter rules."
+        ],
+        "exclusions": [
+          "No sharing, charts, macros, version history, external connector, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/sheet/backend/server.mjs",
+          "factory26_harness/templates/sheet/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC Spreadsheet 102-test suite"
+        ]
+      },
+      "validation_and_references": {
+        "version": "1",
+        "implemented": true,
+        "description": "Validation rules and reference-safe structural edits.",
+        "behavior_clauses": [
+          "Validation rules and reference-safe structural edits."
+        ],
+        "exclusions": [
+          "No sharing, charts, macros, version history, external connector, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/sheet/backend/server.mjs",
+          "factory26_harness/templates/sheet/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC Spreadsheet 102-test suite"
+        ]
+      },
+      "workbook_lifecycle": {
+        "version": "1",
+        "implemented": true,
+        "description": "Workbook list, create, rename, import, export, and persistence.",
+        "behavior_clauses": [
+          "Workbook list, create, rename, import, export, and persistence."
+        ],
+        "exclusions": [
+          "No sharing, charts, macros, version history, external connector, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/sheet/backend/server.mjs",
+          "factory26_harness/templates/sheet/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC Spreadsheet 102-test suite"
+        ]
+      },
+      "worksheet_structure": {
+        "version": "1",
+        "implemented": true,
+        "description": "Worksheet tabs plus reversible row and column structure changes.",
+        "behavior_clauses": [
+          "Worksheet tabs plus reversible row and column structure changes."
+        ],
+        "exclusions": [
+          "No sharing, charts, macros, version history, external connector, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/sheet/backend/server.mjs",
+          "factory26_harness/templates/sheet/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC Spreadsheet 102-test suite"
+        ]
+      }
+    },
+    "requirements": [
+      {
+        "requirement_id": "REQ-1-1-1",
+        "capabilities": [
+          "workbook_lifecycle",
+          "cell_editing",
+          "formulas",
+          "validation_and_references",
+          "pivot_tables"
+        ],
+        "matched_patterns": [
+          "(?:view|open|create|rename)\\b.{0,40}\\bworkbook",
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference",
+          "pivot table|pivot summary"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-1-2-1",
+        "capabilities": [
+          "workbook_lifecycle",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "(?:view|open|create|rename)\\b.{0,40}\\bworkbook",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-1-2-2",
+        "capabilities": [
+          "workbook_lifecycle"
+        ],
+        "matched_patterns": [
+          "(?:view|open|create|rename)\\b.{0,40}\\bworkbook"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-1-3-1",
+        "capabilities": [
+          "workbook_lifecycle"
+        ],
+        "matched_patterns": [
+          "(?:view|open|create|rename)\\b.{0,40}\\bworkbook",
+          "import csv|export (?:the current worksheet|.*) as csv"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-1-3-2",
+        "capabilities": [
+          "workbook_lifecycle",
+          "cell_editing",
+          "formulas"
+        ],
+        "matched_patterns": [
+          "(?:view|open|create|rename)\\b.{0,40}\\bworkbook",
+          "import csv|export (?:the current worksheet|.*) as csv",
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "formula|calculate|aggregate functions?|recalculate"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-1-3",
+        "capabilities": [
+          "worksheet_structure"
+        ],
+        "matched_patterns": [
+          "(?:add|rename|switch|delete)\\b.{0,40}\\bworksheets?"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-1-1",
+        "capabilities": [
+          "worksheet_structure",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "(?:add|rename|switch|delete)\\b.{0,40}\\bworksheets?",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-2-1",
+        "capabilities": [
+          "worksheet_structure",
+          "formulas",
+          "validation_and_references",
+          "pivot_tables"
+        ],
+        "matched_patterns": [
+          "insert and delete rows|insert and delete columns",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference",
+          "pivot table|pivot summary"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-2-2",
+        "capabilities": [
+          "worksheet_structure",
+          "formulas",
+          "validation_and_references",
+          "pivot_tables"
+        ],
+        "matched_patterns": [
+          "insert and delete rows|insert and delete columns",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference",
+          "pivot table|pivot summary"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-1-1",
+        "capabilities": [
+          "cell_editing",
+          "formulas"
+        ],
+        "matched_patterns": [
+          "(?:edit|select|paste|modify)\\b.{0,40}\\bcells?",
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "formula|calculate|aggregate functions?|recalculate"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-1-2",
+        "capabilities": [
+          "cell_editing",
+          "clipboard_and_history",
+          "formulas"
+        ],
+        "matched_patterns": [
+          "(?:edit|select|paste|modify)\\b.{0,40}\\bcells?",
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "copy|cut|paste|clipboard|undo|redo",
+          "formula|calculate|aggregate functions?|recalculate"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-1-3",
+        "capabilities": [
+          "cell_editing"
+        ],
+        "matched_patterns": [
+          "(?:edit|select|paste|modify)\\b.{0,40}\\bcells?",
+          "formula bar|rectangular cell range|two-dimensional table data"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-2-1",
+        "capabilities": [
+          "cell_editing",
+          "clipboard_and_history",
+          "formulas",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "(?:edit|select|paste|modify)\\b.{0,40}\\bcells?",
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "copy|cut|paste|clipboard|undo|redo",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-2-2",
+        "capabilities": [
+          "cell_editing",
+          "clipboard_and_history",
+          "formulas",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "copy|cut|paste|clipboard|undo|redo",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-1-1",
+        "capabilities": [
+          "cell_editing",
+          "formulas",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-2-1",
+        "capabilities": [
+          "cell_editing",
+          "clipboard_and_history",
+          "formulas",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "copy|cut|paste|clipboard|undo|redo",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-2-2",
+        "capabilities": [
+          "cell_editing",
+          "formulas",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-1-2",
+        "capabilities": [
+          "cell_editing",
+          "clipboard_and_history",
+          "formulas",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "copy|cut|paste|clipboard|undo|redo",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-1-2",
+        "capabilities": [
+          "formulas",
+          "sorting_and_filtering",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "formula|calculate|aggregate functions?|recalculate",
+          "sort a data range|filter rows|sorting|filtering",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-2-1",
+        "capabilities": [
+          "cell_editing",
+          "clipboard_and_history",
+          "formulas",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "copy|cut|paste|clipboard|undo|redo",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-1-2",
+        "capabilities": [
+          "worksheet_structure",
+          "cell_editing",
+          "formulas",
+          "validation_and_references",
+          "pivot_tables"
+        ],
+        "matched_patterns": [
+          "(?:add|rename|switch|delete)\\b.{0,40}\\bworksheets?",
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference",
+          "pivot table|pivot summary"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-1-1",
+        "capabilities": [
+          "cell_editing",
+          "formulas",
+          "sorting_and_filtering",
+          "validation_and_references"
+        ],
+        "matched_patterns": [
+          "formula bar|rectangular cell range|two-dimensional table data",
+          "formula|calculate|aggregate functions?|recalculate",
+          "sort a data range|filter rows|sorting|filtering",
+          "validation|dropdown|numeric validation|reference"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-3-1",
+        "capabilities": [
+          "pivot_tables"
+        ],
+        "matched_patterns": [
+          "pivot table|pivot summary"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-1-4",
+        "capabilities": [
+          "worksheet_structure",
+          "formulas",
+          "validation_and_references",
+          "pivot_tables"
+        ],
+        "matched_patterns": [
+          "(?:add|rename|switch|delete)\\b.{0,40}\\bworksheets?",
+          "formula|calculate|aggregate functions?|recalculate",
+          "validation|dropdown|numeric validation|reference",
+          "pivot table|pivot summary"
+        ],
+        "implemented": true
+      }
+    ]
+  },
+  "capability_memory": {
+    "matched_capsules": [],
+    "reuse_skipped_revalidation": false
+  },
+  "transaction_safety": {
+    "batch_count": 0,
+    "committed": 0,
+    "rolled_back": 0,
+    "transactions": []
+  },
+  "claim_boundary": "Local checks prove packaging/build/startup only; hidden GUI score is unknown until ARC-Bench evaluates it."
+}

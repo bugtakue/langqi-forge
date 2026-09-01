@@ -1,0 +1,202 @@
+{
+  "contract_sha256": "1c6fe8ecee667140899c69f2d94034df85e28f443ebc7ae6fe16978dc5db69eb",
+  "entrypoint": "main.py",
+  "files": {
+    "arcbench_agent_runtime/__init__.py": {
+      "sha256": "815ef1ee083d1377fe251452ad6296e53ca1bdc25e2b7a07de9afb96c26c1f86",
+      "size": 321
+    },
+    "arcbench_agent_runtime/context.py": {
+      "sha256": "083f4b0071611d480fd87831f266dfe98b6460cbfd390aea2b77ba8f35174587",
+      "size": 2029
+    },
+    "arcbench_agent_runtime/events.py": {
+      "sha256": "b5d262ab8a77d57e279b134568e4b3509a357a13088ba20fa8ab96d1b0aa5a14",
+      "size": 6849
+    },
+    "arcbench_agent_runtime/gitops.py": {
+      "sha256": "ffcd2bb8348754e901d57df0e4ddff94bf686a6bf169392834195bdef2d334dd",
+      "size": 9624
+    },
+    "arcbench_agent_runtime/jsonio.py": {
+      "sha256": "604a78c049b72bf4b98186f6d9d8c315ae52fd1e77e113338b740ef660bd2123",
+      "size": 1023
+    },
+    "arcbench_agent_runtime/runtime.py": {
+      "sha256": "cefa97de838973ac592c9a9ad25077f90b74dde9dbb14c548f2e45ac02b9960c",
+      "size": 1132
+    },
+    "arcbench_agent_runtime/traceability.py": {
+      "sha256": "55fc6684973fc036ed22ead5e2ca64865fd44f7c3e814683c0c7e8e8a915f408",
+      "size": 28093
+    },
+    "factory26_harness/__init__.py": {
+      "sha256": "cfb10cd56e0b1cae0e747df2ff305a62fb6f5fe1b59bc4cd1325924f81f3139d",
+      "size": 100
+    },
+    "factory26_harness/agent.py": {
+      "sha256": "fb4e718e5b0e146df724579ea0a88b038d19e583b32e58bfb6f19362cecc507d",
+      "size": 29461
+    },
+    "factory26_harness/artifacts.py": {
+      "sha256": "526a5a20dadd0e461c8e83183a231e57a8c81725105a86177eab1d18c96d3bbe",
+      "size": 14853
+    },
+    "factory26_harness/capabilities.py": {
+      "sha256": "bf0f7936ee4db601eefac2ef5b52f3add3491af268b672527fe157026059169c",
+      "size": 23616
+    },
+    "factory26_harness/capability_memory.py": {
+      "sha256": "86247fa9be366d0824f30f4c06e33dbbbe86c9f01d3e6e8f9c7b25136de53db3",
+      "size": 13653
+    },
+    "factory26_harness/checks.py": {
+      "sha256": "0a5d7508822812d31ca2f499109dd1eb8af7ec97b7d80939ac26660550bc43bc",
+      "size": 16491
+    },
+    "factory26_harness/cli.py": {
+      "sha256": "a029fec4299621548949d191766bb3ac2391fe9e0fcd6b6d42baffe0934da1c3",
+      "size": 42497
+    },
+    "factory26_harness/impact.py": {
+      "sha256": "37aeb96a486a84136a0f636c16306bb3f86597fd0661872d83b1fa27b62a101e",
+      "size": 2514
+    },
+    "factory26_harness/model.py": {
+      "sha256": "ea5a18adfc84607a8416ad55939c7afd19b74367dc895d80f330e4963539f8f3",
+      "size": 10146
+    },
+    "factory26_harness/planner.py": {
+      "sha256": "31daac3c684071e89fd900d5a31165f73eb3cb408db4f4a638be610716fb6ec7",
+      "size": 13372
+    },
+    "factory26_harness/requirements.py": {
+      "sha256": "8280add216d77287cbd7afb95770ddcd44735d94cda3c48562705ef4216308a3",
+      "size": 10392
+    },
+    "factory26_harness/scaffold.py": {
+      "sha256": "feaaacc2e1aa7dd0744b21347f25612894e4d91234f069ada0d9d5a3a32855fc",
+      "size": 8952
+    },
+    "factory26_harness/submission_bundle.py": {
+      "sha256": "88844c8b5cee55063ed44802487b40f2243d7a74c378616982cde4c356fc9787",
+      "size": 11682
+    },
+    "factory26_harness/templates/github/backend/auth.mjs": {
+      "sha256": "d4147114aaf33c9bbadb130a559d3340cda28cf591ef5a9d0cd3147edfb7bdac",
+      "size": 5251
+    },
+    "factory26_harness/templates/github/backend/authorization.mjs": {
+      "sha256": "5407b96c1b6ae66aff7cf2ba9bbcc29d9cee7b44dc8e4fe0c1f813f39de3cfac",
+      "size": 6794
+    },
+    "factory26_harness/templates/github/backend/enterprise.mjs": {
+      "sha256": "734d7caf2590958cd415753e7f6d4ab8df1091d1dc1358139965f2859e46a74d",
+      "size": 50750
+    },
+    "factory26_harness/templates/github/backend/package-lock.json": {
+      "sha256": "c1d7679d4c37238e666aa57ef8ddb66c7e463706a2bcd376c686ae98d6e49739",
+      "size": 217
+    },
+    "factory26_harness/templates/github/backend/package.json": {
+      "sha256": "51a972aee3a8c11f9f10719807155f4f6c5ce9a73c8f7d9a18b6ce88320db6ed",
+      "size": 156
+    },
+    "factory26_harness/templates/github/backend/server.mjs": {
+      "sha256": "0cda2617927b381182a21a751f85334fee5e85b826584701efb948d14e6bb1de",
+      "size": 41705
+    },
+    "factory26_harness/templates/github/frontend/build.mjs": {
+      "sha256": "a8b759e06003f141f384e6d6bf66fcc3572ec920f613fe149d9eacf24dc7ee47",
+      "size": 346
+    },
+    "factory26_harness/templates/github/frontend/package-lock.json": {
+      "sha256": "759d5b8281b8d857f836176382ec19a401d858100daf18c33b8861cecf323746",
+      "size": 219
+    },
+    "factory26_harness/templates/github/frontend/package.json": {
+      "sha256": "1019d6323736b9742aaf9de49db05e3f604238f4c0c87caaca204de9658c06c3",
+      "size": 156
+    },
+    "factory26_harness/templates/github/frontend/src/app.js": {
+      "sha256": "4291e40df609ecbff66e0bbb4042dc16998bd2f97f112dee806775147fc5f9a6",
+      "size": 94871
+    },
+    "factory26_harness/templates/github/frontend/src/enterprise.js": {
+      "sha256": "03f04166ddfa5db8a88fffadd9f696fc321768cda55ecb0f1b9ed6e2953234eb",
+      "size": 36821
+    },
+    "factory26_harness/templates/github/frontend/src/index.html": {
+      "sha256": "7f54113deb915b18bfe032cadb6a9a180d72aafcc1b59d2fe6d9fc7971d829a0",
+      "size": 377
+    },
+    "factory26_harness/templates/github/frontend/src/styles.css": {
+      "sha256": "1512c5020f9d217453a8cb22824385ecf2e6a2f90c38e1312eedd26dcc02df14",
+      "size": 5369
+    },
+    "factory26_harness/templates/sheet/backend/compute.mjs": {
+      "sha256": "1001cdbbff5b962800c530f28ce833d817f6f9ac0c4d58c19eb0441dfae3e3d8",
+      "size": 34299
+    },
+    "factory26_harness/templates/sheet/backend/package-lock.json": {
+      "sha256": "43d62d58fc1b42af0ba1d2ee49c8a23b2cbbf2a3ae56146ecaf5e63685918e51",
+      "size": 209
+    },
+    "factory26_harness/templates/sheet/backend/package.json": {
+      "sha256": "696bebcddac653a24a9f9d13f9c57bf94f04567ac9c54899ef865eca3433f8b3",
+      "size": 152
+    },
+    "factory26_harness/templates/sheet/backend/server.mjs": {
+      "sha256": "188e11f795d4daad569b2b97ea4e6eb908c1e837314b81436ef7f3e1060b3c59",
+      "size": 13845
+    },
+    "factory26_harness/templates/sheet/frontend/build.mjs": {
+      "sha256": "b790ff57db54e53787c31dc8228a1f864b5e0f3dbe839b8f31d9fbfed188302e",
+      "size": 332
+    },
+    "factory26_harness/templates/sheet/frontend/package-lock.json": {
+      "sha256": "ba302989cc0df775de33563484f0b133ad17ccf4d15f65f6ec72e329c7d4fb8e",
+      "size": 211
+    },
+    "factory26_harness/templates/sheet/frontend/package.json": {
+      "sha256": "1d936b112e6aeaf580fbd10ecee892c6629c8a04079569a58e71a7036f597de8",
+      "size": 152
+    },
+    "factory26_harness/templates/sheet/frontend/src/app.js": {
+      "sha256": "fe6892e1f4cdb5d4f999f11736dfbe410208f708c718aaf5d4cc96cfa9691558",
+      "size": 68161
+    },
+    "factory26_harness/templates/sheet/frontend/src/compute.js": {
+      "sha256": "3d5fbd435f174bd662d61252e67ae8d607f43013a1f58425d5f7ee9704a47873",
+      "size": 40266
+    },
+    "factory26_harness/templates/sheet/frontend/src/index.html": {
+      "sha256": "b5cf529e197e29f4a63158f961d03a61adf68c8c134f388530d681d6034ec84d",
+      "size": 363
+    },
+    "factory26_harness/templates/sheet/frontend/src/styles.css": {
+      "sha256": "f6bcd28514cd8aeb17c1a1981d2b7f2726df4ad624504bed662f2b55f9df295b",
+      "size": 17229
+    },
+    "factory26_harness/trace.py": {
+      "sha256": "cf38f9a1a1528fbd75c10cb5ce9b605b5fca49f1061abc61b7ed8e8394528d9f",
+      "size": 9203
+    },
+    "factory26_harness/workspace_tools.py": {
+      "sha256": "a6847a3f76408afc36e13057aca0194df8ac73df4614b313340babb1bf71f67b",
+      "size": 20362
+    },
+    "main.py": {
+      "sha256": "41052b0cb03f8e702435ae3c297a138fd728eaef35b2c39420131e5dc35af82d",
+      "size": 176
+    },
+    "requirements.txt": {
+      "sha256": "547e28eecda7100f2aeb785db476874330046e17de6a6ff3b4537ffe77fb702f",
+      "size": 15
+    }
+  },
+  "runtime": "python",
+  "schema": "langqi-forge-submission-v1",
+  "source_revision": "d0474d789c583b3c0d0dfbd133c4af8df270cfed",
+  "source_worktree_clean": true
+}

@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "source_run_id": "202cd502-c8c8-4e8d-af95-5d338a870a4a",
+  "task_id": "sheet",
+  "run_label": "sheet",
+  "fixture_profile": "baseline",
+  "fully_parallel": true,
+  "workers": 4,
+  "grep": null,
+  "exit_code": 0,
+  "duration_seconds": 23.254,
+  "stats": {
+    "startTime": "2026-09-01T06:54:49.443Z",
+    "duration": 22915.774999999998,
+    "expected": 102,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "failure_count": 0,
+  "repair_packets": [],
+  "application_source_sha256": "6f80e1c9f366c18386b5d135ed7f628749e4201f1e85875550816761f5e4c7e0",
+  "application_source_file_count": 11,
+  "test_bundle_sha256": "afec335ed4d442795b344cd6b67f27bdc28583ed0b5ca13876e5acb3a4778f43",
+  "test_bundle_file_count": 25,
+  "public_task_manifest_sha256": "ee1fd03236d999188455c7ceb1afc05953b781dbbcae6f90c093a5bd337abd82",
+  "requirements_sha256": "9f2bfd7a9242474ac8e5b3ab9bc0e77e7b659b0ac72b5110bddf53a313c2b494",
+  "playwright_report_sha256": "6a4f4b68c72582360123b26161bc68522b4e3dae0ae744fbd3346e418752e45b",
+  "playwright_report_contract": {
+    "test_count": 102,
+    "test_file_count": 24,
+    "inventory_sha256": "9ef10bed3f46935596d07fddf52ca6ab68a2f690892cd2d881dd8ab65f729d77",
+    "status_counts": {
+      "expected": 102,
+      "unexpected": 0,
+      "skipped": 0,
+      "flaky": 0
+    }
+  },
+  "playwright_runtime": {
+    "version": "1.62.1",
+    "cli_sha256": "79e23e6a249176295b8490567daa7717448a75866d6ea6f6b296ff3d23305c69",
+    "runtime_file_count": 184,
+    "runtime_sha256": "79989525e1b186199504e4c47854bf481e8fba3b092669144d30c6c10dadd7df"
+  },
+  "fixture_contract_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+}

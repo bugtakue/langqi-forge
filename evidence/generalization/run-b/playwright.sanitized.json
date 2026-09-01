@@ -1,0 +1,260 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/25.2.0/bin/node",
+      "<harness-repository>/.cache/public-tasks/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "<harness-repository>/.cache/public-tasks/playwright.config.mjs"
+    ],
+    "configFile": "<harness-repository>/.cache/public-tasks/playwright.config.mjs",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "id": "chromium",
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "chromium",
+        "outputDir": "<harness-repository>/.cache/public-tasks/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "testDir": "<harness-repository>/.cache/public-tasks/generalization-change-control/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 10000
+      }
+    ],
+    "quiet": false,
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "reporter": [
+      [
+        "json",
+        null
+      ]
+    ],
+    "rootDir": "<harness-repository>/.cache/public-tasks/generalization-change-control/tests",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "webServer": null,
+    "workers": 1
+  },
+  "errors": [],
+  "stats": {
+    "duration": 1620.225,
+    "expected": 5,
+    "flaky": 0,
+    "skipped": 0,
+    "startTime": "2026-09-01T06:59:52.166Z",
+    "unexpected": 0
+  },
+  "suites": [
+    {
+      "column": 0,
+      "file": "change-control.spec.ts",
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "column": 15,
+          "file": "change-control.spec.ts",
+          "line": 5,
+          "specs": [
+            {
+              "column": 3,
+              "file": "change-control.spec.ts",
+              "id": "0ffed759113c72bfffa7-30e8decf79f54b76df8d",
+              "line": 6,
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "annotations": [],
+                      "attachments": [],
+                      "duration": 299,
+                      "errors": [],
+                      "parallelIndex": 0,
+                      "retry": 0,
+                      "startTime": "2026-09-01T06:59:52.411Z",
+                      "status": "passed",
+                      "stderr": [],
+                      "stdout": [],
+                      "workerIndex": 0
+                    }
+                  ],
+                  "status": "expected",
+                  "timeout": 10000
+                }
+              ],
+              "title": "renders the required semantic change form"
+            },
+            {
+              "column": 3,
+              "file": "change-control.spec.ts",
+              "id": "0ffed759113c72bfffa7-239c421d4e622b6f37b5",
+              "line": 15,
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "annotations": [],
+                      "attachments": [],
+                      "duration": 159,
+                      "errors": [],
+                      "parallelIndex": 0,
+                      "retry": 0,
+                      "startTime": "2026-09-01T06:59:52.968Z",
+                      "status": "passed",
+                      "stderr": [],
+                      "stdout": [],
+                      "workerIndex": 0
+                    }
+                  ],
+                  "status": "expected",
+                  "timeout": 10000
+                }
+              ],
+              "title": "rejects a blank request without creating a record"
+            },
+            {
+              "column": 3,
+              "file": "change-control.spec.ts",
+              "id": "0ffed759113c72bfffa7-e1b5708ef5aa2792bcb5",
+              "line": 24,
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "annotations": [],
+                      "attachments": [],
+                      "duration": 176,
+                      "errors": [],
+                      "parallelIndex": 0,
+                      "retry": 0,
+                      "startTime": "2026-09-01T06:59:53.132Z",
+                      "status": "passed",
+                      "stderr": [],
+                      "stdout": [],
+                      "workerIndex": 0
+                    }
+                  ],
+                  "status": "expected",
+                  "timeout": 10000
+                }
+              ],
+              "title": "creates arbitrary persistent pending requests"
+            },
+            {
+              "column": 3,
+              "file": "change-control.spec.ts",
+              "id": "0ffed759113c72bfffa7-bbbbc12d9d4cb9f5935c",
+              "line": 39,
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "annotations": [],
+                      "attachments": [],
+                      "duration": 233,
+                      "errors": [],
+                      "parallelIndex": 0,
+                      "retry": 0,
+                      "startTime": "2026-09-01T06:59:53.314Z",
+                      "status": "passed",
+                      "stderr": [],
+                      "stdout": [],
+                      "workerIndex": 0
+                    }
+                  ],
+                  "status": "expected",
+                  "timeout": 10000
+                }
+              ],
+              "title": "rejects self approval and accepts an independent reviewer"
+            },
+            {
+              "column": 3,
+              "file": "change-control.spec.ts",
+              "id": "0ffed759113c72bfffa7-7583a9e3bf697d2d4f2c",
+              "line": 53,
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "annotations": [],
+                      "attachments": [],
+                      "duration": 201,
+                      "errors": [],
+                      "parallelIndex": 0,
+                      "retry": 0,
+                      "startTime": "2026-09-01T06:59:53.556Z",
+                      "status": "passed",
+                      "stderr": [],
+                      "stdout": [],
+                      "workerIndex": 0
+                    }
+                  ],
+                  "status": "expected",
+                  "timeout": 10000
+                }
+              ],
+              "title": "executes once and preserves the terminal state after refresh"
+            }
+          ],
+          "title": "unseen change-control domain"
+        }
+      ],
+      "title": "change-control.spec.ts"
+    }
+  ]
+}

@@ -1,0 +1,1106 @@
+{
+  "version": 1,
+  "strategy": "deterministic-foundation-then-small-batches",
+  "requirement_count": 47,
+  "batch_size": 3,
+  "batches": [
+    {
+      "index": 1,
+      "requirement_ids": [
+        "REQ-1-1-1",
+        "REQ-1-1-2",
+        "REQ-1-1-3"
+      ],
+      "dependencies": [
+        "REQ-1-1-1"
+      ]
+    },
+    {
+      "index": 2,
+      "requirement_ids": [
+        "REQ-1-2",
+        "REQ-1-3",
+        "REQ-2-1-1"
+      ],
+      "dependencies": [
+        "REQ-1-1-2"
+      ]
+    },
+    {
+      "index": 3,
+      "requirement_ids": [
+        "REQ-2-1-2",
+        "REQ-2-2-1",
+        "REQ-2-2-2"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-2-1-2",
+        "REQ-2-2-1"
+      ]
+    },
+    {
+      "index": 4,
+      "requirement_ids": [
+        "REQ-2-2-3",
+        "REQ-2-2-4",
+        "REQ-2-3"
+      ],
+      "dependencies": [
+        "REQ-2-1-2",
+        "REQ-2-2-1"
+      ]
+    },
+    {
+      "index": 5,
+      "requirement_ids": [
+        "REQ-3-1",
+        "REQ-3-2-1",
+        "REQ-3-3"
+      ],
+      "dependencies": [
+        "REQ-1-1-2"
+      ]
+    },
+    {
+      "index": 6,
+      "requirement_ids": [
+        "REQ-3-2-2",
+        "REQ-3-2-3",
+        "REQ-3-4"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-3-3"
+      ]
+    },
+    {
+      "index": 7,
+      "requirement_ids": [
+        "REQ-4-1",
+        "REQ-4-2-1",
+        "REQ-4-2-2"
+      ],
+      "dependencies": [
+        "REQ-3-3",
+        "REQ-4-1",
+        "REQ-4-2-1"
+      ]
+    },
+    {
+      "index": 8,
+      "requirement_ids": [
+        "REQ-4-2-3",
+        "REQ-4-3-1",
+        "REQ-4-3-2"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-4-1",
+        "REQ-4-3-1"
+      ]
+    },
+    {
+      "index": 9,
+      "requirement_ids": [
+        "REQ-4-3-3",
+        "REQ-4-4",
+        "REQ-5-1-1"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-3-3",
+        "REQ-4-1",
+        "REQ-4-3-1"
+      ]
+    },
+    {
+      "index": 10,
+      "requirement_ids": [
+        "REQ-5-1-2",
+        "REQ-5-2-1",
+        "REQ-5-2-2"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-3-3",
+        "REQ-5-1-1",
+        "REQ-5-1-2"
+      ]
+    },
+    {
+      "index": 11,
+      "requirement_ids": [
+        "REQ-5-2-3",
+        "REQ-5-3-1",
+        "REQ-5-3-2"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-5-1-2"
+      ]
+    },
+    {
+      "index": 12,
+      "requirement_ids": [
+        "REQ-5-3-3",
+        "REQ-5-4",
+        "REQ-6-1"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-4-3-1",
+        "REQ-5-1-2"
+      ]
+    },
+    {
+      "index": 13,
+      "requirement_ids": [
+        "REQ-6-2-1",
+        "REQ-6-2-2",
+        "REQ-6-2-3"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-3-3",
+        "REQ-4-3-1",
+        "REQ-6-2-2"
+      ]
+    },
+    {
+      "index": 14,
+      "requirement_ids": [
+        "REQ-6-2-4",
+        "REQ-6-3-1",
+        "REQ-6-3-2"
+      ],
+      "dependencies": [
+        "REQ-6-2-2",
+        "REQ-6-2-3",
+        "REQ-6-3-1"
+      ]
+    },
+    {
+      "index": 15,
+      "requirement_ids": [
+        "REQ-6-3-3",
+        "REQ-6-3-4",
+        "REQ-6-4"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-6-2-3",
+        "REQ-6-3-1",
+        "REQ-6-3-2"
+      ]
+    },
+    {
+      "index": 16,
+      "requirement_ids": [
+        "REQ-6-5",
+        "REQ-6-6"
+      ],
+      "dependencies": [
+        "REQ-1-1-2",
+        "REQ-6-1",
+        "REQ-6-2-3",
+        "REQ-6-3-4"
+      ]
+    }
+  ],
+  "detected_domain": "github",
+  "requirement_sha256": "a4ba2c2e1bd62091a46384e89a823819a485ab609780ce00ead1490edd881959",
+  "run_id": "ada86423-46c3-4c5b-a564-ba9f0399a8ba",
+  "capability_coverage": {
+    "version": 2,
+    "domain": "github",
+    "kernel_eligible": true,
+    "required_capabilities": [
+      "authentication",
+      "branch_protection",
+      "code_and_branches",
+      "issues",
+      "organization_permissions",
+      "pull_requests",
+      "repository_lifecycle"
+    ],
+    "implemented_capabilities": [
+      "authentication",
+      "branch_protection",
+      "code_and_branches",
+      "issues",
+      "organization_permissions",
+      "pull_requests",
+      "repository_lifecycle"
+    ],
+    "missing_capabilities": [],
+    "covered_requirement_ids": [
+      "REQ-1-1-1",
+      "REQ-1-1-2",
+      "REQ-1-1-3",
+      "REQ-1-2",
+      "REQ-1-3",
+      "REQ-2-1-1",
+      "REQ-2-1-2",
+      "REQ-2-2-1",
+      "REQ-2-2-2",
+      "REQ-2-2-3",
+      "REQ-2-2-4",
+      "REQ-2-3",
+      "REQ-3-1",
+      "REQ-3-2-1",
+      "REQ-3-3",
+      "REQ-3-2-2",
+      "REQ-3-2-3",
+      "REQ-3-4",
+      "REQ-4-1",
+      "REQ-4-2-1",
+      "REQ-4-2-2",
+      "REQ-4-2-3",
+      "REQ-4-3-1",
+      "REQ-4-3-2",
+      "REQ-4-3-3",
+      "REQ-4-4",
+      "REQ-5-1-1",
+      "REQ-5-1-2",
+      "REQ-5-2-1",
+      "REQ-5-2-2",
+      "REQ-5-2-3",
+      "REQ-5-3-1",
+      "REQ-5-3-2",
+      "REQ-5-3-3",
+      "REQ-5-4",
+      "REQ-6-1",
+      "REQ-6-2-1",
+      "REQ-6-2-2",
+      "REQ-6-2-3",
+      "REQ-6-2-4",
+      "REQ-6-3-1",
+      "REQ-6-3-2",
+      "REQ-6-3-3",
+      "REQ-6-3-4",
+      "REQ-6-4",
+      "REQ-6-5",
+      "REQ-6-6"
+    ],
+    "uncovered_requirement_ids": [],
+    "capability_evidence": {
+      "authentication": {
+        "version": "2",
+        "implemented": true,
+        "description": "Server-issued world-bound sessions, derived credentials, generic recovery contexts, and account lifecycle.",
+        "behavior_clauses": [
+          "Server-issued world-bound sessions, derived credentials, generic recovery contexts, and account lifecycle."
+        ],
+        "exclusions": [
+          "No external network service, deployment, package registry, wiki, board, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/github/backend/auth.mjs",
+          "factory26_harness/templates/github/backend/authorization.mjs",
+          "factory26_harness/templates/github/backend/server.mjs",
+          "factory26_harness/templates/github/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "tests/github_auth.test.mjs",
+          "tests/test_enterprise_process.py",
+          "public ARC GitHub 101-test suite"
+        ]
+      },
+      "branch_protection": {
+        "version": "1",
+        "implemented": true,
+        "description": "Branch protection with approval and status-check requirements.",
+        "behavior_clauses": [
+          "Branch protection with approval and status-check requirements."
+        ],
+        "exclusions": [
+          "No external network service, deployment, package registry, wiki, board, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/github/backend/server.mjs",
+          "factory26_harness/templates/github/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC GitHub 101-test suite"
+        ]
+      },
+      "code_and_branches": {
+        "version": "1",
+        "implemented": true,
+        "description": "Files, commits, diffs, code search, branches, and web editing.",
+        "behavior_clauses": [
+          "Files, commits, diffs, code search, branches, and web editing."
+        ],
+        "exclusions": [
+          "No external network service, deployment, package registry, wiki, board, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/github/backend/server.mjs",
+          "factory26_harness/templates/github/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC GitHub 101-test suite"
+        ]
+      },
+      "issues": {
+        "version": "1",
+        "implemented": true,
+        "description": "Issue lifecycle, discussion, metadata, and state transitions.",
+        "behavior_clauses": [
+          "Issue lifecycle, discussion, metadata, and state transitions."
+        ],
+        "exclusions": [
+          "No external network service, deployment, package registry, wiki, board, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/github/backend/server.mjs",
+          "factory26_harness/templates/github/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC GitHub 101-test suite"
+        ]
+      },
+      "organization_permissions": {
+        "version": "2",
+        "implemented": true,
+        "description": "Server-enforced organizations, teams, memberships, role inheritance, and repository grants.",
+        "behavior_clauses": [
+          "Server-enforced organizations, teams, memberships, role inheritance, and repository grants."
+        ],
+        "exclusions": [
+          "No external network service, deployment, package registry, wiki, board, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/github/backend/authorization.mjs",
+          "factory26_harness/templates/github/backend/server.mjs",
+          "factory26_harness/templates/github/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "tests/github_auth.test.mjs",
+          "tests/test_enterprise_process.py",
+          "public ARC GitHub 101-test suite"
+        ]
+      },
+      "pull_requests": {
+        "version": "1",
+        "implemented": true,
+        "description": "Pull-request creation, review, diff comments, checks, and merge.",
+        "behavior_clauses": [
+          "Pull-request creation, review, diff comments, checks, and merge."
+        ],
+        "exclusions": [
+          "No external network service, deployment, package registry, wiki, board, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/github/backend/server.mjs",
+          "factory26_harness/templates/github/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC GitHub 101-test suite"
+        ]
+      },
+      "repository_lifecycle": {
+        "version": "1",
+        "implemented": true,
+        "description": "Repository search, creation, viewing, forking, clone URL, and visibility.",
+        "behavior_clauses": [
+          "Repository search, creation, viewing, forking, clone URL, and visibility."
+        ],
+        "exclusions": [
+          "No external network service, deployment, package registry, wiki, board, or notification behavior is included unless separately named."
+        ],
+        "implementation_files": [
+          "factory26_harness/templates/github/backend/server.mjs",
+          "factory26_harness/templates/github/frontend/src/app.js"
+        ],
+        "validation_tests": [
+          "public ARC GitHub 101-test suite"
+        ]
+      }
+    },
+    "requirements": [
+      {
+        "requirement_id": "REQ-1-1-1",
+        "capabilities": [
+          "authentication"
+        ],
+        "matched_patterns": [
+          "register|create (?:a )?(?:new )?(?:github )?account",
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-1-1-2",
+        "capabilities": [
+          "authentication"
+        ],
+        "matched_patterns": [
+          "register|create (?:a )?(?:new )?(?:github )?account",
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-1-1-3",
+        "capabilities": [
+          "authentication"
+        ],
+        "matched_patterns": [
+          "register|create (?:a )?(?:new )?(?:github )?account",
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-1-2",
+        "capabilities": [
+          "authentication",
+          "organization_permissions"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-1-3",
+        "capabilities": [
+          "authentication"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-1-1",
+        "capabilities": [
+          "authentication",
+          "organization_permissions",
+          "repository_lifecycle"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-1-2",
+        "capabilities": [
+          "authentication",
+          "organization_permissions",
+          "repository_lifecycle"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-2-1",
+        "capabilities": [
+          "organization_permissions"
+        ],
+        "matched_patterns": [
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-2-2",
+        "capabilities": [
+          "organization_permissions"
+        ],
+        "matched_patterns": [
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "team member|team hierarchy|repository access|grant (?:a )?repository role|collaborator"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-2-3",
+        "capabilities": [
+          "authentication",
+          "organization_permissions"
+        ],
+        "matched_patterns": [
+          "register|create (?:a )?(?:new )?(?:github )?account",
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-2-4",
+        "capabilities": [
+          "authentication",
+          "organization_permissions"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-2-3",
+        "capabilities": [
+          "organization_permissions",
+          "repository_lifecycle"
+        ],
+        "matched_patterns": [
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "team member|team hierarchy|repository access|grant (?:a )?repository role|collaborator",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-1",
+        "capabilities": [
+          "repository_lifecycle"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-2-1",
+        "capabilities": [
+          "authentication",
+          "organization_permissions",
+          "repository_lifecycle"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-3",
+        "capabilities": [
+          "repository_lifecycle",
+          "issues",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)",
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-2-2",
+        "capabilities": [
+          "authentication",
+          "repository_lifecycle"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-2-3",
+        "capabilities": [
+          "repository_lifecycle",
+          "code_and_branches"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)",
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-3-4",
+        "capabilities": [
+          "authentication",
+          "repository_lifecycle"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-1",
+        "capabilities": [
+          "repository_lifecycle",
+          "code_and_branches"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-2-1",
+        "capabilities": [
+          "repository_lifecycle",
+          "code_and_branches"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)",
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-2-2",
+        "capabilities": [
+          "repository_lifecycle",
+          "code_and_branches"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-2-3",
+        "capabilities": [
+          "repository_lifecycle",
+          "code_and_branches"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)",
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-3-1",
+        "capabilities": [
+          "repository_lifecycle",
+          "code_and_branches"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-3-2",
+        "capabilities": [
+          "authentication",
+          "organization_permissions",
+          "repository_lifecycle",
+          "code_and_branches"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-3-3",
+        "capabilities": [
+          "authentication",
+          "organization_permissions",
+          "repository_lifecycle",
+          "code_and_branches"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-4-4",
+        "capabilities": [
+          "authentication",
+          "organization_permissions",
+          "repository_lifecycle",
+          "code_and_branches"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-1-1",
+        "capabilities": [
+          "repository_lifecycle",
+          "issues"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)",
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "issues?\\b.{0,48}\\b(?:discussion|title|description|participants?|labels?|milestone|close|reopen)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-1-2",
+        "capabilities": [
+          "organization_permissions",
+          "repository_lifecycle",
+          "issues"
+        ],
+        "matched_patterns": [
+          "team member|team hierarchy|repository access|grant (?:a )?repository role|collaborator",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "issues?\\b.{0,48}\\b(?:discussion|title|description|participants?|labels?|milestone|close|reopen)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-2-1",
+        "capabilities": [
+          "authentication",
+          "repository_lifecycle",
+          "issues"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)",
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "issues?\\b.{0,48}\\b(?:discussion|title|description|participants?|labels?|milestone|close|reopen)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-2-2",
+        "capabilities": [
+          "issues"
+        ],
+        "matched_patterns": [
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "issues?\\b.{0,48}\\b(?:discussion|title|description|participants?|labels?|milestone|close|reopen)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-2-3",
+        "capabilities": [
+          "authentication",
+          "issues"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "issues?\\b.{0,48}\\b(?:discussion|title|description|participants?|labels?|milestone|close|reopen)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-3-1",
+        "capabilities": [
+          "organization_permissions",
+          "issues"
+        ],
+        "matched_patterns": [
+          "team member|team hierarchy|repository access|grant (?:a )?repository role|collaborator",
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "issues?\\b.{0,48}\\b(?:discussion|title|description|participants?|labels?|milestone|close|reopen)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-3-2",
+        "capabilities": [
+          "repository_lifecycle",
+          "issues"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "issues?\\b.{0,48}\\b(?:discussion|title|description|participants?|labels?|milestone|close|reopen)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-3-3",
+        "capabilities": [
+          "repository_lifecycle",
+          "issues"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "issues?\\b.{0,48}\\b(?:discussion|title|description|participants?|labels?|milestone|close|reopen)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-5-4",
+        "capabilities": [
+          "issues"
+        ],
+        "matched_patterns": [
+          "(?:list|filter|view|create|edit|comment|assign|unassign|apply|close|reopen)\\b.{0,48}\\bissues?",
+          "issues?\\b.{0,48}\\b(?:discussion|title|description|participants?|labels?|milestone|close|reopen)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-1",
+        "capabilities": [
+          "authentication",
+          "repository_lifecycle",
+          "code_and_branches",
+          "pull_requests",
+          "branch_protection"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)",
+          "review comments?|request changes|merge eligible|merge commit",
+          "branch protection|protect branches"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-2-1",
+        "capabilities": [
+          "repository_lifecycle",
+          "code_and_branches",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "repositor(?:y|ies)\\b.{0,48}\\b(?:search|creation|overview|fork|clone|visibility|namespace)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-2-2",
+        "capabilities": [
+          "authentication",
+          "organization_permissions",
+          "repository_lifecycle",
+          "code_and_branches",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "team member|team hierarchy|repository access|grant (?:a )?repository role|collaborator",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)",
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?",
+          "pull requests?\\b.{0,64}\\b(?:overview|commits?|changed files?|review|reviewers?|merge|draft)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-2-3",
+        "capabilities": [
+          "organization_permissions",
+          "repository_lifecycle",
+          "code_and_branches",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "team member|team hierarchy|repository access|grant (?:a )?repository role|collaborator",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-2-4",
+        "capabilities": [
+          "organization_permissions",
+          "code_and_branches",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "team member|team hierarchy|repository access|grant (?:a )?repository role|collaborator",
+          "(?:browse|manage|create|list|switch|change)\\b.{0,48}\\b(?:repository files?|directories|branches?|default branch)",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?",
+          "pull requests?\\b.{0,64}\\b(?:overview|commits?|changed files?|review|reviewers?|merge|draft)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-3-1",
+        "capabilities": [
+          "repository_lifecycle",
+          "code_and_branches",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?",
+          "pull requests?\\b.{0,64}\\b(?:overview|commits?|changed files?|review|reviewers?|merge|draft)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-3-2",
+        "capabilities": [
+          "code_and_branches",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?",
+          "pull requests?\\b.{0,64}\\b(?:overview|commits?|changed files?|review|reviewers?|merge|draft)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-3-3",
+        "capabilities": [
+          "authentication",
+          "code_and_branches",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff",
+          "pull requests?\\b.{0,64}\\b(?:overview|commits?|changed files?|review|reviewers?|merge|draft)",
+          "review comments?|request changes|merge eligible|merge commit"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-3-4",
+        "capabilities": [
+          "authentication",
+          "code_and_branches",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:view|inspect|search)\\b.{0,48}\\b(?:commit|revision|code)|changed files?|aggregate diff",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?",
+          "pull requests?\\b.{0,64}\\b(?:overview|commits?|changed files?|review|reviewers?|merge|draft)",
+          "review comments?|request changes|merge eligible|merge commit"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-4",
+        "capabilities": [
+          "authentication",
+          "organization_permissions",
+          "repository_lifecycle",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "team member|team hierarchy|repository access|grant (?:a )?repository role|collaborator",
+          "(?:search|locate|list|browse|create|view|open|fork|clone|change|set|manage)\\b.{0,48}\\brepositor(?:y|ies)",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?",
+          "pull requests?\\b.{0,64}\\b(?:overview|commits?|changed files?|review|reviewers?|merge|draft)"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-5",
+        "capabilities": [
+          "organization_permissions",
+          "pull_requests",
+          "branch_protection"
+        ],
+        "matched_patterns": [
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?",
+          "pull requests?\\b.{0,64}\\b(?:overview|commits?|changed files?|review|reviewers?|merge|draft)",
+          "review comments?|request changes|merge eligible|merge commit",
+          "branch protection|protect branches"
+        ],
+        "implemented": true
+      },
+      {
+        "requirement_id": "REQ-6-6",
+        "capabilities": [
+          "authentication",
+          "organization_permissions",
+          "pull_requests"
+        ],
+        "matched_patterns": [
+          "sign[ -]?in|sign[ -]?out|forgot password|recover account|change (?:account )?password|authenticated session",
+          "(?:browse|create|manage) organization|organization (?:team|member|owner|repositories)",
+          "(?:list|filter|compare|create|view|inspect|review|merge|close|reopen|request|remove)\\b.{0,64}\\bpull requests?",
+          "review comments?|request changes|merge eligible|merge commit"
+        ],
+        "implemented": true
+      }
+    ]
+  },
+  "capability_memory": {
+    "matched_capsules": [],
+    "reuse_skipped_revalidation": false
+  },
+  "execution_route": "planner-approved-deterministic-kernel",
+  "planner_status": "completed",
+  "planner_contract": {
+    "domain": "github",
+    "kernel_eligible": true,
+    "capability_tags": [
+      "authentication",
+      "organization_permissions",
+      "repository_lifecycle",
+      "code_and_branches",
+      "issues",
+      "pull_requests",
+      "branch_protection"
+    ],
+    "risks": [
+      "Authentication flow gaps may allow unauthorized access to protected resources",
+      "Organization permission inheritance could create unintended access escalation paths"
+    ],
+    "validation_focus": [
+      "Account registration and password recovery flows",
+      "Organization team membership and repository access controls",
+      "Branch protection rule enforcement"
+    ],
+    "rationale": "Candidate domain matches requirement scope for GitHub platform. Covers authentication, organization management, repository operations, issues, and pull requests. All requirements map to available capabilities.",
+    "uncovered_requirement_ids": [],
+    "decision_mode": "tool_call",
+    "iterations": 1
+  }
+}
