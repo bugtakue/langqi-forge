@@ -46,7 +46,7 @@ class OpenAIChatClient:
             1024, int(os.environ.get("FACTORY26_MAX_MODEL_REQUEST_BYTES", "5000000"))
         )
         self.max_total_prompt_tokens = max(
-            1, int(os.environ.get("FACTORY26_MAX_TOTAL_PROMPT_TOKENS", "100000"))
+            1, int(os.environ.get("FACTORY26_MAX_TOTAL_PROMPT_TOKENS", "120000"))
         )
         self.max_total_completion_tokens = max(
             1,

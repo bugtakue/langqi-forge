@@ -51,7 +51,7 @@ GLUED_LABEL_VALUE_PATTERN = re.compile(
 )
 CREATED_DOM_NODE_PATTERN = re.compile(
     r"\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*"
-    r"document\s*\.\s*createElement\s*\("
+    r"document\s*\.\s*createElement\s*\(\s*([\"'])([A-Za-z0-9-]+)\2"
 )
 INTERACTION_SOURCE_SUFFIXES = {".html", ".js", ".jsx", ".mjs", ".ts", ".tsx"}
 
@@ -224,6 +224,7 @@ def interaction_policy_check(root: Path) -> CheckResult:
             created_nodes = list(CREATED_DOM_NODE_PATTERN.finditer(text))
             for index, match in enumerate(created_nodes):
                 name = match.group(1)
+                element_name = match.group(3).lower()
                 next_same_name = next(
                     (
                         later.start()
@@ -253,6 +254,44 @@ def interaction_policy_check(root: Path) -> CheckResult:
                     )
                     if len(violations) >= 20:
                         break
+                if element_name in {"input", "select", "textarea"}:
+                    accessible_name = re.search(
+                        rf"\b{escaped}\s*\.\s*(?:ariaLabel|ariaLabelledBy)\s*="
+                        rf"|\b{escaped}\s*\.\s*setAttribute\s*\(\s*[\"']"
+                        r"aria-(?:label|labelledby)[\"']"
+                        rf"|(?:htmlFor\s*=|setAttribute\s*\(\s*[\"']for[\"']\s*,)"
+                        rf"\s*{escaped}\s*\.\s*id\b",
+                        body,
+                        re.IGNORECASE,
+                    )
+                    if not accessible_name:
+                        line = text.count("\n", 0, match.start()) + 1
+                        violations.append(
+                            f"{relative}:{line} creates dynamic {element_name} `{name}` without aria-label, aria-labelledby, or an associated label"
+                        )
+                        if len(violations) >= 20:
+                            break
+                if element_name == "article":
+                    interactive = re.search(
+                        r"document\s*\.\s*createElement\s*\(\s*[\"']button[\"']"
+                        r"|<button\b",
+                        body,
+                        re.IGNORECASE,
+                    )
+                    owned_feedback = re.search(
+                        r"role\s*=\s*[\"']alert[\"']"
+                        r"|setAttribute\s*\(\s*[\"']role[\"']\s*,\s*[\"']alert[\"']"
+                        r"|aria-live\s*=",
+                        body,
+                        re.IGNORECASE,
+                    )
+                    if interactive and not owned_feedback:
+                        line = text.count("\n", 0, match.start()) + 1
+                        violations.append(
+                            f"{relative}:{line} creates an interactive article without an owned role=alert or aria-live feedback node"
+                        )
+                        if len(violations) >= 20:
+                            break
             if len(violations) >= 20:
                 break
     summary = (

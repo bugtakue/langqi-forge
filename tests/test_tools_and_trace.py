@@ -398,6 +398,53 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertTrue(interaction_policy_check(root).passed)
 
             app.write_text(
+                'const reviewer = document.createElement("input");\n'
+                'reviewer.type = "text";\n'
+                'reviewer.placeholder = "Reviewer";\n'
+                "card.append(reviewer);\n",
+                encoding="utf-8",
+            )
+            unnamed_control = interaction_policy_check(root)
+            self.assertFalse(unnamed_control.passed)
+            self.assertIn("without aria-label", unnamed_control.summary)
+
+            app.write_text(
+                'const reviewer = document.createElement("input");\n'
+                'reviewer.type = "text";\n'
+                'reviewer.setAttribute("aria-label", "Reviewer");\n'
+                "card.append(reviewer);\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(interaction_policy_check(root).passed)
+
+            app.write_text(
+                'const card = document.createElement("article");\n'
+                'card.setAttribute("aria-label", "Change");\n'
+                'const button = document.createElement("button");\n'
+                'button.textContent = "Approve";\n'
+                "card.append(button);\n"
+                "root.append(card);\n",
+                encoding="utf-8",
+            )
+            feedbackless_card = interaction_policy_check(root)
+            self.assertFalse(feedbackless_card.passed)
+            self.assertIn(
+                "interactive article without an owned", feedbackless_card.summary
+            )
+
+            app.write_text(
+                'const card = document.createElement("article");\n'
+                'card.setAttribute("aria-label", "Change");\n'
+                "card.innerHTML = '<p role=\"alert\"></p>';\n"
+                'const button = document.createElement("button");\n'
+                'button.textContent = "Approve";\n'
+                "card.append(button);\n"
+                "root.append(card);\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(interaction_policy_check(root).passed)
+
+            app.write_text(
                 'window.alert("Reviewer must differ from requester");\n'
                 'globalThis.confirm("Continue?");\n',
                 encoding="utf-8",

@@ -72,7 +72,7 @@ Check all of these failure surfaces:
 
 If any gap exists, patch only that gap and run quick validation once. If none exists, return a short `AUDIT PASS` summary without tools."""
 
-MAX_SOURCE_SNAPSHOT_BYTES = 16_000
+MAX_SOURCE_SNAPSHOT_BYTES = 12_000
 
 STARTER_SOURCE_PATHS = (
     "frontend/src/app.js",
