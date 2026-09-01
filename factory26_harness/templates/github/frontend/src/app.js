@@ -44,6 +44,10 @@ async function request(path, options = {}) {
   const token = sessionToken();
   const response = await fetch(path, {
     ...options,
+    // A Playwright/user reload can follow a submit click before the async
+    // handler settles. Keep command writes alive across that navigation; the
+    // state endpoint also waits for already queued mutations before reading.
+    keepalive: path === "/api/command" && options.method === "POST",
     headers: {
       "content-type": "application/json",
       "x-langqi-world": worldId(),

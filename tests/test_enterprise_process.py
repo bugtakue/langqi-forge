@@ -69,6 +69,25 @@ def authenticate(port: int, username: str) -> str:
 
 
 class EnterpriseProcessTests(unittest.TestCase):
+    def test_reload_safe_command_commit_barrier_is_wired_on_both_sides(self) -> None:
+        frontend = (TEMPLATE / "frontend" / "src" / "app.js").read_text(
+            encoding="utf-8"
+        )
+        backend = (TEMPLATE / "backend" / "server.mjs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'keepalive: path === "/api/command" && options.method === "POST"',
+            frontend,
+        )
+        state_route = backend.index(
+            'if (url.pathname === "/api/state" && request.method === "GET")'
+        )
+        command_route = backend.index(
+            'if (url.pathname === "/api/command" && request.method === "POST")'
+        )
+        self.assertIn("await mutationQueue", backend[state_route:command_route])
+
     def test_server_blocks_merge_and_branch_bypasses_then_persists_valid_merge(
         self,
     ) -> None:

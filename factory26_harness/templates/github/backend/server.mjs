@@ -873,7 +873,13 @@ const server = createServer(async (request, response) => {
       });
       return response.end(body);
     }
-    if (url.pathname === "/api/state" && request.method === "GET") return sendJson(response, 200, stateForWorld(worldId, actor));
+    if (url.pathname === "/api/state" && request.method === "GET") {
+      // A navigation may request fresh state while a keepalive command from
+      // the previous document is still committing. Read only after every
+      // mutation that was already queued at this point has settled.
+      await mutationQueue;
+      return sendJson(response, 200, stateForWorld(worldId, actor));
+    }
     if (url.pathname === "/api/command" && request.method === "POST") {
       const command = await readBody(request);
       if (!command || typeof command !== "object" || Array.isArray(command) || typeof command.type !== "string") {
