@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from factory26_harness.agent import CodingAgent
-from factory26_harness.model import OpenAIChatClient
+from factory26_harness.model import ModelBudgetExceeded, OpenAIChatClient
 from factory26_harness.requirements import RequirementNode
 from factory26_harness.trace import ProductionTrace
 from factory26_harness.workspace_tools import WorkspaceTools
@@ -82,6 +82,48 @@ class _ModelHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_local_token_budget_failure_is_not_retried(self) -> None:
+        class FakeResponse:
+            headers: dict[str, str] = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args) -> None:
+                return None
+
+            @staticmethod
+            def read(_limit: int) -> bytes:
+                return json.dumps(
+                    {
+                        "choices": [
+                            {"message": {"role": "assistant", "content": "done"}}
+                        ],
+                        "usage": {"prompt_tokens": 2, "completion_tokens": 1},
+                    }
+                ).encode("utf-8")
+
+        with tempfile.TemporaryDirectory() as directory:
+            trace = ProductionTrace(Path(directory) / "trace.jsonl")
+            environment = {
+                "OPENAI_API_KEY": "test-secret",
+                "OPENAI_BASE_URL": "https://gateway.example.test/v1",
+                "MODEL": "mock-model",
+                "FACTORY26_MAX_TOTAL_PROMPT_TOKENS": "1",
+            }
+            with (
+                patch.dict(os.environ, environment, clear=False),
+                patch(
+                    "factory26_harness.model.urllib.request.urlopen",
+                    return_value=FakeResponse(),
+                ) as request,
+            ):
+                client = OpenAIChatClient(trace)
+                with self.assertRaises(ModelBudgetExceeded):
+                    client.complete([{"role": "user", "content": "test"}], [])
+            self.assertEqual(request.call_count, 1)
+            self.assertEqual(client.http_attempt_count, 1)
+
     def test_remote_disconnect_is_retried_within_the_bounded_http_policy(self) -> None:
         class FakeResponse:
             headers: dict[str, str] = {}
@@ -272,6 +314,113 @@ class ModelLoopTests(unittest.TestCase):
             self.assertFalse(result.completed)
             self.assertEqual(result.summary, "workspace tool-call budget exceeded")
             self.assertEqual(tools.write_operations, 0)
+
+    def test_large_tool_history_is_compacted_without_losing_trace(self) -> None:
+        class VerboseModel:
+            def __init__(self) -> None:
+                self.turn = 0
+                self.context_sizes: list[int] = []
+
+            def complete(self, messages, _tools):
+                self.turn += 1
+                self.context_sizes.append(_context_size(messages))
+                if self.turn == 1:
+                    calls = (
+                        {
+                            "id": "write",
+                            "type": "function",
+                            "function": {
+                                "name": "write_file",
+                                "arguments": json.dumps(
+                                    {
+                                        "path": "frontend/src/large.js",
+                                        "content": "x" * 9_000,
+                                    }
+                                ),
+                            },
+                        },
+                    )
+                    return SimpleNamespace(
+                        tool_calls=calls,
+                        raw_message={"role": "assistant", "tool_calls": calls},
+                        content="",
+                    )
+                if self.turn == 2:
+                    calls = (
+                        {
+                            "id": "validate",
+                            "type": "function",
+                            "function": {
+                                "name": "run_validation",
+                                "arguments": '{"scope":"quick"}',
+                            },
+                        },
+                    )
+                    return SimpleNamespace(
+                        tool_calls=calls,
+                        raw_message={"role": "assistant", "tool_calls": calls},
+                        content="",
+                    )
+                return SimpleNamespace(
+                    tool_calls=(),
+                    raw_message={"role": "assistant", "content": "AUDIT PASS"},
+                    content="AUDIT PASS",
+                )
+
+        def _context_size(messages) -> int:
+            return len(json.dumps(messages, ensure_ascii=False))
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "frontend").mkdir()
+            (root / "backend").mkdir()
+            (root / "frontend" / "package.json").write_text(
+                json.dumps(
+                    {
+                        "name": "frontend",
+                        "private": True,
+                        "scripts": {"build": 'node -e ""'},
+                    }
+                )
+            )
+            (root / "backend" / "package.json").write_text(
+                json.dumps(
+                    {
+                        "name": "backend",
+                        "private": True,
+                        "scripts": {"start": 'node -e ""'},
+                    }
+                )
+            )
+            trace = ProductionTrace(root / ".arc" / "trace.jsonl")
+            model = VerboseModel()
+            with patch.dict(os.environ, {"FACTORY26_AGENT_CONTEXT_CHARS": "8000"}):
+                result = CodingAgent(
+                    model, WorkspaceTools(root, trace, 3923), trace, max_turns=4
+                ).implement(
+                    [
+                        RequirementNode(
+                            req_id="R-COMPACT",
+                            name="Compact context",
+                            description="Create a large source file.",
+                            dependencies=(),
+                            scenarios=(),
+                            visual_reference=(),
+                            raw={},
+                        )
+                    ]
+                )
+            self.assertTrue(result.completed)
+            rows = [
+                json.loads(line)
+                for line in trace.path.read_text(encoding="utf-8").splitlines()
+            ]
+            compacted = [
+                row for row in rows if row["event"] == "agent_context_compacted"
+            ]
+            self.assertTrue(compacted)
+            self.assertLess(compacted[0]["payload"]["after_characters"], 8_000)
+            self.assertTrue((root / "frontend" / "src" / "large.js").is_file())
 
     def test_oversized_model_request_fails_before_network_io(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

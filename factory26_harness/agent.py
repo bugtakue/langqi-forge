@@ -42,7 +42,7 @@ The harness will not accept completion unless the latest changed revision has a 
 When complete, return a short summary of files changed and any remaining risk.
 """
 
-ACCEPTANCE_AUDIT_PROMPT = """Do not summarize yet. Perform a final requirement-by-requirement audit against the code you actually wrote. You already have the edited code in this conversation, so do not re-read files unless necessary.
+ACCEPTANCE_AUDIT_PROMPT = """Do not summarize yet. Perform a final requirement-by-requirement audit against the code you actually wrote. Use the retained context; if a required implementation detail is absent, batch-read only the changed source files.
 
 Check all of these failure surfaces:
 1. Exact visible copy, accessible roles/names/labels, and literal DOM whitespace in `Label: value` text.
@@ -80,6 +80,48 @@ def _assistant_message(reply_message: dict[str, Any]) -> dict[str, Any]:
     return message
 
 
+def _context_characters(messages: list[dict[str, Any]]) -> int:
+    return len(
+        json.dumps(messages, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    )
+
+
+def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {"tool": tool, "ok": bool(payload.get("ok"))}
+    for key in (
+        "path",
+        "changed",
+        "change_revision",
+        "sha256",
+        "file_count",
+        "current_changes_validated",
+        "validated_change_revision",
+    ):
+        if key in payload:
+            summary[key] = payload[key]
+    files = payload.get("files")
+    if isinstance(files, list):
+        summary["paths"] = [
+            str(item.get("path") or "")
+            for item in files
+            if isinstance(item, dict) and item.get("path")
+        ][:12]
+    checks = payload.get("checks")
+    if isinstance(checks, list):
+        summary["checks"] = [
+            {
+                "name": str(item.get("name") or ""),
+                "passed": bool(item.get("passed")),
+                "summary": str(item.get("summary") or "")[:300],
+            }
+            for item in checks
+            if isinstance(item, dict)
+        ][:8]
+    if payload.get("error"):
+        summary["error"] = str(payload["error"])[:600]
+    return summary
+
+
 class CodingAgent:
     def __init__(
         self,
@@ -98,6 +140,10 @@ class CodingAgent:
         self.maximum_total_tool_calls = max(
             self.maximum_tool_calls_per_turn,
             int(os.environ.get("FACTORY26_MAX_TOTAL_TOOL_CALLS", "48")),
+        )
+        self.maximum_context_characters = max(
+            8_000,
+            int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "24000")),
         )
 
     def implement(
@@ -224,6 +270,7 @@ class CodingAgent:
             total_tool_calls += call_count
             recognized_tool = False
             successful_tool = False
+            compact_results: list[dict[str, Any]] = []
             for call in reply.tool_calls:
                 function = call.get("function") or {}
                 name = str(function.get("name") or "")
@@ -239,17 +286,52 @@ class CodingAgent:
                     arguments = {}
                 result = self.tools.execute(name, arguments)
                 try:
-                    successful_tool = successful_tool or bool(
-                        json.loads(result).get("ok")
-                    )
+                    result_payload = json.loads(result)
+                    successful_tool = successful_tool or bool(result_payload.get("ok"))
+                    compact_results.append(_compact_tool_result(name, result_payload))
                 except (json.JSONDecodeError, AttributeError):
-                    pass
+                    compact_results.append(
+                        {"tool": name, "ok": False, "error": "non-JSON tool result"}
+                    )
                 messages.append(
                     {
                         "role": "tool",
                         "tool_call_id": str(call.get("id") or name),
                         "content": result,
                     }
+                )
+            context_before = _context_characters(messages)
+            if context_before > self.maximum_context_characters:
+                checkpoint = {
+                    "changed_files": sorted(self.tools.changed_files),
+                    "change_revision": self.tools.change_revision,
+                    "current_changes_validated": self.tools.current_changes_validated,
+                    "validation_scope": self.tools.validation_scope,
+                    "latest_tool_results": compact_results,
+                }
+                messages = messages[:2] + [
+                    {
+                        "role": "user",
+                        "content": (
+                            "Deterministic context checkpoint. Earlier model/tool turns remain "
+                            "sealed in the production trace but are omitted from this request. "
+                            "Use read_files only for source details you still need. State:\n"
+                            + json.dumps(
+                                checkpoint,
+                                ensure_ascii=False,
+                                sort_keys=True,
+                                separators=(",", ":"),
+                            )
+                        ),
+                    }
+                ]
+                self.trace.record(
+                    "agent_context_compacted",
+                    stage=stage,
+                    requirement_ids=requirement_ids,
+                    before_characters=context_before,
+                    after_characters=_context_characters(messages),
+                    checkpoint=checkpoint,
                 )
             if recognized_tool:
                 invalid_tool_turns = 0

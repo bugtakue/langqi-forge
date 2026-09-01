@@ -12,6 +12,10 @@ from urllib.parse import urlsplit
 from .trace import ProductionTrace
 
 
+class ModelBudgetExceeded(RuntimeError):
+    """A deterministic local model budget was exceeded."""
+
+
 @dataclass(frozen=True)
 class ModelReply:
     content: str
@@ -188,7 +192,16 @@ class OpenAIChatClient:
                     or self.total_completion_tokens + completion_tokens
                     > self.max_total_completion_tokens
                 ):
-                    raise ValueError("model token budget exceeded")
+                    self.trace.record(
+                        "model_budget_exhausted",
+                        prompt_tokens_observed=prompt_tokens,
+                        completion_tokens_observed=completion_tokens,
+                        total_prompt_tokens=self.total_prompt_tokens,
+                        total_completion_tokens=self.total_completion_tokens,
+                        maximum_prompt_tokens=self.max_total_prompt_tokens,
+                        maximum_completion_tokens=self.max_total_completion_tokens,
+                    )
+                    raise ModelBudgetExceeded("model token budget exceeded")
                 response_id = str(body.get("id") or "")
                 self.total_prompt_tokens += prompt_tokens
                 self.total_completion_tokens += completion_tokens
