@@ -143,7 +143,7 @@ class CodingAgent:
         )
         self.maximum_context_characters = max(
             8_000,
-            int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "36000")),
+            int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "24000")),
         )
 
     def implement(
@@ -271,6 +271,7 @@ class CodingAgent:
             recognized_tool = False
             successful_tool = False
             audit_validation_completed = False
+            implementation_validation_completed = False
             compact_results: list[dict[str, Any]] = []
             for call in reply.tool_calls:
                 function = call.get("function") or {}
@@ -295,6 +296,15 @@ class CodingAgent:
                         and name == "run_validation"
                         and bool(result_payload.get("ok"))
                         and self.tools.current_changes_validated
+                    )
+                    implementation_validation_completed = (
+                        implementation_validation_completed
+                        or (
+                            stage == "implementation"
+                            and name == "run_validation"
+                            and bool(result_payload.get("ok"))
+                            and self.tools.current_changes_validated
+                        )
                     )
                 except (json.JSONDecodeError, AttributeError):
                     compact_results.append(
@@ -353,6 +363,17 @@ class CodingAgent:
                     after_characters=_context_characters(messages),
                     checkpoint=checkpoint,
                 )
+            if implementation_validation_completed and not acceptance_audit_requested:
+                acceptance_audit_requested = True
+                changed = tuple(sorted(self.tools.changed_files - changed_before))
+                self.trace.record(
+                    "agent_acceptance_audit_requested",
+                    stage=stage,
+                    requirement_ids=requirement_ids,
+                    changed_files=changed,
+                    trigger="first_passing_implementation_validation",
+                )
+                messages.append({"role": "user", "content": ACCEPTANCE_AUDIT_PROMPT})
             if recognized_tool:
                 invalid_tool_turns = 0
             else:

@@ -64,11 +64,6 @@ class _ModelHandler(BaseHTTPRequestHandler):
                     }
                 ],
             }
-        elif type(self).calls == 3:
-            message = {
-                "role": "assistant",
-                "content": "Implemented the requested file.",
-            }
         else:
             message = {
                 "role": "assistant",
@@ -256,9 +251,9 @@ class ModelLoopTests(unittest.TestCase):
                     (root / "frontend" / "src" / "generated.txt").read_text(),
                     "generated\n",
                 )
-                self.assertEqual(client.total_prompt_tokens, 40)
-                self.assertEqual(client.total_completion_tokens, 20)
-                self.assertEqual(result.turns, 4)
+                self.assertEqual(client.total_prompt_tokens, 30)
+                self.assertEqual(client.total_completion_tokens, 15)
+                self.assertEqual(result.turns, 3)
                 first_messages = _ModelHandler.payloads[0]["messages"]
                 self.assertIn("read_files", first_messages[0]["content"])
                 self.assertIn("at most 4 model turns", first_messages[1]["content"])
@@ -291,6 +286,15 @@ class ModelLoopTests(unittest.TestCase):
                     for row in trace_rows
                     if row["event"] == "agent_session_completed"
                 ]
+                audit_requests = [
+                    row
+                    for row in trace_rows
+                    if row["event"] == "agent_acceptance_audit_requested"
+                ]
+                self.assertEqual(
+                    audit_requests[-1]["payload"].get("trigger"),
+                    "first_passing_implementation_validation",
+                )
                 self.assertTrue(
                     completions[-1]["payload"].get("completed_on_validation")
                 )
