@@ -381,6 +381,23 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertIn("without DOM whitespace", glued.summary)
 
             app.write_text(
+                'const details = document.createElement("div");\n'
+                'details.innerHTML = "<p>Requester: Alice</p>";\n',
+                encoding="utf-8",
+            )
+            detached = interaction_policy_check(root)
+            self.assertFalse(detached.passed)
+            self.assertIn("never attaches, returns, or activates", detached.summary)
+
+            app.write_text(
+                'const details = document.createElement("div");\n'
+                'details.innerHTML = "<p>Requester: Alice</p>";\n'
+                "card.append(details);\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(interaction_policy_check(root).passed)
+
+            app.write_text(
                 'window.alert("Reviewer must differ from requester");\n'
                 'globalThis.confirm("Continue?");\n',
                 encoding="utf-8",

@@ -31,7 +31,13 @@ Hard rules:
   inside the form, card, dialog, row, or other semantic container that owns that action.
 - Browser assertions read normalized DOM text, not CSS gaps. Render human-readable `Label: value`
   with literal DOM whitespace; adjacent tags such as `Label:</strong><span>value` are invalid.
+- Every populated DOM node must be appended, returned, or intentionally activated before leaving
+  its scope. For repeated cards/rows, put a dedicated `role="alert"` feedback node inside each item
+  and resolve it from the action's owning container; do not reuse a page-global status for row errors.
 - Enforce workflow transitions and terminal states in backend logic as well as disabled UI controls.
+- Workflow UIs should send a command (`action`, stable item id, action inputs) to the backend; do not
+  trust a client-computed replacement collection. The backend must find the target, validate the
+  current state and actor/input, derive the next state, then persist it atomically.
 - Keep one canonical state schema consistent across the initial JSON, backend handlers, and frontend.
   Validate a command before mapping or mutating collections; never send an HTTP response from inside
   a map/filter/reduce callback. Persist exactly once only after the whole command is valid.

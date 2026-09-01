@@ -49,6 +49,10 @@ GLUED_LABEL_VALUE_PATTERN = re.compile(
     r":</(?:label|strong|b|span)><(?:span|strong|b)(?:\s|>)",
     re.IGNORECASE,
 )
+CREATED_DOM_NODE_PATTERN = re.compile(
+    r"\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*"
+    r"document\s*\.\s*createElement\s*\("
+)
 INTERACTION_SOURCE_SUFFIXES = {".html", ".js", ".jsx", ".mjs", ".ts", ".tsx"}
 
 
@@ -217,13 +221,45 @@ def interaction_policy_check(root: Path) -> CheckResult:
                 )
                 if len(violations) >= 20:
                     break
+            created_nodes = list(CREATED_DOM_NODE_PATTERN.finditer(text))
+            for index, match in enumerate(created_nodes):
+                name = match.group(1)
+                next_same_name = next(
+                    (
+                        later.start()
+                        for later in created_nodes[index + 1 :]
+                        if later.group(1) == name
+                    ),
+                    len(text),
+                )
+                body = text[match.end() : next_same_name]
+                escaped = re.escape(name)
+                populated = re.search(
+                    rf"\b{escaped}\s*\.\s*(?:innerHTML|innerText|textContent|"
+                    r"setAttribute|className|classList|value|href|download)\b",
+                    body,
+                )
+                attached = re.search(
+                    rf"(?:append|appendChild|prepend|replaceChildren|insertBefore|"
+                    rf"replaceWith)\s*\([^;\n)]*\b{escaped}\b"
+                    rf"|\b{escaped}\s*\.\s*(?:click|showModal|replaceWith)\s*\("
+                    rf"|\breturn\s+{escaped}\b",
+                    body,
+                )
+                if populated and not attached:
+                    line = text.count("\n", 0, match.start()) + 1
+                    violations.append(
+                        f"{relative}:{line} creates populated DOM node `{name}` but never attaches, returns, or activates it"
+                    )
+                    if len(violations) >= 20:
+                        break
             if len(violations) >= 20:
                 break
     summary = (
         "interaction policy passed"
         if not violations
         else "; ".join(violations)
-        + "; render validation and action feedback in the owning semantic DOM container"
+        + "; render every populated node and keep validation/action feedback in its owning semantic DOM container"
     )
     return CheckResult(
         "interaction_policy",
