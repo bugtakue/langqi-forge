@@ -455,6 +455,120 @@ class ModelLoopTests(unittest.TestCase):
             self.assertLess(compacted[0]["payload"]["after_characters"], 8_000)
             self.assertTrue((root / "frontend" / "src" / "large.js").is_file())
 
+    def test_context_compaction_retains_the_latest_tool_turn_when_it_fits(
+        self,
+    ) -> None:
+        class RetentionModel:
+            def __init__(self) -> None:
+                self.turn = 0
+                self.saw_retained_write = False
+
+            def complete(self, messages, _tools):
+                self.turn += 1
+                if self.turn <= 2:
+                    path = f"frontend/src/part-{self.turn}.js"
+                    calls = (
+                        {
+                            "id": f"write-{self.turn}",
+                            "type": "function",
+                            "function": {
+                                "name": "write_file",
+                                "arguments": json.dumps(
+                                    {"path": path, "content": "x" * 3_000}
+                                ),
+                            },
+                        },
+                    )
+                    return SimpleNamespace(
+                        tool_calls=calls,
+                        raw_message={"role": "assistant", "tool_calls": calls},
+                        content="",
+                    )
+                if self.turn == 3:
+                    self.saw_retained_write = any(
+                        message.get("role") == "assistant"
+                        and any(
+                            (call.get("function") or {}).get("name") == "write_file"
+                            and "part-2.js"
+                            in str((call.get("function") or {}).get("arguments"))
+                            for call in message.get("tool_calls") or []
+                        )
+                        for message in messages
+                    )
+                    calls = (
+                        {
+                            "id": "validate",
+                            "type": "function",
+                            "function": {
+                                "name": "run_validation",
+                                "arguments": '{"scope":"quick"}',
+                            },
+                        },
+                    )
+                    return SimpleNamespace(
+                        tool_calls=calls,
+                        raw_message={"role": "assistant", "tool_calls": calls},
+                        content="",
+                    )
+                return SimpleNamespace(
+                    tool_calls=(),
+                    raw_message={"role": "assistant", "content": "AUDIT PASS"},
+                    content="AUDIT PASS",
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "frontend").mkdir()
+            (root / "backend").mkdir()
+            (root / "frontend" / "package.json").write_text(
+                json.dumps(
+                    {
+                        "name": "frontend",
+                        "private": True,
+                        "scripts": {"build": 'node -e ""'},
+                    }
+                )
+            )
+            (root / "backend" / "package.json").write_text(
+                json.dumps(
+                    {
+                        "name": "backend",
+                        "private": True,
+                        "scripts": {"start": 'node -e ""'},
+                    }
+                )
+            )
+            trace = ProductionTrace(root / ".arc" / "trace.jsonl")
+            model = RetentionModel()
+            with patch.dict(os.environ, {"FACTORY26_AGENT_CONTEXT_CHARS": "12000"}):
+                result = CodingAgent(
+                    model, WorkspaceTools(root, trace, 3924), trace, max_turns=4
+                ).implement(
+                    [
+                        RequirementNode(
+                            req_id="R-RETAIN",
+                            name="Retain recent turn",
+                            description="Create two source files.",
+                            dependencies=(),
+                            scenarios=(),
+                            visual_reference=(),
+                            raw={},
+                        )
+                    ]
+                )
+            self.assertTrue(result.completed)
+            self.assertTrue(model.saw_retained_write)
+            rows = [
+                json.loads(line)
+                for line in trace.path.read_text(encoding="utf-8").splitlines()
+            ]
+            compacted = [
+                row for row in rows if row["event"] == "agent_context_compacted"
+            ]
+            self.assertTrue(
+                any(row["payload"].get("retained_current_turn") for row in compacted)
+            )
+
     def test_oversized_model_request_fails_before_network_io(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -30,9 +30,15 @@ Hard rules:
 - Browser assertions read normalized DOM text, not CSS gaps. Render human-readable `Label: value`
   with literal DOM whitespace; adjacent tags such as `Label:</strong><span>value` are invalid.
 - Enforce workflow transitions and terminal states in backend logic as well as disabled UI controls.
+- Keep one canonical state schema consistent across the initial JSON, backend handlers, and frontend.
+  Validate a command before mapping or mutating collections; never send an HTTP response from inside
+  a map/filter/reduce callback. Persist exactly once only after the whole command is valid.
 - Make the smallest coherent change. Do not rewrite unrelated working features.
 - Conserve the bounded model turns. One response may issue multiple independent tool calls. When
   source paths are already known, inspect them together with read_files instead of serial reads.
+- A successful write is authoritative for that revision. Do not reread a file you just wrote unless
+  a later validation failure requires exact current text. Patch every location named by validation
+  before calling run_validation again.
 - Prefer exact replace_text edits. Before fully replacing an existing file, read it and pass the returned SHA-256 precondition.
 - Stay within the changed-file and cumulative-write budgets reported by tools.
 - Hidden tests are unavailable. Generalize from the requirement rather than guessing test data.
@@ -207,11 +213,13 @@ class CodingAgent:
         failed_tool_turns = 0
         total_tool_calls = 0
         acceptance_audit_requested = False
+        observed_files: set[str] = set()
         tool_schemas = self.tools.schemas()
         valid_tool_names = {
             str(item.get("function", {}).get("name") or "") for item in tool_schemas
         }
         for turn in range(1, self.max_turns + 1):
+            turn_message_start = len(messages)
             reply = self.model.complete(messages, tool_schemas)
             messages.append(_assistant_message(reply.raw_message))
             if not reply.tool_calls:
@@ -291,6 +299,16 @@ class CodingAgent:
                     result_payload = json.loads(result)
                     successful_tool = successful_tool or bool(result_payload.get("ok"))
                     compact_results.append(_compact_tool_result(name, result_payload))
+                    if bool(result_payload.get("ok")) and name == "read_file":
+                        path = str(result_payload.get("path") or "")
+                        if path:
+                            observed_files.add(path)
+                    elif bool(result_payload.get("ok")) and name == "read_files":
+                        observed_files.update(
+                            str(item.get("path") or "")
+                            for item in result_payload.get("files") or []
+                            if isinstance(item, dict) and item.get("path")
+                        )
                     audit_validation_completed = audit_validation_completed or (
                         acceptance_audit_requested
                         and name == "run_validation"
@@ -336,25 +354,40 @@ class CodingAgent:
                     "changed_files": sorted(self.tools.changed_files),
                     "change_revision": self.tools.change_revision,
                     "current_changes_validated": self.tools.current_changes_validated,
+                    "observed_files": sorted(observed_files),
+                    "starter_batch_read_completed": set(STARTER_SOURCE_PATHS).issubset(
+                        observed_files
+                    ),
                     "validation_scope": self.tools.validation_scope,
                     "latest_tool_results": compact_results,
                 }
-                messages = messages[:2] + [
-                    {
-                        "role": "user",
-                        "content": (
-                            "Deterministic context checkpoint. Earlier model/tool turns remain "
-                            "sealed in the production trace but are omitted from this request. "
-                            "Use read_files only for source details you still need. State:\n"
-                            + json.dumps(
-                                checkpoint,
-                                ensure_ascii=False,
-                                sort_keys=True,
-                                separators=(",", ":"),
-                            )
-                        ),
-                    }
-                ]
+                checkpoint_message = {
+                    "role": "user",
+                    "content": (
+                        "Deterministic context checkpoint. Earlier model/tool turns remain "
+                        "sealed in the production trace but are omitted from this request. "
+                        "The initial starter read has already been handled when the state says "
+                        "starter_batch_read_completed=true; do not restart it merely because "
+                        "the original task prompt mentions it. Do not reread observed files "
+                        "unless exact current text is necessary for the next edit. State:\n"
+                        + json.dumps(
+                            checkpoint,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
+                    ),
+                }
+                compacted_messages = messages[:2] + [checkpoint_message]
+                recent_messages = messages[turn_message_start:]
+                with_recent_turn = compacted_messages + recent_messages
+                retained_current_turn = (
+                    _context_characters(with_recent_turn)
+                    <= self.maximum_context_characters
+                )
+                messages = (
+                    with_recent_turn if retained_current_turn else compacted_messages
+                )
                 self.trace.record(
                     "agent_context_compacted",
                     stage=stage,
@@ -362,6 +395,7 @@ class CodingAgent:
                     before_characters=context_before,
                     after_characters=_context_characters(messages),
                     checkpoint=checkpoint,
+                    retained_current_turn=retained_current_turn,
                 )
             if implementation_validation_completed and not acceptance_audit_requested:
                 acceptance_audit_requested = True
