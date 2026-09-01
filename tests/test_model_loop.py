@@ -272,6 +272,9 @@ class ModelLoopTests(unittest.TestCase):
                         message.get("role") == "user"
                         and "requirement-by-requirement audit"
                         in message.get("content", "")
+                        and "<untrusted_changed_sources>" in message.get("content", "")
+                        and "frontend/src/generated.txt" in message.get("content", "")
+                        and "generated" in message.get("content", "")
                         for message in final_messages
                     )
                 )
@@ -568,6 +571,106 @@ class ModelLoopTests(unittest.TestCase):
             self.assertTrue(
                 any(row["payload"].get("retained_current_turn") for row in compacted)
             )
+
+    def test_turn_budget_never_auto_accepts_an_unfinished_audit(self) -> None:
+        class UnfinishedAuditModel:
+            def __init__(self) -> None:
+                self.turn = 0
+
+            def complete(self, _messages, _tools):
+                self.turn += 1
+                if self.turn == 1:
+                    calls = (
+                        {
+                            "id": "write",
+                            "type": "function",
+                            "function": {
+                                "name": "write_file",
+                                "arguments": json.dumps(
+                                    {
+                                        "path": "frontend/src/unfinished.js",
+                                        "content": "unfinished\n",
+                                    }
+                                ),
+                            },
+                        },
+                    )
+                elif self.turn == 2:
+                    calls = (
+                        {
+                            "id": "validate",
+                            "type": "function",
+                            "function": {
+                                "name": "run_validation",
+                                "arguments": '{"scope":"quick"}',
+                            },
+                        },
+                    )
+                else:
+                    calls = (
+                        {
+                            "id": "unfinished-read",
+                            "type": "function",
+                            "function": {
+                                "name": "read_file",
+                                "arguments": '{"path":"frontend/src/unfinished.js"}',
+                            },
+                        },
+                    )
+                return SimpleNamespace(
+                    tool_calls=calls,
+                    raw_message={"role": "assistant", "tool_calls": calls},
+                    content="",
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "frontend").mkdir()
+            (root / "backend").mkdir()
+            (root / "frontend" / "package.json").write_text(
+                json.dumps(
+                    {
+                        "name": "frontend",
+                        "private": True,
+                        "scripts": {"build": 'node -e ""'},
+                    }
+                )
+            )
+            (root / "backend" / "package.json").write_text(
+                json.dumps(
+                    {
+                        "name": "backend",
+                        "private": True,
+                        "scripts": {"start": 'node -e ""'},
+                    }
+                )
+            )
+            trace = ProductionTrace(root / ".arc" / "trace.jsonl")
+            result = CodingAgent(
+                UnfinishedAuditModel(),
+                WorkspaceTools(root, trace, 3925),
+                trace,
+                max_turns=3,
+            ).implement(
+                [
+                    RequirementNode(
+                        req_id="R-UNFINISHED-AUDIT",
+                        name="Reject unfinished audit",
+                        description="Create one implementation file.",
+                        dependencies=(),
+                        scenarios=(),
+                        visual_reference=(),
+                        raw={},
+                    )
+                ]
+            )
+            self.assertFalse(result.completed)
+            self.assertEqual(result.summary, "maximum tool turns reached")
+            rows = [
+                json.loads(line)
+                for line in trace.path.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(rows[-1]["event"], "agent_session_exhausted")
 
     def test_oversized_model_request_fails_before_network_io(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

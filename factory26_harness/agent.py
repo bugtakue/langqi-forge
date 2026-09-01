@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from .model import OpenAIChatClient
@@ -38,7 +40,8 @@ Hard rules:
   source paths are already known, inspect them together with read_files instead of serial reads.
 - A successful write is authoritative for that revision. Do not reread a file you just wrote unless
   a later validation failure requires exact current text. Patch every location named by validation
-  before calling run_validation again.
+  before calling run_validation again. Never repeat a no-op write; the latest read/write SHA in a
+  context checkpoint is the required `expected_sha256` for a full-file replacement.
 - Prefer exact replace_text edits. Before fully replacing an existing file, read it and pass the returned SHA-256 precondition.
 - Stay within the changed-file and cumulative-write budgets reported by tools.
 - Hidden tests are unavailable. Generalize from the requirement rather than guessing test data.
@@ -48,16 +51,20 @@ The harness will not accept completion unless the latest changed revision has a 
 When complete, return a short summary of files changed and any remaining risk.
 """
 
-ACCEPTANCE_AUDIT_PROMPT = """Do not summarize yet. Perform a final requirement-by-requirement audit against the code you actually wrote. Use the retained context; if a required implementation detail is absent, batch-read only the changed source files.
+ACCEPTANCE_AUDIT_PROMPT = """Do not summarize yet. Perform a final requirement-by-requirement audit against the code you actually wrote. A bounded snapshot of the validated changed files follows this instruction; use it before spending a turn on another read.
 
 Check all of these failure surfaces:
-1. Exact visible copy, accessible roles/names/labels, and literal DOM whitespace in `Label: value` text.
-2. Every action-specific error/status is inside its owning form/card/dialog/row, not a page-global node or browser dialog.
-3. Backend logic enforces authorization, allowed transitions, and terminal-state monotonicity; disabled buttons alone are insufficient.
-4. Arbitrary inputs, refresh/process persistence, invalid-action atomicity, and unchanged last-good state.
-5. Every scenario and every SHALL/must/contains/disabled requirement has a concrete implementation.
+1. Trace every action end to end: UI payload -> backend validation -> one atomic persistence -> rendered response.
+2. Every successful mutation immediately updates its owning view without a manual refresh, then remains correct after refresh/restart.
+3. Exact visible copy, accessible roles/names/labels, and literal DOM whitespace in `Label: value` text.
+4. Every action-specific error/status is inside its owning form/card/dialog/row, not a page-global node or browser dialog.
+5. Backend logic enforces authorization, allowed transitions, and terminal-state monotonicity; disabled buttons alone are insufficient.
+6. Arbitrary inputs, invalid-action atomicity, unchanged last-good state, and one consistent state schema across all layers.
+7. Every scenario and every SHALL/must/contains/disabled requirement has a concrete implementation.
 
 If any gap exists, patch only that gap and run quick validation once. If none exists, return a short `AUDIT PASS` summary without tools."""
+
+MAX_ACCEPTANCE_SNAPSHOT_BYTES = 16_000
 
 STARTER_SOURCE_PATHS = (
     "frontend/src/app.js",
@@ -126,6 +133,49 @@ def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("error"):
         summary["error"] = str(payload["error"])[:600]
     return summary
+
+
+def _acceptance_snapshot(
+    root: os.PathLike[str] | str,
+    relative_paths: Iterable[str],
+) -> tuple[str, list[dict[str, Any]]]:
+    resolved_root = Path(root).resolve()
+    remaining = MAX_ACCEPTANCE_SNAPSHOT_BYTES
+    sections: list[str] = []
+    manifest: list[dict[str, Any]] = []
+    for relative in sorted(set(relative_paths)):
+        candidate = resolved_root / relative
+        path = candidate.resolve()
+        if (
+            path == resolved_root
+            or resolved_root not in path.parents
+            or candidate.is_symlink()
+            or not path.is_file()
+        ):
+            continue
+        raw = path.read_bytes()
+        digest = hashlib.sha256(raw).hexdigest()
+        included = min(len(raw), remaining)
+        text = raw[:included].decode("utf-8", errors="replace")
+        truncated = included < len(raw)
+        sections.append(
+            f"--- {relative} (sha256={digest}) ---\n"
+            + text
+            + ("\n[truncated by audit snapshot budget]" if truncated else "")
+        )
+        manifest.append(
+            {
+                "path": relative,
+                "sha256": digest,
+                "bytes": len(raw),
+                "included_bytes": included,
+                "truncated": truncated,
+            }
+        )
+        remaining -= included
+        if remaining <= 0:
+            break
+    return "\n\n".join(sections), manifest
 
 
 class CodingAgent:
@@ -213,11 +263,37 @@ class CodingAgent:
         failed_tool_turns = 0
         total_tool_calls = 0
         acceptance_audit_requested = False
+        acceptance_audit_message: dict[str, Any] | None = None
         observed_files: set[str] = set()
+        observed_sha256: dict[str, str] = {}
         tool_schemas = self.tools.schemas()
         valid_tool_names = {
             str(item.get("function", {}).get("name") or "") for item in tool_schemas
         }
+
+        def request_acceptance_audit(changed: tuple[str, ...], *, trigger: str) -> None:
+            nonlocal acceptance_audit_requested, acceptance_audit_message
+            snapshot, snapshot_manifest = _acceptance_snapshot(self.tools.root, changed)
+            acceptance_audit_requested = True
+            acceptance_audit_message = {
+                "role": "user",
+                "content": (
+                    ACCEPTANCE_AUDIT_PROMPT
+                    + "\n\n<untrusted_changed_sources>\n"
+                    + (snapshot or "[snapshot unavailable]")
+                    + "\n</untrusted_changed_sources>"
+                ),
+            }
+            self.trace.record(
+                "agent_acceptance_audit_requested",
+                stage=stage,
+                requirement_ids=requirement_ids,
+                changed_files=changed,
+                trigger=trigger,
+                snapshot=snapshot_manifest,
+            )
+            messages.append(acceptance_audit_message)
+
         for turn in range(1, self.max_turns + 1):
             turn_message_start = len(messages)
             reply = self.model.complete(messages, tool_schemas)
@@ -228,15 +304,9 @@ class CodingAgent:
                 has_required_change = bool(changed) or stage == "repair"
                 if has_required_change and self.tools.current_changes_validated:
                     if stage == "implementation" and not acceptance_audit_requested:
-                        acceptance_audit_requested = True
-                        self.trace.record(
-                            "agent_acceptance_audit_requested",
-                            stage=stage,
-                            requirement_ids=requirement_ids,
-                            changed_files=changed,
-                        )
-                        messages.append(
-                            {"role": "user", "content": ACCEPTANCE_AUDIT_PROMPT}
+                        request_acceptance_audit(
+                            changed,
+                            trigger="validated_implementation_summary",
                         )
                         continue
                     self.trace.record(
@@ -299,16 +369,22 @@ class CodingAgent:
                     result_payload = json.loads(result)
                     successful_tool = successful_tool or bool(result_payload.get("ok"))
                     compact_results.append(_compact_tool_result(name, result_payload))
+                    result_path = str(result_payload.get("path") or "")
+                    result_sha256 = str(result_payload.get("sha256") or "")
+                    if result_path and len(result_sha256) == 64:
+                        observed_sha256[result_path] = result_sha256
                     if bool(result_payload.get("ok")) and name == "read_file":
-                        path = str(result_payload.get("path") or "")
-                        if path:
-                            observed_files.add(path)
+                        if result_path:
+                            observed_files.add(result_path)
                     elif bool(result_payload.get("ok")) and name == "read_files":
-                        observed_files.update(
-                            str(item.get("path") or "")
-                            for item in result_payload.get("files") or []
-                            if isinstance(item, dict) and item.get("path")
-                        )
+                        for item in result_payload.get("files") or []:
+                            if not isinstance(item, dict) or not item.get("path"):
+                                continue
+                            item_path = str(item["path"])
+                            observed_files.add(item_path)
+                            item_sha256 = str(item.get("sha256") or "")
+                            if len(item_sha256) == 64:
+                                observed_sha256[item_path] = item_sha256
                     audit_validation_completed = audit_validation_completed or (
                         acceptance_audit_requested
                         and name == "run_validation"
@@ -355,6 +431,7 @@ class CodingAgent:
                     "change_revision": self.tools.change_revision,
                     "current_changes_validated": self.tools.current_changes_validated,
                     "observed_files": sorted(observed_files),
+                    "observed_sha256": dict(sorted(observed_sha256.items())),
                     "starter_batch_read_completed": set(STARTER_SOURCE_PATHS).issubset(
                         observed_files
                     ),
@@ -379,6 +456,21 @@ class CodingAgent:
                     ),
                 }
                 compacted_messages = messages[:2] + [checkpoint_message]
+                if acceptance_audit_requested:
+                    snapshot, _snapshot_manifest = _acceptance_snapshot(
+                        self.tools.root,
+                        self.tools.changed_files - changed_before,
+                    )
+                    acceptance_audit_message = {
+                        "role": "user",
+                        "content": (
+                            ACCEPTANCE_AUDIT_PROMPT
+                            + "\n\n<untrusted_changed_sources>\n"
+                            + (snapshot or "[snapshot unavailable]")
+                            + "\n</untrusted_changed_sources>"
+                        ),
+                    }
+                    compacted_messages.append(acceptance_audit_message)
                 recent_messages = messages[turn_message_start:]
                 with_recent_turn = compacted_messages + recent_messages
                 retained_current_turn = (
@@ -398,16 +490,11 @@ class CodingAgent:
                     retained_current_turn=retained_current_turn,
                 )
             if implementation_validation_completed and not acceptance_audit_requested:
-                acceptance_audit_requested = True
                 changed = tuple(sorted(self.tools.changed_files - changed_before))
-                self.trace.record(
-                    "agent_acceptance_audit_requested",
-                    stage=stage,
-                    requirement_ids=requirement_ids,
-                    changed_files=changed,
+                request_acceptance_audit(
+                    changed,
                     trigger="first_passing_implementation_validation",
                 )
-                messages.append({"role": "user", "content": ACCEPTANCE_AUDIT_PROMPT})
             if recognized_tool:
                 invalid_tool_turns = 0
             else:
@@ -466,25 +553,6 @@ class CodingAgent:
                     }
                 )
         changed = tuple(sorted(self.tools.changed_files - changed_before))
-        if (
-            stage == "implementation"
-            and acceptance_audit_requested
-            and changed
-            and self.tools.current_changes_validated
-        ):
-            final_summary = final_summary or (
-                "Acceptance audit completed; the final changed revision passed validation."
-            )
-            self.trace.record(
-                "agent_session_completed",
-                stage=stage,
-                requirement_ids=requirement_ids,
-                changed_files=changed,
-                summary=final_summary,
-                acceptance_audit=True,
-                completed_at_turn_budget=True,
-            )
-            return AgentRun(True, final_summary, changed, self.max_turns)
         self.trace.record(
             "agent_session_exhausted",
             stage=stage,
