@@ -417,6 +417,51 @@ class QualificationTests(unittest.TestCase):
             failed = {item["name"] for item in result["checks"] if not item["passed"]}
             self.assertIn("bound_artifacts_readable", failed)
 
+    def test_relocated_v2_evidence_can_require_report_version_without_artifact_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            report_path = Path(temporary) / "harness-report.json"
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "run_id": "11111111-1111-4111-8111-111111111111",
+                        "source_identity": {"worktree_clean": True},
+                        "all_local_checks_passed": True,
+                        "run_completed_successfully": True,
+                        "checks": [{"name": "structure", "passed": True}],
+                        "requirement_count": 47,
+                        "execution_route": "planner-approved-deterministic-kernel",
+                        "planner_status": "completed",
+                        "planner_contract": {
+                            "decision_mode": "tool_call",
+                            "capability_tags": ["repository_lifecycle"],
+                            "risks": ["permissions"],
+                            "validation_focus": ["persistence"],
+                        },
+                        "planner_iterations": 1,
+                        "coding_agent_iterations": 0,
+                        "manual_interventions": 0,
+                        "model_usage": {
+                            "prompt_tokens": 100,
+                            "completion_tokens": 20,
+                            "request_count": 1,
+                            "http_attempt_count": 1,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = evaluate_generation(
+                report_path,
+                expected_requirements=47,
+                require_report_version_2=True,
+            )
+            version_check = next(
+                item for item in result["checks"] if item["name"] == "report_version"
+            )
+            self.assertFalse(version_check["passed"])
+            self.assertEqual(version_check["expected"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

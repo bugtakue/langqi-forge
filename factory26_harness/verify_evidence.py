@@ -439,6 +439,7 @@ def _recompute_qualification(root: Path, qualification: dict[str, Any]) -> None:
             expected_gateway_provenance=expected_gateway_provenance,
             require_clean_source=True,
             require_bound_artifacts=False,
+            require_report_version_2=True,
         )
         _require_recomputed_checks(
             label=f"{domain}_generation",

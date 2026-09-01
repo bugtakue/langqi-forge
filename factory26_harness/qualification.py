@@ -494,6 +494,7 @@ def evaluate_generation(
     expected_gateway_provenance: str | None = None,
     require_clean_source: bool = False,
     require_bound_artifacts: bool = False,
+    require_report_version_2: bool | None = None,
 ) -> dict[str, Any]:
     payload = _load(path)
     usage = payload.get("model_usage") or {}
@@ -505,10 +506,15 @@ def evaluate_generation(
     gateway_provenance = str(gateway.get("provenance") or "").strip()
     prompt_tokens = int(usage.get("prompt_tokens") or 0)
     completion_tokens = int(usage.get("completion_tokens") or 0)
+    strict_report_version = (
+        require_bound_artifacts
+        if require_report_version_2 is None
+        else require_report_version_2
+    )
     clean_expected: Any = True if require_clean_source else "true or unavailable"
     clean_passed = source_identity.get("worktree_clean") is True if require_clean_source else source_identity.get("worktree_clean") is not False
     checks = [
-        _check("report_version", payload.get("version") == 2 if require_bound_artifacts else payload.get("version") in {None, 1, 2}, payload.get("version"), 2 if require_bound_artifacts else "1 or 2"),
+        _check("report_version", payload.get("version") == 2 if strict_report_version else payload.get("version") in {None, 1, 2}, payload.get("version"), 2 if strict_report_version else "1 or 2"),
         _check("run_id", _valid_run_id(payload.get("run_id")), payload.get("run_id"), "UUID"),
         _check("source_worktree_clean", clean_passed, source_identity.get("worktree_clean"), clean_expected),
         _check("all_local_checks_passed", payload.get("all_local_checks_passed") is True, payload.get("all_local_checks_passed"), True),
