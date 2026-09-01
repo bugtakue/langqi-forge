@@ -11,8 +11,10 @@ dynamic input, validation, separation of duties, state transitions, and refresh
 persistence. It is not part of the official 304-test score and must never be
 reported as such.
 
-The production proof is pending until a real model route is available. A dry
-run cannot pass because the generic scaffold does not implement this domain.
+The source tree never self-asserts that this proof passed. A dry run cannot
+pass because the generic scaffold does not implement this domain; a production
+result is published only in the same-revision `evidence-v2` branch after the
+real model route and locked evaluator both pass.
 
 Run it only from a clean commit with an OpenAI-compatible model configured:
 

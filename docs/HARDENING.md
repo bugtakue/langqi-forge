@@ -1,6 +1,6 @@
 # Adversarial hardening — 2026-09-01
 
-本页记录正式百炼基线之后的最新代码强化。它证明当前工作树的确定性内核、故障语义和 GUI 兼容性；它不是新的模型生产轨迹。最终参赛证据仍需在实现冻结后用阿里云百炼重新生成并通过资格门。
+本页记录正式百炼基线之后的代码强化。源码回归与模型生产证据不混写：当前 release 的真实模型、GUI、资格和独立复核结果只发布到绑定精确源码 revision 的 [`evidence-v2`](https://github.com/bugtakue/langqi-forge/tree/evidence-v2/evidence/v2) 分支。该链接不存在或资格失败时，即不作当前生产声明。
 
 ## 最新回归
 
@@ -9,7 +9,7 @@
 | GitHub 最新 dry-run 制品基准 | 101 / 101 | 0 / 0 / 0 | 4 workers，完全并发 |
 | 同一制品改名对抗 | 101 / 101 | 0 / 0 / 0 | 4 workers，完全并发 |
 | Spreadsheet 最新 dry-run 制品基准 | 102 / 102 | 0 / 0 / 0 | 4 workers，完全并发 |
-| Python 全仓测试 | 114 / 114 | — | 含证据篡改、统计型伪报告、运行时替换、环境注入、轨迹密钥夹带、路径逃逸、胶囊、第三域盲测输入锁定、Planner 时间预算与并行预构建、原始 tool-call 规范化绑定、最小比赛包、评委报告、竞品 runner 和实时违规终止合同 |
+| Python 全仓测试 | 116 / 116 | — | 含证据篡改、统计型伪报告、运行时替换、环境注入、轨迹密钥夹带、路径逃逸、胶囊、第三域盲测输入锁定、Planner 时间预算与并行预构建、原始 tool-call 规范化绑定、最小比赛包、评委报告、竞品 runner 和实时违规终止合同 |
 | Node 内核与认证合同 | 22 / 22 | — | 含确定性随机总账/BOM 性质测试 |
 
 2026-09-01 在干净提交 `ae293d7` 上完成了新的顺序离线冻结：GitHub baseline 11.113s、GitHub adversarial 10.843s、Spreadsheet baseline 19.327s，全部 4 workers、无 unexpected / skipped / flaky。这些是本地候选证据，不是模型生产证据。最终数字必须在实现冻结后从干净 commit 通过百炼顺序重跑，并由 v2 资格门与独立验证器一起验收。企业 GUI 另通过 GitHub 8 个页面与 Spreadsheet 5 个工作区的端到端操作。
@@ -67,8 +67,8 @@
 
 ## 尚未冒充完成的事项
 
-- 最新代码尚未用百炼密钥重新生成最终双域生产轨迹；仓库现有 `evidence/final/` 仍是上一份真实 `qwen-plus` 运行。
-- 第三域 Change Control 盲测的需求、隐藏测试和 fail-closed runner 已冻结；当前只能声明“通道可运行”，尚不声明泛化通过，直到真实百炼模型产生编码工具轨迹并通过 5/5 黑盒。
+- 主源码分支不自报同版本生产通过；只有独立 `evidence-v2` 分支中的资格文件和验证器输出可以建立该声明，旧 `evidence/final/` 仍只代表历史 `qwen-plus` 运行。
+- 第三域 Change Control 的源码不内置“通过”布尔值；只有精确 zip 经真实模型产生编码工具轨迹并通过锁定的 5/5 黑盒后，`evidence-v2` 才可收录其 proof。
 - 2026-09-01 的 `unbounded-v2` 隔离盲测不构成成对成绩：Codex CLI `0.151.0` + `gpt-5.4/high` 在 GitHub 上 1200.063 秒 timeout，未产生可评分文件；在 Spreadsheet 上 1200.062 秒 timeout，已生成前后端 10 个文件，但未执行 install/build/start，因此仍不评分。两次均无违规工具事件。Claude Code `2.1.161` 在 5.792 秒返回 OAuth token revoked 的 401，属认证失败而非参赛成绩。
 - 独立的 `checkpointed-v3` 对双方同时要求早期可运行骨架与最多两文件的增量编辑，不覆盖 v2 超时。Codex 的 Spreadsheet v3 运行在约 1 分钟内生成了前后端可安装骨架，随后逐层生成事务持久化、公式、结构变更、CSV、排序/筛选/校验/透视和真实 SPA；但在 1200.044 秒时仍未做完最终 build/start 收尾，所以状态仍是 timeout、不评分。它证明检查点策略改善了可恢复性，也暴露出单文件仍可膨胀到 1,584 行的剩余问题。在 Claude 重新认证并完成同题运行前，不宣称任一通用 Agent 获胜。
 - 3–5 分钟视频按用户要求后置；官网项目未提交，也未保存不可撤回的提交动作。
