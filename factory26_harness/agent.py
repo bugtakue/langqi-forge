@@ -26,13 +26,24 @@ Hard rules:
 - Implement real behavior, not screenshots or hard-coded answers.
 - Use visible labels, semantic buttons, `type="text"`, JavaScript validation messages, and real disabled states.
 - Make the smallest coherent change. Do not rewrite unrelated working features.
+- Conserve the bounded model turns. One response may issue multiple independent tool calls. When
+  source paths are already known, inspect them together with read_files instead of serial reads.
 - Prefer exact replace_text edits. Before fully replacing an existing file, read it and pass the returned SHA-256 precondition.
 - Stay within the changed-file and cumulative-write budgets reported by tools.
 - Hidden tests are unavailable. Generalize from the requirement rather than guessing test data.
-- Call run_validation("quick") before finishing a feature batch.
+- Call run_validation("quick") once after the last planned edit. Do not call full after a passing
+  quick check; the harness performs an independent full check after the transaction commits.
 The harness will not accept completion unless the latest changed revision has a passing quick/full validation.
 When complete, return a short summary of files changed and any remaining risk.
 """
+
+STARTER_SOURCE_PATHS = (
+    "frontend/src/app.js",
+    "frontend/src/index.html",
+    "frontend/src/styles.css",
+    "backend/server.mjs",
+    "backend/data/state.json",
+)
 
 
 @dataclass(frozen=True)
@@ -88,6 +99,14 @@ class CodingAgent:
                 "\n\nPreviously observed related files:\n- " + "\n- ".join(related)
                 if related
                 else ""
+            )
+            + (
+                "\n\nExecution budget: at most "
+                f"{self.max_turns} model turns, including the final summary. Reserve one "
+                "tool turn for quick validation and one no-tool turn for completion. "
+                "The standard starter paths are known; begin with one read_files call for:\n- "
+                + "\n- ".join(STARTER_SOURCE_PATHS)
+                + "\nDo not spend a turn listing the workspace unless that batch read reports a missing path."
             )
         )
         return self._run(
@@ -234,6 +253,28 @@ class CodingAgent:
                     return AgentRun(
                         False, "workspace tools failed for four consecutive turns", changed, turn
                     )
+            remaining_turns = self.max_turns - turn
+            if remaining_turns <= 6:
+                if self.tools.current_changes_validated:
+                    instruction = (
+                        "If every required behavior is implemented, finish now with a no-tool "
+                        "summary. Otherwise make only the missing edits and re-run quick once."
+                    )
+                else:
+                    instruction = (
+                        "Stop broad inspection. Complete only the missing edits, then reserve one "
+                        "turn for run_validation(\"quick\") and one no-tool completion turn."
+                    )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Turn-budget checkpoint: {remaining_turns} model turns remain. "
+                            + instruction
+                            + " Do not call full unless a quick check failed and you repaired it."
+                        ),
+                    }
+                )
         changed = tuple(sorted(self.tools.changed_files - changed_before))
         self.trace.record(
             "agent_session_exhausted",

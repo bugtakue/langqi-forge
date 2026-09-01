@@ -23,6 +23,8 @@ SENSITIVE_NAMES = {".npmrc", ".pypirc", "credentials", "credentials.json"}
 VALIDATING_SCOPES = {"quick", "full"}
 MAX_TOOL_RESULT_CHARS = 12_000
 MAX_READ_FILE_BYTES = 2_000_000
+MAX_BATCH_READ_FILES = 8
+MAX_BATCH_READ_BYTES = 10_000
 
 
 def _contains_sensitive_part(parts: tuple[str, ...]) -> bool:
@@ -89,6 +91,30 @@ class WorkspaceTools:
                             "end_line": {"type": "integer", "minimum": 1},
                         },
                         "required": ["path"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_files",
+                    "description": (
+                        "Read up to eight small UTF-8 project files in one call. "
+                        "Prefer this over serial read_file calls when the paths are already known."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "paths": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "minItems": 1,
+                                "maxItems": MAX_BATCH_READ_FILES,
+                                "uniqueItems": True,
+                            }
+                        },
+                        "required": ["paths"],
+                        "additionalProperties": False,
                     },
                 },
             },
@@ -270,6 +296,38 @@ class WorkspaceTools:
             "content": "\n".join(selected),
             "sha256": hashlib.sha256(content).hexdigest(),
             "total_lines": len(lines),
+        }
+
+    def _tool_read_files(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        requested = arguments.get("paths")
+        if not isinstance(requested, list) or not 1 <= len(requested) <= MAX_BATCH_READ_FILES:
+            raise ValueError(
+                f"paths must contain between 1 and {MAX_BATCH_READ_FILES} files"
+            )
+        if any(not isinstance(item, str) or not item.strip() for item in requested):
+            raise ValueError("every batch read path must be a non-empty string")
+
+        normalized: list[str] = []
+        total_bytes = 0
+        for item in requested:
+            path = self._safe_path(item)
+            relative = str(path.relative_to(self.root))
+            if relative in normalized:
+                raise ValueError("batch read paths must be unique after normalization")
+            file_size = path.stat().st_size
+            total_bytes += file_size
+            normalized.append(relative)
+        if total_bytes > MAX_BATCH_READ_BYTES:
+            raise ValueError(
+                "batch read exceeds bounded context budget: "
+                f"{total_bytes} > {MAX_BATCH_READ_BYTES} bytes"
+            )
+
+        return {
+            "ok": True,
+            "files": [self._tool_read_file({"path": path}) for path in normalized],
+            "file_count": len(normalized),
+            "total_bytes": total_bytes,
         }
 
     def _tool_search_text(self, arguments: dict[str, Any]) -> dict[str, Any]:

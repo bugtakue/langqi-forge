@@ -19,13 +19,14 @@ from factory26_harness.workspace_tools import WorkspaceTools
 
 class _ModelHandler(BaseHTTPRequestHandler):
     calls = 0
+    payloads: list[dict] = []
 
     def log_message(self, *_args) -> None:
         return
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
         length = int(self.headers.get("content-length") or 0)
-        json.loads(self.rfile.read(length))
+        type(self).payloads.append(json.loads(self.rfile.read(length)))
         type(self).calls += 1
         if type(self).calls == 1:
             message = {
@@ -82,6 +83,7 @@ class _ModelHandler(BaseHTTPRequestHandler):
 class ModelLoopTests(unittest.TestCase):
     def test_openai_tool_loop_edits_workspace_and_tracks_usage(self) -> None:
         _ModelHandler.calls = 0
+        _ModelHandler.payloads = []
         server = ThreadingHTTPServer(("127.0.0.1", 0), _ModelHandler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -138,6 +140,18 @@ class ModelLoopTests(unittest.TestCase):
                 )
                 self.assertEqual(client.total_prompt_tokens, 30)
                 self.assertEqual(client.total_completion_tokens, 15)
+                first_messages = _ModelHandler.payloads[0]["messages"]
+                self.assertIn("read_files", first_messages[0]["content"])
+                self.assertIn("at most 4 model turns", first_messages[1]["content"])
+                second_messages = _ModelHandler.payloads[1]["messages"]
+                self.assertTrue(
+                    any(
+                        message.get("role") == "user"
+                        and "Turn-budget checkpoint: 3 model turns remain"
+                        in message.get("content", "")
+                        for message in second_messages
+                    )
+                )
                 self.assertNotIn(
                     "test-secret",
                     (root / ".arc" / "trace.jsonl").read_text(encoding="utf-8"),

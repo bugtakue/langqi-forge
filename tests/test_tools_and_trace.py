@@ -22,6 +22,44 @@ from factory26_harness.workspace_tools import WorkspaceTools
 
 
 class ToolAndTraceTests(unittest.TestCase):
+    def test_batch_read_returns_multiple_hash_bound_files_in_one_tool_call(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frontend = root / "frontend"
+            backend = root / "backend"
+            frontend.mkdir()
+            backend.mkdir()
+            (frontend / "app.js").write_text("const ready = true;\n", encoding="utf-8")
+            (backend / "server.mjs").write_text("export const port = 1;\n", encoding="utf-8")
+            tools = WorkspaceTools(
+                root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
+            )
+
+            result = json.loads(
+                tools.execute(
+                    "read_files",
+                    {"paths": ["frontend/app.js", "backend/server.mjs"]},
+                )
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["file_count"], 2)
+            self.assertEqual(
+                [entry["path"] for entry in result["files"]],
+                ["frontend/app.js", "backend/server.mjs"],
+            )
+            self.assertEqual(
+                result["files"][0]["sha256"],
+                hashlib.sha256(b"const ready = true;\n").hexdigest(),
+            )
+            duplicate = json.loads(
+                tools.execute(
+                    "read_files",
+                    {"paths": ["frontend/app.js", "frontend/./app.js"]},
+                )
+            )
+            self.assertFalse(duplicate["ok"])
+
     def test_smoke_port_selection_skips_occupied_and_grading_ports(self) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
             occupied.bind(("127.0.0.1", 0))
