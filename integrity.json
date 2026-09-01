@@ -1,0 +1,12 @@
+{
+  "demo": {
+    "bytes": 11398630,
+    "duration_seconds": 290.866667,
+    "name": "langqi-forge-demo.mp4",
+    "sha256": "1168ef88ffff22809b9dd9979887baaddf89c7c584af1949d095807b67d2db5d"
+  },
+  "evidence_commit": "c9918a93ea335d91c515b95500ca9143fc62a625",
+  "source_revision": "d0474d789c583b3c0d0dfbd133c4af8df270cfed",
+  "submission_zip_sha256": "a897cb3ed11833bfd76bf3a9f80ff930a49d9b30714a5f1fc87c14d510444869",
+  "version": 1
+}

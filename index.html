@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111513" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; media-src 'self'; img-src 'self' data:;" />
+    <title>Langqi Forge · Factory26 Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #111513;
+        --muted: #65706a;
+        --line: #cfd6d1;
+        --paper: #f4f6f2;
+        --panel: #fff;
+        --accent: #1f654e;
+        --accent-soft: #dcebe4;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 88% 4%, rgba(31,101,78,.12), transparent 26rem),
+          var(--paper);
+      }
+      a { color: inherit; }
+      .shell { width: min(1180px, calc(100% - 36px)); margin: 0 auto; }
+      header { display: flex; align-items: center; justify-content: space-between; padding: 24px 0; border-bottom: 1px solid var(--line); }
+      .brand { font-weight: 900; letter-spacing: .02em; }
+      .badge { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; font: 700 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .badge::before { content: ""; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
+      main { padding: 64px 0 72px; }
+      .eyebrow { margin: 0 0 12px; color: var(--accent); font-weight: 850; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; }
+      h1 { max-width: 920px; margin: 0; font-size: clamp(44px, 7vw, 86px); line-height: .98; letter-spacing: -.055em; }
+      .lede { max-width: 790px; margin: 24px 0 34px; color: var(--muted); font-size: clamp(18px, 2vw, 23px); line-height: 1.55; }
+      .player-shell { background: #090b0a; border: 1px solid #202522; box-shadow: 0 22px 70px rgba(14,20,17,.18); }
+      video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #090b0a; }
+      .player-meta { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 16px; color: #cbd3cf; font-size: 13px; }
+      .player-meta code { color: #fff; }
+      .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 32px 0; border: 1px solid var(--ink); background: var(--ink); gap: 1px; }
+      .metric { min-height: 122px; padding: 22px; background: var(--ink); color: white; }
+      .metric strong { display: block; margin-bottom: 10px; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.04em; }
+      .metric span { color: #c9d1cd; font-size: 13px; line-height: 1.45; }
+      .content-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 28px; align-items: start; }
+      .panel { border: 1px solid var(--line); background: rgba(255,255,255,.82); padding: 26px; }
+      h2 { margin: 0 0 16px; font-size: 28px; letter-spacing: -.025em; }
+      .chapters { display: grid; gap: 8px; }
+      .chapter { width: 100%; display: grid; grid-template-columns: 52px 1fr; gap: 12px; align-items: center; border: 1px solid transparent; background: transparent; padding: 11px 12px; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+      .chapter:hover, .chapter:focus-visible { border-color: var(--line); background: white; outline: 0; }
+      .chapter time { color: var(--accent); font: 750 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .chapter span { font-size: 15px; }
+      .links { display: grid; gap: 10px; }
+      .button { display: block; padding: 13px 15px; border: 1px solid var(--ink); background: var(--ink); color: white; text-decoration: none; font-weight: 800; }
+      .button.secondary { background: white; color: var(--ink); border-color: var(--line); }
+      .integrity { margin-top: 22px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+      .integrity code { display: block; overflow-wrap: anywhere; color: var(--ink); }
+      .boundary { margin-top: 28px; border-left: 4px solid #9a5b32; padding: 6px 0 6px 18px; color: #704b32; line-height: 1.6; }
+      footer { padding: 24px 0 36px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 20px; }
+      @media (max-width: 760px) {
+        main { padding-top: 42px; }
+        .metrics { grid-template-columns: repeat(2, 1fr); }
+        .content-grid { grid-template-columns: 1fr; }
+        .player-meta, footer { align-items: flex-start; flex-direction: column; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <div class="brand">LANGQI FORGE / 琅岐铸造</div>
+        <div class="badge">Factory26 Demo · 04:50</div>
+      </header>
+      <main>
+        <p class="eyebrow">Evidence before confidence</p>
+        <h1>让 Agent 积累<br />可证伪的能力</h1>
+        <p class="lede">一次受约束的模型决策，把需求路由到可运行内核；失败变成最小反例，全绿才铸成能力胶囊。复用经验，不复用信心。</p>
+
+        <section class="player-shell" aria-label="Langqi Forge Demo video">
+          <video controls preload="auto" poster="poster.jpg">
+            <source src="langqi-forge-demo.mp4" type="video/mp4" />
+            <track kind="subtitles" srclang="zh-CN" label="简体中文" src="langqi-forge.zh-CN.vtt" />
+            你的浏览器不支持 HTML5 视频。请使用下方下载链接。
+          </video>
+          <div class="player-meta"><span>1080p · H.264/AAC · 已内嵌中文字幕</span><code>source d0474d789c58</code></div>
+        </section>
+
+        <section class="metrics" aria-label="Verified results">
+          <div class="metric"><strong>304 / 304</strong><span>真实百炼 · 双域公开与对抗 GUI</span></div>
+          <div class="metric"><strong>71</strong><span>带依赖的原子要求</span></div>
+          <div class="metric"><strong>0</strong><span>最终生产运行人工干预</span></div>
+          <div class="metric"><strong>5/5 × 2</strong><span>同一 ZIP · 陌生第三域双跑</span></div>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel">
+            <h2>章节</h2>
+            <div class="chapters">
+              <button class="chapter" data-time="0"><time>00:00</time><span>为什么不是另一个 Coding Agent 包装</span></button>
+              <button class="chapter" data-time="18"><time>00:18</time><span>Compile → Decide → Route → Build → Falsify → Remember</span></button>
+              <button class="chapter" data-time="56"><time>00:56</time><span>真实百炼与 304 项 GUI 证据</span></button>
+              <button class="chapter" data-time="82"><time>01:22</time><span>强制工具调用与 fail-closed Agent</span></button>
+              <button class="chapter" data-time="116"><time>01:56</time><span>GitHub 服务端权限与合并门禁</span></button>
+              <button class="chapter" data-time="155"><time>02:35</time><span>Spreadsheet 公式、BOM/MRP 与证据链</span></button>
+              <button class="chapter" data-time="193"><time>03:13</time><span>同一 ZIP 的陌生 Change Control 双跑</span></button>
+              <button class="chapter" data-time="229"><time>03:49</time><span>官方 Linux/arm64 Runner 与确定性包</span></button>
+              <button class="chapter" data-time="264"><time>04:24</time><span>证据边界与公开链接</span></button>
+            </div>
+          </article>
+
+          <aside class="panel">
+            <h2>独立复核</h2>
+            <div class="links">
+              <a class="button" href="https://github.com/bugtakue/langqi-forge">源码与启动方式</a>
+              <a class="button secondary" href="https://github.com/bugtakue/langqi-forge/tree/evidence-v2/evidence">完整生产证据</a>
+              <a class="button secondary" href="langqi-forge-demo.mp4" download>下载 MP4</a>
+              <a class="button secondary" href="transcript.md">旁白与画面脚本</a>
+            </div>
+            <div class="integrity">Demo SHA-256<code>1168ef88ffff22809b9dd9979887baaddf89c7c584af1949d095807b67d2db5d</code></div>
+            <div class="integrity">Submission ZIP SHA-256<code>a897cb3ed11833bfd76bf3a9f80ff930a49d9b30714a5f1fc87c14d510444869</code></div>
+            <p class="boundary">公开测试全绿不等于隐藏测试、Top 20 或获奖保证。本页只陈述可以由公开制品复核的结果。</p>
+          </aside>
+        </section>
+      </main>
+      <footer><span>Factory26 · 琅岐岛民</span><span>Langqi Forge · 2026</span></footer>
+    </div>
+    <script>
+      const video = document.querySelector("video");
+      const sourceUrl = video.querySelector("source").src;
+      let bufferedSourcePromise;
+      let bufferedSourceUrl;
+
+      const isSeekable = (targetTime) => {
+        for (let index = 0; index < video.seekable.length; index += 1) {
+          if (targetTime >= video.seekable.start(index) && targetTime <= video.seekable.end(index)) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      const waitForMetadata = () => {
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          return Promise.resolve();
+        }
+
+        return new Promise((resolve, reject) => {
+          video.addEventListener("loadedmetadata", resolve, { once: true });
+          video.addEventListener("error", () => reject(new Error("无法读取 Demo 视频元数据")), { once: true });
+          video.load();
+        });
+      };
+
+      const loadBufferedSource = async () => {
+        if (!bufferedSourcePromise) {
+          bufferedSourcePromise = fetch(sourceUrl).then((response) => {
+            if (!response.ok) {
+              throw new Error(`Demo 视频加载失败：${response.status}`);
+            }
+            return response.blob();
+          }).then((blob) => URL.createObjectURL(blob));
+        }
+
+        bufferedSourceUrl = await bufferedSourcePromise;
+        if (video.src !== bufferedSourceUrl) {
+          video.pause();
+          const metadataReady = new Promise((resolve, reject) => {
+            video.addEventListener("loadedmetadata", resolve, { once: true });
+            video.addEventListener("error", () => reject(new Error("无法读取缓冲后的 Demo 视频")), { once: true });
+          });
+          video.src = bufferedSourceUrl;
+          video.load();
+          await metadataReady;
+        }
+      };
+
+      const seekAndPlay = async (targetTime) => {
+        video.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        try {
+          await waitForMetadata();
+          if (targetTime > 0 && !isSeekable(targetTime)) {
+            await loadBufferedSource();
+          }
+          video.currentTime = Math.min(targetTime, Math.max(video.duration - 0.25, 0));
+          await video.play();
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      document.querySelectorAll("[data-time]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const targetTime = Number(button.dataset.time || 0);
+          seekAndPlay(targetTime);
+        });
+      });
+    </script>
+  </body>
+</html>
