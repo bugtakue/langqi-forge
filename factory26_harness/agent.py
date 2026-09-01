@@ -270,6 +270,7 @@ class CodingAgent:
             total_tool_calls += call_count
             recognized_tool = False
             successful_tool = False
+            audit_validation_completed = False
             compact_results: list[dict[str, Any]] = []
             for call in reply.tool_calls:
                 function = call.get("function") or {}
@@ -289,6 +290,12 @@ class CodingAgent:
                     result_payload = json.loads(result)
                     successful_tool = successful_tool or bool(result_payload.get("ok"))
                     compact_results.append(_compact_tool_result(name, result_payload))
+                    audit_validation_completed = audit_validation_completed or (
+                        acceptance_audit_requested
+                        and name == "run_validation"
+                        and bool(result_payload.get("ok"))
+                        and self.tools.current_changes_validated
+                    )
                 except (json.JSONDecodeError, AttributeError):
                     compact_results.append(
                         {"tool": name, "ok": False, "error": "non-JSON tool result"}
@@ -300,6 +307,19 @@ class CodingAgent:
                         "content": result,
                     }
                 )
+            if audit_validation_completed:
+                changed = tuple(sorted(self.tools.changed_files - changed_before))
+                final_summary = "Acceptance audit completed; the final changed revision passed validation."
+                self.trace.record(
+                    "agent_session_completed",
+                    stage=stage,
+                    requirement_ids=requirement_ids,
+                    changed_files=changed,
+                    summary=final_summary,
+                    acceptance_audit=True,
+                    completed_on_validation=True,
+                )
+                return AgentRun(True, final_summary, changed, turn)
             context_before = _context_characters(messages)
             if context_before > self.maximum_context_characters:
                 checkpoint = {

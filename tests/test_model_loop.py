@@ -64,10 +64,25 @@ class _ModelHandler(BaseHTTPRequestHandler):
                     }
                 ],
             }
-        else:
+        elif type(self).calls == 3:
             message = {
                 "role": "assistant",
                 "content": "Implemented the requested file.",
+            }
+        else:
+            message = {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call-audit-validation",
+                        "type": "function",
+                        "function": {
+                            "name": "run_validation",
+                            "arguments": json.dumps({"scope": "quick"}),
+                        },
+                    }
+                ],
             }
         payload = {
             "choices": [{"message": message}],
@@ -264,6 +279,20 @@ class ModelLoopTests(unittest.TestCase):
                         in message.get("content", "")
                         for message in final_messages
                     )
+                )
+                trace_rows = [
+                    json.loads(line)
+                    for line in (root / ".arc" / "trace.jsonl")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                ]
+                completions = [
+                    row
+                    for row in trace_rows
+                    if row["event"] == "agent_session_completed"
+                ]
+                self.assertTrue(
+                    completions[-1]["payload"].get("completed_on_validation")
                 )
                 self.assertNotIn(
                     "test-secret",
