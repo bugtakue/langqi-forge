@@ -48,7 +48,9 @@ Hard rules:
   a later validation failure requires exact current text. Patch every location named by validation
   before calling run_validation again. Never repeat a no-op write; the latest read/write SHA in a
   context checkpoint is the required `expected_sha256` for a full-file replacement.
-- Prefer exact replace_text edits. Before fully replacing an existing file, read it and pass the returned SHA-256 precondition.
+- Prefer exact replace_text for one isolated block. When a small file needs multiple coordinated
+  edits or a state contract changes across layers, replace it once with write_file and the latest
+  observed SHA instead of stacking fragile text replacements.
 - Stay within the changed-file and cumulative-write budgets reported by tools.
 - Hidden tests are unavailable. Generalize from the requirement rather than guessing test data.
 - Call run_validation("quick") once after the last planned edit. Do not call full after a passing
@@ -70,7 +72,7 @@ Check all of these failure surfaces:
 
 If any gap exists, patch only that gap and run quick validation once. If none exists, return a short `AUDIT PASS` summary without tools."""
 
-MAX_ACCEPTANCE_SNAPSHOT_BYTES = 16_000
+MAX_SOURCE_SNAPSHOT_BYTES = 16_000
 
 STARTER_SOURCE_PATHS = (
     "frontend/src/app.js",
@@ -141,15 +143,23 @@ def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
     return summary
 
 
-def _acceptance_snapshot(
+def _source_snapshot(
     root: os.PathLike[str] | str,
     relative_paths: Iterable[str],
+    *,
+    maximum_bytes: int = MAX_SOURCE_SNAPSHOT_BYTES,
 ) -> tuple[str, list[dict[str, Any]]]:
     resolved_root = Path(root).resolve()
-    remaining = MAX_ACCEPTANCE_SNAPSHOT_BYTES
+    remaining = max(0, maximum_bytes)
+    if remaining == 0:
+        return "", []
     sections: list[str] = []
     manifest: list[dict[str, Any]] = []
-    for relative in sorted(set(relative_paths)):
+    seen: set[str] = set()
+    for relative in relative_paths:
+        if relative in seen:
+            continue
+        seen.add(relative)
         candidate = resolved_root / relative
         path = candidate.resolve()
         if (
@@ -205,7 +215,7 @@ class CodingAgent:
         )
         self.maximum_context_characters = max(
             8_000,
-            int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "24000")),
+            int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "32000")),
         )
 
     def implement(
@@ -279,7 +289,7 @@ class CodingAgent:
 
         def request_acceptance_audit(changed: tuple[str, ...], *, trigger: str) -> None:
             nonlocal acceptance_audit_requested, acceptance_audit_message
-            snapshot, snapshot_manifest = _acceptance_snapshot(self.tools.root, changed)
+            snapshot, snapshot_manifest = _source_snapshot(self.tools.root, changed)
             acceptance_audit_requested = True
             acceptance_audit_message = {
                 "role": "user",
@@ -444,39 +454,79 @@ class CodingAgent:
                     "validation_scope": self.tools.validation_scope,
                     "latest_tool_results": compact_results,
                 }
-                checkpoint_message = {
-                    "role": "user",
-                    "content": (
-                        "Deterministic context checkpoint. Earlier model/tool turns remain "
-                        "sealed in the production trace but are omitted from this request. "
-                        "The initial starter read has already been handled when the state says "
-                        "starter_batch_read_completed=true; do not restart it merely because "
-                        "the original task prompt mentions it. Do not reread observed files "
-                        "unless exact current text is necessary for the next edit. State:\n"
-                        + json.dumps(
-                            checkpoint,
-                            ensure_ascii=False,
-                            sort_keys=True,
-                            separators=(",", ":"),
-                        )
-                    ),
-                }
-                compacted_messages = messages[:2] + [checkpoint_message]
-                if acceptance_audit_requested:
-                    snapshot, _snapshot_manifest = _acceptance_snapshot(
-                        self.tools.root,
-                        self.tools.changed_files - changed_before,
+                checkpoint_intro = (
+                    "Deterministic context checkpoint. Earlier model/tool turns remain "
+                    "sealed in the production trace but are omitted from this request. "
+                    "The initial starter read has already been handled when the state says "
+                    "starter_batch_read_completed=true; do not restart it merely because "
+                    "the original task prompt mentions it. A bounded snapshot of current "
+                    "observed source follows the state, so edit from that exact text instead "
+                    "of rereading it. State:\n"
+                    + json.dumps(
+                        checkpoint,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
                     )
-                    acceptance_audit_message = {
+                )
+                changed_now = sorted(self.tools.changed_files - changed_before)
+                snapshot_paths = changed_now + sorted(observed_files - set(changed_now))
+                compact_audit_message: dict[str, Any] | None = None
+                if acceptance_audit_requested:
+                    compact_audit_message = {
                         "role": "user",
                         "content": (
                             ACCEPTANCE_AUDIT_PROMPT
-                            + "\n\n<untrusted_changed_sources>\n"
-                            + (snapshot or "[snapshot unavailable]")
-                            + "\n</untrusted_changed_sources>"
+                            + "\n\nUse the refreshed current-source snapshot in the "
+                            "preceding deterministic checkpoint."
                         ),
                     }
-                    compacted_messages.append(acceptance_audit_message)
+                    acceptance_audit_message = compact_audit_message
+                no_snapshot_message = {
+                    "role": "user",
+                    "content": checkpoint_intro,
+                }
+                fixed_messages = messages[:2] + [no_snapshot_message]
+                if compact_audit_message is not None:
+                    fixed_messages.append(compact_audit_message)
+                snapshot_budget = min(
+                    MAX_SOURCE_SNAPSHOT_BYTES,
+                    max(
+                        0,
+                        self.maximum_context_characters
+                        - _context_characters(fixed_messages)
+                        - 800,
+                    ),
+                )
+                source_snapshot = ""
+                source_snapshot_manifest: list[dict[str, Any]] = []
+                while snapshot_budget > 0:
+                    source_snapshot, source_snapshot_manifest = _source_snapshot(
+                        self.tools.root,
+                        snapshot_paths,
+                        maximum_bytes=snapshot_budget,
+                    )
+                    checkpoint_message = {
+                        "role": "user",
+                        "content": (
+                            checkpoint_intro
+                            + "\n\n<untrusted_current_sources>\n"
+                            + (source_snapshot or "[snapshot unavailable]")
+                            + "\n</untrusted_current_sources>"
+                        ),
+                    }
+                    compacted_messages = messages[:2] + [checkpoint_message]
+                    if compact_audit_message is not None:
+                        compacted_messages.append(compact_audit_message)
+                    if (
+                        _context_characters(compacted_messages)
+                        <= self.maximum_context_characters
+                    ):
+                        break
+                    snapshot_budget //= 2
+                else:
+                    compacted_messages = fixed_messages
+                    source_snapshot_manifest = []
                 recent_messages = messages[turn_message_start:]
                 with_recent_turn = compacted_messages + recent_messages
                 retained_current_turn = (
@@ -494,6 +544,7 @@ class CodingAgent:
                     after_characters=_context_characters(messages),
                     checkpoint=checkpoint,
                     retained_current_turn=retained_current_turn,
+                    source_snapshot=source_snapshot_manifest,
                 )
             if implementation_validation_completed and not acceptance_audit_requested:
                 changed = tuple(sorted(self.tools.changed_files - changed_before))

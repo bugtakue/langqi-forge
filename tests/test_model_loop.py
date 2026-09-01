@@ -458,16 +458,22 @@ class ModelLoopTests(unittest.TestCase):
             self.assertLess(compacted[0]["payload"]["after_characters"], 8_000)
             self.assertTrue((root / "frontend" / "src" / "large.js").is_file())
 
-    def test_context_compaction_retains_the_latest_tool_turn_when_it_fits(
+    def test_context_compaction_includes_the_current_source_snapshot(
         self,
     ) -> None:
         class RetentionModel:
             def __init__(self) -> None:
                 self.turn = 0
-                self.saw_retained_write = False
+                self.saw_current_source = False
 
             def complete(self, messages, _tools):
                 self.turn += 1
+                self.saw_current_source = self.saw_current_source or any(
+                    message.get("role") == "user"
+                    and "<untrusted_current_sources>" in message.get("content", "")
+                    and "frontend/src/part-2.js" in message.get("content", "")
+                    for message in messages
+                )
                 if self.turn <= 2:
                     path = f"frontend/src/part-{self.turn}.js"
                     calls = (
@@ -477,7 +483,7 @@ class ModelLoopTests(unittest.TestCase):
                             "function": {
                                 "name": "write_file",
                                 "arguments": json.dumps(
-                                    {"path": path, "content": "x" * 3_000}
+                                    {"path": path, "content": "x" * 5_000}
                                 ),
                             },
                         },
@@ -488,16 +494,6 @@ class ModelLoopTests(unittest.TestCase):
                         content="",
                     )
                 if self.turn == 3:
-                    self.saw_retained_write = any(
-                        message.get("role") == "assistant"
-                        and any(
-                            (call.get("function") or {}).get("name") == "write_file"
-                            and "part-2.js"
-                            in str((call.get("function") or {}).get("arguments"))
-                            for call in message.get("tool_calls") or []
-                        )
-                        for message in messages
-                    )
                     calls = (
                         {
                             "id": "validate",
@@ -543,7 +539,7 @@ class ModelLoopTests(unittest.TestCase):
             )
             trace = ProductionTrace(root / ".arc" / "trace.jsonl")
             model = RetentionModel()
-            with patch.dict(os.environ, {"FACTORY26_AGENT_CONTEXT_CHARS": "12000"}):
+            with patch.dict(os.environ, {"FACTORY26_AGENT_CONTEXT_CHARS": "16000"}):
                 result = CodingAgent(
                     model, WorkspaceTools(root, trace, 3924), trace, max_turns=4
                 ).implement(
@@ -560,7 +556,7 @@ class ModelLoopTests(unittest.TestCase):
                     ]
                 )
             self.assertTrue(result.completed)
-            self.assertTrue(model.saw_retained_write)
+            self.assertTrue(model.saw_current_source)
             rows = [
                 json.loads(line)
                 for line in trace.path.read_text(encoding="utf-8").splitlines()
@@ -569,7 +565,13 @@ class ModelLoopTests(unittest.TestCase):
                 row for row in rows if row["event"] == "agent_context_compacted"
             ]
             self.assertTrue(
-                any(row["payload"].get("retained_current_turn") for row in compacted)
+                any(
+                    any(
+                        item.get("path") == "frontend/src/part-2.js"
+                        for item in row["payload"].get("source_snapshot") or []
+                    )
+                    for row in compacted
+                )
             )
 
     def test_turn_budget_never_auto_accepts_an_unfinished_audit(self) -> None:
