@@ -9,7 +9,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from factory26_harness.checks import frontend_build_check, package_policy_check
+from factory26_harness.checks import (
+    frontend_build_check,
+    interaction_policy_check,
+    package_policy_check,
+)
 from factory26_harness.cli import _safe_smoke_port
 from factory26_harness.impact import ChangeImpactGraph
 from factory26_harness.trace import (
@@ -22,7 +26,9 @@ from factory26_harness.workspace_tools import WorkspaceTools
 
 
 class ToolAndTraceTests(unittest.TestCase):
-    def test_batch_read_returns_multiple_hash_bound_files_in_one_tool_call(self) -> None:
+    def test_batch_read_returns_multiple_hash_bound_files_in_one_tool_call(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             frontend = root / "frontend"
@@ -30,7 +36,9 @@ class ToolAndTraceTests(unittest.TestCase):
             frontend.mkdir()
             backend.mkdir()
             (frontend / "app.js").write_text("const ready = true;\n", encoding="utf-8")
-            (backend / "server.mjs").write_text("export const port = 1;\n", encoding="utf-8")
+            (backend / "server.mjs").write_text(
+                "export const port = 1;\n", encoding="utf-8"
+            )
             tools = WorkspaceTools(
                 root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
             )
@@ -351,6 +359,29 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertFalse(result.passed)
             self.assertIn("postinstall", result.summary)
             self.assertIn("unsafe dependency", result.summary)
+
+    def test_interaction_policy_requires_in_page_feedback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "frontend" / "src"
+            source.mkdir(parents=True)
+            app = source / "app.js"
+            app.write_text(
+                'card.querySelector("[role=alert]").textContent = message;\n',
+                encoding="utf-8",
+            )
+            self.assertTrue(interaction_policy_check(root).passed)
+
+            app.write_text(
+                'window.alert("Reviewer must differ from requester");\n'
+                'globalThis.confirm("Continue?");\n',
+                encoding="utf-8",
+            )
+            result = interaction_policy_check(root)
+            self.assertFalse(result.passed)
+            self.assertIn("frontend/src/app.js:1", result.summary)
+            self.assertIn("frontend/src/app.js:2", result.summary)
+            self.assertIn("owning semantic DOM container", result.summary)
 
     def test_write_invalidates_previous_validation_revision(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

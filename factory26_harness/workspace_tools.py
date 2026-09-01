@@ -10,6 +10,7 @@ from typing import Any
 
 from .checks import (
     frontend_build_check,
+    interaction_policy_check,
     package_policy_check,
     run_full_checks,
     structure_check,
@@ -74,7 +75,12 @@ class WorkspaceTools:
                     "description": "List project files without node_modules, dist, .git, or generated caches.",
                     "parameters": {
                         "type": "object",
-                        "properties": {"directory": {"type": "string", "description": "Relative directory, default ."}},
+                        "properties": {
+                            "directory": {
+                                "type": "string",
+                                "description": "Relative directory, default .",
+                            }
+                        },
                     },
                 },
             },
@@ -127,7 +133,10 @@ class WorkspaceTools:
                         "type": "object",
                         "properties": {
                             "query": {"type": "string"},
-                            "directory": {"type": "string", "description": "Relative directory, default ."},
+                            "directory": {
+                                "type": "string",
+                                "description": "Relative directory, default .",
+                            },
                         },
                         "required": ["query"],
                     },
@@ -163,7 +172,11 @@ class WorkspaceTools:
                             "path": {"type": "string"},
                             "old": {"type": "string"},
                             "new": {"type": "string"},
-                            "expected_count": {"type": "integer", "minimum": 1, "default": 1},
+                            "expected_count": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "default": 1,
+                            },
                         },
                         "required": ["path", "old", "new"],
                     },
@@ -177,7 +190,10 @@ class WorkspaceTools:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "scope": {"type": "string", "enum": ["structure", "quick", "full"]}
+                            "scope": {
+                                "type": "string",
+                                "enum": ["structure", "quick", "full"],
+                            }
                         },
                         "required": ["scope"],
                     },
@@ -270,7 +286,9 @@ class WorkspaceTools:
                 if not path.is_file():
                     continue
                 relative = path.relative_to(self.root)
-                if any(part in EXCLUDED_PARTS for part in relative.parts) or _contains_sensitive_part(relative.parts):
+                if any(
+                    part in EXCLUDED_PARTS for part in relative.parts
+                ) or _contains_sensitive_part(relative.parts):
                     continue
                 files.append(str(relative))
                 if len(files) >= 300:
@@ -288,7 +306,10 @@ class WorkspaceTools:
         requested_end = int(arguments.get("end_line") or (start + 399))
         end = min(requested_end, start + 399)
         lines = path.read_text(encoding="utf-8").splitlines()
-        selected = [f"{index}: {lines[index - 1]}" for index in range(start, min(end, len(lines)) + 1)]
+        selected = [
+            f"{index}: {lines[index - 1]}"
+            for index in range(start, min(end, len(lines)) + 1)
+        ]
         content = path.read_bytes()
         return {
             "ok": True,
@@ -300,7 +321,10 @@ class WorkspaceTools:
 
     def _tool_read_files(self, arguments: dict[str, Any]) -> dict[str, Any]:
         requested = arguments.get("paths")
-        if not isinstance(requested, list) or not 1 <= len(requested) <= MAX_BATCH_READ_FILES:
+        if (
+            not isinstance(requested, list)
+            or not 1 <= len(requested) <= MAX_BATCH_READ_FILES
+        ):
             raise ValueError(
                 f"paths must contain between 1 and {MAX_BATCH_READ_FILES} files"
             )
@@ -357,7 +381,13 @@ class WorkspaceTools:
                 continue
             for index, line in enumerate(lines, 1):
                 if matcher.search(line):
-                    matches.append({"path": str(path.relative_to(self.root)), "line": index, "text": line[:300]})
+                    matches.append(
+                        {
+                            "path": str(path.relative_to(self.root)),
+                            "line": index,
+                            "text": line[:300],
+                        }
+                    )
                     if len(matches) >= 80:
                         return {"ok": True, "matches": matches, "truncated": True}
         return {"ok": True, "matches": matches, "truncated": False}
@@ -376,7 +406,9 @@ class WorkspaceTools:
                 )
             actual = hashlib.sha256(path.read_bytes()).hexdigest()
             if expected != actual:
-                raise ValueError("file changed since read_file; SHA-256 precondition failed")
+                raise ValueError(
+                    "file changed since read_file; SHA-256 precondition failed"
+                )
             if path.read_bytes() == encoded:
                 return {
                     "ok": True,
@@ -441,6 +473,8 @@ class WorkspaceTools:
             results = [structure_check(self.root)]
             if results[-1].passed:
                 results.append(package_policy_check(self.root))
+            if results[-1].passed:
+                results.append(interaction_policy_check(self.root))
             if results[-1].passed:
                 results.append(frontend_build_check(self.root))
         elif scope == "full":

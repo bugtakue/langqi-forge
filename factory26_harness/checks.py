@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -40,6 +41,11 @@ FORBIDDEN_LIFECYCLE_SCRIPTS = {
     "prepublish",
     "prepublishOnly",
 }
+BLOCKING_DIALOG_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_$])(?:(?:window|globalThis)\s*\.\s*)?"
+    r"(?:alert|confirm|prompt)\s*\("
+)
+INTERACTION_SOURCE_SUFFIXES = {".html", ".js", ".jsx", ".mjs", ".ts", ".tsx"}
 
 
 @dataclass(frozen=True)
@@ -72,7 +78,11 @@ def _safe_environment(**extra: str) -> dict[str, str]:
 
 
 def _run(
-    command: list[str], cwd: Path, timeout: int, *, environment: dict[str, str] | None = None
+    command: list[str],
+    cwd: Path,
+    timeout: int,
+    *,
+    environment: dict[str, str] | None = None,
 ) -> tuple[int, str, float]:
     started = time.monotonic()
     try:
@@ -91,7 +101,11 @@ def _run(
         return completed.returncode, output[-4000:], time.monotonic() - started
     except subprocess.TimeoutExpired as exc:
         output = ((exc.stdout or "") + "\n" + (exc.stderr or "")).strip()
-        return 124, f"timeout after {timeout}s\n{output[-3000:]}", time.monotonic() - started
+        return (
+            124,
+            f"timeout after {timeout}s\n{output[-3000:]}",
+            time.monotonic() - started,
+        )
     except OSError as exc:
         return 127, str(exc), time.monotonic() - started
 
@@ -104,7 +118,9 @@ def structure_check(root: Path) -> CheckResult:
     )
     missing = [relative for relative in required if not (root / relative).is_file()]
     summary = "structure complete" if not missing else "missing: " + ", ".join(missing)
-    return CheckResult("structure", not missing, summary, required, time.monotonic() - started)
+    return CheckResult(
+        "structure", not missing, summary, required, time.monotonic() - started
+    )
 
 
 def package_policy_check(root: Path) -> CheckResult:
@@ -129,7 +145,9 @@ def package_policy_check(root: Path) -> CheckResult:
             errors.append(f"{path.relative_to(root)} scripts must be an object")
             continue
         if not str(scripts.get(required_script) or "").strip():
-            errors.append(f"{path.relative_to(root)} is missing script {required_script}")
+            errors.append(
+                f"{path.relative_to(root)} is missing script {required_script}"
+            )
         forbidden = sorted(FORBIDDEN_LIFECYCLE_SCRIPTS.intersection(scripts))
         if forbidden:
             errors.append(
@@ -162,6 +180,49 @@ def package_policy_check(root: Path) -> CheckResult:
     )
 
 
+def interaction_policy_check(root: Path) -> CheckResult:
+    """Reject blocking browser dialogs that hide product feedback from the DOM."""
+
+    started = time.monotonic()
+    source_root = root / "frontend" / "src"
+    related: list[str] = []
+    violations: list[str] = []
+    if source_root.is_dir():
+        for path in sorted(source_root.rglob("*")):
+            if (
+                not path.is_file()
+                or path.suffix.lower() not in INTERACTION_SOURCE_SUFFIXES
+            ):
+                continue
+            relative = path.relative_to(root).as_posix()
+            related.append(relative)
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                violations.append(f"{relative} is unreadable: {exc}")
+                continue
+            for match in BLOCKING_DIALOG_PATTERN.finditer(text):
+                line = text.count("\n", 0, match.start()) + 1
+                violations.append(f"{relative}:{line} uses a blocking browser dialog")
+                if len(violations) >= 20:
+                    break
+            if len(violations) >= 20:
+                break
+    summary = (
+        "interaction policy passed"
+        if not violations
+        else "; ".join(violations)
+        + "; render validation and action feedback in the owning semantic DOM container"
+    )
+    return CheckResult(
+        "interaction_policy",
+        not violations,
+        summary,
+        tuple(related),
+        time.monotonic() - started,
+    )
+
+
 def _npm_install(directory: Path) -> tuple[int, str, float]:
     package = json.loads((directory / "package.json").read_text(encoding="utf-8"))
     dependencies = package.get("dependencies") or {}
@@ -180,10 +241,18 @@ def frontend_build_check(root: Path) -> CheckResult:
     frontend = root / "frontend"
     related = ("frontend/package.json", "frontend/src", "frontend/build.mjs")
     if not (frontend / "package.json").is_file():
-        return CheckResult("frontend_build", False, "frontend/package.json missing", related, 0.0)
+        return CheckResult(
+            "frontend_build", False, "frontend/package.json missing", related, 0.0
+        )
     install_rc, install_output, install_seconds = _npm_install(frontend)
     if install_rc != 0:
-        return CheckResult("frontend_build", False, f"npm install failed\n{install_output}", related, install_seconds)
+        return CheckResult(
+            "frontend_build",
+            False,
+            f"npm install failed\n{install_output}",
+            related,
+            install_seconds,
+        )
     rc, output, seconds = _run(
         ["npm", "run", "build"],
         frontend,
@@ -199,14 +268,18 @@ def frontend_build_check(root: Path) -> CheckResult:
     )
 
 
-def _wait_for_health(port: int, process: subprocess.Popen, timeout: int) -> tuple[bool, str]:
+def _wait_for_health(
+    port: int, process: subprocess.Popen, timeout: int
+) -> tuple[bool, str]:
     deadline = time.monotonic() + timeout
     last_error = "not ready"
     while time.monotonic() < deadline:
         if process.poll() is not None:
             return False, f"backend exited with code {process.returncode}"
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2) as response:
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/health", timeout=2
+            ) as response:
                 payload = json.loads(response.read().decode("utf-8"))
                 if response.status == 200 and payload.get("ready") is True:
                     return True, "health endpoint ready"
@@ -232,15 +305,25 @@ def startup_check(root: Path, smoke_port: int) -> CheckResult:
     backend = root / "backend"
     related = ("backend/package.json", "backend/server.mjs", "frontend/dist")
     if not (backend / "package.json").is_file():
-        return CheckResult("startup_health", False, "backend/package.json missing", related, 0.0)
+        return CheckResult(
+            "startup_health", False, "backend/package.json missing", related, 0.0
+        )
     if not _port_available(smoke_port):
         return CheckResult(
-            "startup_health", False, f"smoke port {smoke_port} is already occupied", related, 0.0
+            "startup_health",
+            False,
+            f"smoke port {smoke_port} is already occupied",
+            related,
+            0.0,
         )
     install_rc, install_output, _ = _npm_install(backend)
     if install_rc != 0:
         return CheckResult(
-            "startup_health", False, f"backend npm install failed\n{install_output}", related, time.monotonic() - started
+            "startup_health",
+            False,
+            f"backend npm install failed\n{install_output}",
+            related,
+            time.monotonic() - started,
         )
     environment = _safe_environment(PORT=str(smoke_port))
     process = subprocess.Popen(
@@ -259,7 +342,9 @@ def startup_check(root: Path, smoke_port: int) -> CheckResult:
                 summary += "\n" + process.stdout.read()[-3000:]
             except OSError:
                 pass
-        return CheckResult("startup_health", passed, summary, related, time.monotonic() - started)
+        return CheckResult(
+            "startup_health", passed, summary, related, time.monotonic() - started
+        )
     finally:
         try:
             os.killpg(process.pid, signal.SIGTERM)
@@ -279,6 +364,8 @@ def run_full_checks(root: Path, smoke_port: int) -> list[CheckResult]:
     results = [structure_check(root)]
     if results[-1].passed:
         results.append(package_policy_check(root))
+    if results[-1].passed:
+        results.append(interaction_policy_check(root))
     if results[-1].passed:
         results.append(frontend_build_check(root))
     if results[-1].passed:

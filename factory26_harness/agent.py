@@ -24,7 +24,9 @@ Hard rules:
 - Never start a server yourself; use run_validation, which uses a safe smoke port.
 - Preserve `/api/health` and persistent backend state across refresh and process restart.
 - Implement real behavior, not screenshots or hard-coded answers.
-- Use visible labels, semantic buttons, `type="text"`, JavaScript validation messages, and real disabled states.
+- Use visible labels, semantic buttons, `type="text"`, persistent DOM validation messages, and real disabled states.
+- Never use `alert()`, `confirm()`, or `prompt()` for product feedback. Put each action's error/status
+  inside the form, card, dialog, row, or other semantic container that owns that action.
 - Make the smallest coherent change. Do not rewrite unrelated working features.
 - Conserve the bounded model turns. One response may issue multiple independent tool calls. When
   source paths are already known, inspect them together with read_files instead of serial reads.
@@ -163,9 +165,7 @@ class CodingAgent:
                         changed_files=changed,
                         summary=final_summary,
                     )
-                    return AgentRun(
-                        True, final_summary, changed, turn
-                    )
+                    return AgentRun(True, final_summary, changed, turn)
                 if not has_required_change:
                     reminder = "You have not edited any file. Use the available tools and implement the requirement now."
                 else:
@@ -211,7 +211,9 @@ class CodingAgent:
                     arguments = {}
                 result = self.tools.execute(name, arguments)
                 try:
-                    successful_tool = successful_tool or bool(json.loads(result).get("ok"))
+                    successful_tool = successful_tool or bool(
+                        json.loads(result).get("ok")
+                    )
                 except (json.JSONDecodeError, AttributeError):
                     pass
                 messages.append(
@@ -251,7 +253,10 @@ class CodingAgent:
                         changed_files=changed,
                     )
                     return AgentRun(
-                        False, "workspace tools failed for four consecutive turns", changed, turn
+                        False,
+                        "workspace tools failed for four consecutive turns",
+                        changed,
+                        turn,
                     )
             remaining_turns = self.max_turns - turn
             if remaining_turns <= 6:
@@ -263,7 +268,7 @@ class CodingAgent:
                 else:
                     instruction = (
                         "Stop broad inspection. Complete only the missing edits, then reserve one "
-                        "turn for run_validation(\"quick\") and one no-tool completion turn."
+                        'turn for run_validation("quick") and one no-tool completion turn.'
                     )
                 messages.append(
                     {
