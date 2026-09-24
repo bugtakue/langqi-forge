@@ -24,6 +24,7 @@ MAX_BATCH_READ_FILES = 8
 MAX_BATCH_READ_BYTES = 4_000_000
 MAX_BATCH_RESULT_CONTENT_CHARS = 9_000
 MAX_REQUIREMENT_PAGE_CHARS = 4_000
+MAX_DIRECT_READ_RESULT_CHARS = MAX_TOOL_RESULT_CHARS - 500
 
 
 def _contains_sensitive_part(parts: tuple[str, ...]) -> bool:
@@ -146,13 +147,23 @@ class WorkspaceTools:
                 "type": "function",
                 "function": {
                     "name": "read_file",
-                    "description": "Read a bounded range from a UTF-8 project file.",
+                    "description": (
+                        "Read up to 400 numbered lines from a UTF-8 project file. "
+                        "If content_truncated is true, continue from next_start_line. "
+                        "For an oversized single line, use the returned next_start_char "
+                        "with start_char to page through exact source characters."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "path": {"type": "string"},
                             "start_line": {"type": "integer", "minimum": 1},
                             "end_line": {"type": "integer", "minimum": 1},
+                            "start_char": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "description": "Alternative exact character-page cursor for oversized lines.",
+                            },
                         },
                         "required": ["path"],
                     },
@@ -164,7 +175,9 @@ class WorkspaceTools:
                     "name": "read_files",
                     "description": (
                         "Read up to eight small UTF-8 project files in one call. "
-                        "Prefer this over serial read_file calls when the paths are already known."
+                        "Prefer this over serial read_file calls when the paths are already known. "
+                        "If a file reports content_truncated, continue it with read_file "
+                        "from next_start_line before relying on omitted code."
                     ),
                     "parameters": {
                         "type": "object",
@@ -426,6 +439,32 @@ class WorkspaceTools:
         encoded = json.dumps(result, ensure_ascii=False, sort_keys=True)
         if len(encoded) <= MAX_TOOL_RESULT_CHARS:
             return encoded
+        if name == "read_files" and isinstance(result, dict) and isinstance(result.get("files"), list):
+            return json.dumps(
+                {
+                    "ok": bool(result.get("ok")),
+                    "truncated": True,
+                    "original_chars": len(encoded),
+                    "re_read_files_individually": True,
+                    "message": (
+                        "Combined batch source exceeded the tool result limit. "
+                        "No file content is supplied; read each relevant path with read_file."
+                    ),
+                    "files": [
+                        {
+                            "path": entry.get("path"),
+                            "sha256": entry.get("sha256"),
+                            "total_lines": entry.get("total_lines"),
+                            "content_truncated": True,
+                            "next_start_line": 1,
+                        }
+                        for entry in result["files"]
+                        if isinstance(entry, dict)
+                    ],
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
         summary = {
             "ok": bool(result.get("ok")) if isinstance(result, dict) else False,
             "truncated": True,
@@ -433,14 +472,23 @@ class WorkspaceTools:
             "preview": encoded[: MAX_TOOL_RESULT_CHARS - 500],
         }
         if isinstance(result, dict):
-            for key in ("path", "sha256", "total_lines"):
+            for key in (
+                "path", "sha256", "total_lines", "start_line", "last_line",
+                "next_start_line", "content_truncated", "next_start_char",
+                "character_page_required",
+            ):
                 if key in result:
                     summary[key] = result[key]
             if isinstance(result.get("files"), list):
                 summary["files"] = [
                     {
                         key: entry[key]
-                        for key in ("path", "sha256", "total_lines")
+                        for key in (
+                            "path", "sha256", "total_lines", "start_line",
+                            "last_line", "next_start_line", "content_truncated",
+                            "single_file_read_required", "next_start_char",
+                            "character_page_required",
+                        )
                         if key in entry
                     }
                     for entry in result["files"]
@@ -481,22 +529,75 @@ class WorkspaceTools:
             raise ValueError(
                 f"file exceeds {MAX_READ_FILE_BYTES} byte read safety limit"
             )
+        source = path.read_text(encoding="utf-8")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        relative = str(path.relative_to(self.root))
+        if "start_char" in arguments:
+            if "start_line" in arguments or "end_line" in arguments:
+                raise ValueError("start_char cannot be combined with line cursors")
+            start_char = int(arguments["start_char"])
+            if not 0 <= start_char <= len(source):
+                raise ValueError("start_char is outside the file")
+            end_char = min(len(source), start_char + 8_000)
+            while True:
+                result = {
+                    "ok": True,
+                    "path": relative,
+                    "content": source[start_char:end_char],
+                    "sha256": digest,
+                    "start_char": start_char,
+                    "next_start_char": end_char if end_char < len(source) else None,
+                    "total_chars": len(source),
+                    "content_truncated": end_char < len(source),
+                }
+                if len(json.dumps(result, ensure_ascii=False, sort_keys=True)) <= MAX_DIRECT_READ_RESULT_CHARS:
+                    return result
+                end_char = start_char + max(1, (end_char - start_char) // 2)
         start = max(1, int(arguments.get("start_line") or 1))
         requested_end = int(arguments.get("end_line") or (start + 399))
+        if requested_end < start:
+            raise ValueError("end_line must be at least start_line")
         end = min(requested_end, start + 399)
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = source.splitlines()
+        last_line = min(end, len(lines)) if start <= len(lines) else None
         selected = [
             f"{index}: {lines[index - 1]}"
-            for index in range(start, min(end, len(lines)) + 1)
+            for index in range(start, (last_line or start - 1) + 1)
         ]
-        content = path.read_bytes()
-        return {
-            "ok": True,
-            "path": str(path.relative_to(self.root)),
-            "content": "\n".join(selected),
-            "sha256": hashlib.sha256(content).hexdigest(),
-            "total_lines": len(lines),
-        }
+        def page(count: int) -> dict[str, Any]:
+            shown_line = start + count - 1 if count else None
+            next_line = (
+                start + count if start + count <= len(lines) else None
+            )
+            return {
+                "ok": True,
+                "path": relative,
+                "content": "\n".join(selected[:count]),
+                "sha256": digest,
+                "total_lines": len(lines),
+                "start_line": start,
+                "last_line": shown_line,
+                "next_start_line": next_line,
+                "content_truncated": next_line is not None,
+            }
+
+        low, high = 0, len(selected)
+        best = page(0)
+        while low <= high:
+            middle = (low + high) // 2
+            candidate = page(middle)
+            if len(json.dumps(candidate, ensure_ascii=False, sort_keys=True)) <= MAX_DIRECT_READ_RESULT_CHARS:
+                best = candidate
+                low = middle + 1
+            else:
+                high = middle - 1
+        if selected and best["last_line"] is None:
+            line_start = sum(
+                len(line) for line in source.splitlines(keepends=True)[:start - 1]
+            )
+            best["character_page_required"] = True
+            best["next_start_char"] = line_start
+        return best
 
     def _tool_read_requirement_spec(self, arguments: dict[str, Any]) -> dict[str, Any]:
         req_id = str(arguments["requirement_id"])
@@ -567,8 +668,25 @@ class WorkspaceTools:
         for file_result in files:
             content = str(file_result.get("content") or "")
             if len(content) > per_file_characters:
-                file_result["content"] = content[:per_file_characters]
+                kept: list[str] = []
+                used = 0
+                for line in content.split("\n"):
+                    cost = len(line) + (1 if kept else 0)
+                    if used + cost > per_file_characters:
+                        break
+                    kept.append(line)
+                    used += cost
+                file_result["content"] = "\n".join(kept)
                 file_result["content_truncated"] = True
+                file_result["last_line"] = (
+                    file_result["start_line"] + len(kept) - 1 if kept else None
+                )
+                file_result["next_start_line"] = (
+                    file_result["last_line"] + 1
+                    if kept else file_result["start_line"]
+                )
+                if not kept:
+                    file_result["single_file_read_required"] = True
         return {
             "ok": True,
             "files": files,

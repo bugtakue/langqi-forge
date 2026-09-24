@@ -899,6 +899,36 @@ class ModelLoopTests(unittest.TestCase):
         self.assertEqual(len(summary["assertion_failures"]), 2)
         self.assertEqual(summary["page_errors"], ["TypeError", "ReferenceError"])
 
+    def test_compacted_read_result_retains_unread_source_cursor(self) -> None:
+        summary = _compact_tool_result(
+            "read_files",
+            {
+                "ok": True,
+                "files": [
+                    {
+                        "path": "frontend/src/app.js",
+                        "sha256": "a" * 64,
+                        "content_truncated": True,
+                        "next_start_line": 41,
+                    },
+                    {
+                        "path": "backend/server.mjs",
+                        "sha256": "b" * 64,
+                        "content_truncated": False,
+                        "next_start_line": None,
+                    },
+                ],
+            },
+        )
+        self.assertEqual(summary["paths"], [
+            "frontend/src/app.js", "backend/server.mjs",
+        ])
+        self.assertEqual(summary["unread_sources"], [{
+            "path": "frontend/src/app.js",
+            "next_start_line": 41,
+            "next_start_char": None,
+        }])
+
     def test_workload_budget_scales_to_multi_batch_public_tasks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             trace = ProductionTrace(Path(directory) / "trace.jsonl")

@@ -50,6 +50,10 @@ Hard rules:
 - Make the smallest coherent change. Do not rewrite unrelated working features.
 - Conserve the bounded model turns. One response may issue multiple independent tool calls. When
   source paths are already known, inspect them together with read_files instead of serial reads.
+- Source reads are paged. If read_file/read_files reports content_truncated, follow next_start_line
+  before relying on omitted code. If character_page_required, use read_file(start_char=next_start_char)
+  until its character pages are complete. An oversized batch may supply only file hashes and
+  re_read_files_individually=true; then read the relevant files separately before editing.
 - A successful write is authoritative for that revision. Do not reread a file you just wrote unless
   a later validation failure requires exact current text. Patch every location named by validation
   before calling run_validation again. Never repeat a no-op write; the latest read/write SHA in a
@@ -155,6 +159,12 @@ def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
         "requirement_id",
         "start_char",
         "next_start_char",
+        "start_line",
+        "last_line",
+        "next_start_line",
+        "content_truncated",
+        "character_page_required",
+        "re_read_files_individually",
         "total_chars",
         "complete",
         "review",
@@ -167,6 +177,15 @@ def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
             str(item.get("path") or "")
             for item in files
             if isinstance(item, dict) and item.get("path")
+        ][:12]
+        summary["unread_sources"] = [
+            {
+                "path": str(item.get("path") or ""),
+                "next_start_line": item.get("next_start_line"),
+                "next_start_char": item.get("next_start_char"),
+            }
+            for item in files
+            if isinstance(item, dict) and item.get("path") and item.get("content_truncated")
         ][:12]
     checks = payload.get("checks")
     if isinstance(checks, list):
@@ -403,6 +422,7 @@ class CodingAgent:
         acceptance_audit_revision: int | None = None
         observed_files: set[str] = set()
         observed_sha256: dict[str, str] = {}
+        unread_source_pages: dict[str, dict[str, Any]] = {}
         tool_schemas = self.tools.schemas()
         valid_tool_names = {
             str(item.get("function", {}).get("name") or "") for item in tool_schemas
@@ -668,6 +688,14 @@ class CodingAgent:
                     if bool(result_payload.get("ok")) and name == "read_file":
                         if result_path:
                             observed_files.add(result_path)
+                            if result_payload.get("content_truncated"):
+                                unread_source_pages[result_path] = {
+                                    "next_start_line": result_payload.get("next_start_line"),
+                                    "next_start_char": result_payload.get("next_start_char"),
+                                    "sha256": result_sha256,
+                                }
+                            else:
+                                unread_source_pages.pop(result_path, None)
                     elif bool(result_payload.get("ok")) and name == "read_files":
                         for item in result_payload.get("files") or []:
                             if not isinstance(item, dict) or not item.get("path"):
@@ -677,6 +705,21 @@ class CodingAgent:
                             item_sha256 = str(item.get("sha256") or "")
                             if len(item_sha256) == 64:
                                 observed_sha256[item_path] = item_sha256
+                            if item.get("content_truncated"):
+                                unread_source_pages[item_path] = {
+                                    "next_start_line": item.get("next_start_line"),
+                                    "next_start_char": item.get("next_start_char"),
+                                    "sha256": item_sha256,
+                                }
+                            else:
+                                unread_source_pages.pop(item_path, None)
+                    elif (
+                        bool(result_payload.get("ok"))
+                        and bool(result_payload.get("changed"))
+                        and name in {"write_file", "replace_text"}
+                        and result_path
+                    ):
+                        unread_source_pages.pop(result_path, None)
                     implementation_validation_completed = (
                         implementation_validation_completed
                         or (
@@ -724,8 +767,13 @@ class CodingAgent:
                     "current_changes_validated": self.tools.current_changes_validated,
                     "observed_files": sorted(observed_files),
                     "observed_sha256": dict(sorted(observed_sha256.items())),
-                    "starter_batch_read_completed": set(STARTER_SOURCE_PATHS).issubset(
-                        observed_files
+                    "starter_batch_read_completed": (
+                        set(STARTER_SOURCE_PATHS).issubset(observed_files)
+                        and not set(STARTER_SOURCE_PATHS).intersection(unread_source_pages)
+                    ),
+                    "unread_source_page_count": len(unread_source_pages),
+                    "unread_source_pages": dict(
+                        list(sorted(unread_source_pages.items()))[:12]
                     ),
                     "validation_scope": self.tools.validation_scope,
                     "browser_probe_calls": self.tools.browser_probe_calls,
@@ -747,20 +795,13 @@ class CodingAgent:
                         self.tools.requirement_spec_access_state()
                     )
                 checkpoint_intro = (
-                    "Deterministic context checkpoint. Earlier model/tool turns remain "
-                    "sealed in the production trace but are omitted from this request. "
+                    "Deterministic context checkpoint; prior turns are in trace. "
                     + (
-                        "Earlier original requirement pages may be omitted too. "
-                        "After the first complete read, use read_requirement_spec with "
-                        "start_char=0 or another relevant position to review them; "
-                        "do not infer omitted behavior from the preview. "
+                        "Review omitted specs with read_requirement_spec. "
                         if self.tools.requirement_specs else ""
                     )
-                    + "The initial starter read has already been handled when the state says "
-                    "starter_batch_read_completed=true; do not restart it merely because "
-                    "the original task prompt mentions it. A bounded snapshot of current "
-                    "observed source follows the state, so edit from that exact text instead "
-                    "of rereading it. State:\n"
+                    + "Do not repeat completed starter reads; follow unread_source_pages "
+                    "and read_file for omitted code. State:\n"
                     + json.dumps(
                         checkpoint,
                         ensure_ascii=False,
@@ -902,16 +943,23 @@ class CodingAgent:
                         "Stop broad inspection. Complete only the missing edits, then reserve one "
                         'turn for run_validation("quick") and one no-tool completion turn.'
                     )
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Turn-budget checkpoint: {remaining_turns} model turns remain. "
-                            + instruction
-                            + " Do not call full unless a quick check failed and you repaired it."
-                        ),
-                    }
-                )
+                reminder = {
+                    "role": "user",
+                    "content": (
+                        f"Turn-budget checkpoint: {remaining_turns} model turns remain. "
+                        + instruction
+                        + " Do not call full unless a quick check failed and you repaired it."
+                    ),
+                }
+                if _context_characters(messages + [reminder]) <= self.maximum_context_characters:
+                    messages.append(reminder)
+                else:
+                    self.trace.record(
+                        "turn_budget_checkpoint_omitted",
+                        stage=stage,
+                        requirement_ids=requirement_ids,
+                        reason="context limit; acceptance/source context takes priority",
+                    )
         changed = tuple(sorted(self.tools.changed_files - changed_before))
         self.trace.record(
             "agent_session_exhausted",

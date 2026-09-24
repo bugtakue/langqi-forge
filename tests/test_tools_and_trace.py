@@ -171,6 +171,139 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertTrue(all(len(row["sha256"]) == 64 for row in result["files"]))
             self.assertTrue(all(row["content_truncated"] for row in result["files"]))
 
+    def test_read_tools_disclose_unread_lines_even_when_preview_is_short(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frontend = root / "frontend"
+            frontend.mkdir()
+            (frontend / "app.js").write_text(
+                "".join(f"line-{index}\n" for index in range(1, 402)),
+                encoding="utf-8",
+            )
+            tools = WorkspaceTools(
+                root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
+            )
+            first = json.loads(tools.execute(
+                "read_file", {"path": "frontend/app.js"}
+            ))
+            self.assertTrue(first["content_truncated"])
+            self.assertEqual(first["last_line"], 400)
+            self.assertEqual(first["next_start_line"], 401)
+            self.assertNotIn("line-401", first["content"])
+
+            batch = json.loads(tools.execute(
+                "read_files", {"paths": ["frontend/app.js"]}
+            ))
+            self.assertTrue(batch["files"][0]["content_truncated"])
+            self.assertEqual(batch["files"][0]["next_start_line"], 401)
+
+            tail = json.loads(tools.execute(
+                "read_file", {"path": "frontend/app.js", "start_line": 401}
+            ))
+            self.assertFalse(tail["content_truncated"])
+            self.assertIsNone(tail["next_start_line"])
+            self.assertIn("line-401", tail["content"])
+
+    def test_batch_read_continues_after_last_complete_visible_line(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frontend = root / "frontend"
+            frontend.mkdir()
+            for name in ("a.js", "b.js", "c.js"):
+                (frontend / name).write_text(
+                    "".join(f"line-{index}: " + "x" * 60 + "\n" for index in range(1, 101)),
+                    encoding="utf-8",
+                )
+            tools = WorkspaceTools(
+                root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
+            )
+            batch = json.loads(tools.execute("read_files", {
+                "paths": [f"frontend/{name}" for name in ("a.js", "b.js", "c.js")],
+            }))
+            self.assertTrue(batch["ok"])
+            for item in batch["files"]:
+                self.assertTrue(item["content_truncated"])
+                self.assertEqual(item["next_start_line"], item["last_line"] + 1)
+                self.assertIn(f"line-{item['last_line']}:", item["content"])
+                self.assertNotIn(f"line-{item['next_start_line']}:", item["content"])
+                continuation = json.loads(tools.execute("read_file", {
+                    "path": item["path"], "start_line": item["next_start_line"],
+                }))
+                self.assertIn(
+                    f"line-{item['next_start_line']}:", continuation["content"]
+                )
+
+    def test_long_single_read_returns_a_real_page_not_an_arbitrary_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frontend = root / "frontend"
+            frontend.mkdir()
+            (frontend / "app.js").write_text(
+                "".join(f"line-{index}: " + "x" * 100 + "\n" for index in range(1, 401)),
+                encoding="utf-8",
+            )
+            tools = WorkspaceTools(
+                root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
+            )
+            first = json.loads(tools.execute("read_file", {
+                "path": "frontend/app.js",
+            }))
+            self.assertTrue(first["ok"])
+            self.assertNotIn("truncated", first)
+            self.assertTrue(first["content_truncated"])
+            self.assertLess(first["last_line"], 400)
+            self.assertEqual(first["next_start_line"], first["last_line"] + 1)
+
+    def test_oversized_one_line_source_can_be_read_through_character_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frontend = root / "frontend"
+            frontend.mkdir()
+            source = "A" * 30_000 + "\n"
+            (frontend / "app.js").write_text(source, encoding="utf-8")
+            tools = WorkspaceTools(
+                root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
+            )
+            first = json.loads(tools.execute("read_file", {
+                "path": "frontend/app.js",
+            }))
+            self.assertTrue(first["ok"])
+            self.assertTrue(first["character_page_required"])
+            self.assertEqual(first["next_start_char"], 0)
+
+            pages: list[str] = []
+            cursor = first["next_start_char"]
+            while cursor is not None:
+                page = json.loads(tools.execute("read_file", {
+                    "path": "frontend/app.js", "start_char": cursor,
+                }))
+                self.assertTrue(page["ok"])
+                self.assertNotIn("truncated", page)
+                pages.append(page["content"])
+                cursor = page["next_start_char"]
+            self.assertEqual("".join(pages), source)
+
+    def test_oversized_batch_response_requires_explicit_individual_reads(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frontend = root / "frontend"
+            frontend.mkdir()
+            paths = [f"frontend/{index}.js" for index in range(8)]
+            for relative in paths:
+                (root / relative).write_text(
+                    "".join("\\" * 12 + "\n" for _ in range(200)),
+                    encoding="utf-8",
+                )
+            tools = WorkspaceTools(
+                root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
+            )
+            result = json.loads(tools.execute("read_files", {"paths": paths}))
+            self.assertTrue(result["truncated"])
+            self.assertTrue(result["re_read_files_individually"])
+            self.assertNotIn("preview", result)
+            self.assertEqual(len(result["files"]), 8)
+            self.assertTrue(all(item["next_start_line"] == 1 for item in result["files"]))
+
     def test_smoke_port_selection_skips_occupied_and_grading_ports(self) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
             occupied.bind(("127.0.0.1", 0))
@@ -424,7 +557,9 @@ class ToolAndTraceTests(unittest.TestCase):
                 tools.execute("read_file", {"path": "frontend/large.txt"})
             )
             self.assertTrue(result["ok"])
-            self.assertTrue(result["truncated"])
+            self.assertTrue(result["content_truncated"])
+            self.assertNotIn("truncated", result)
+            self.assertEqual(result["next_start_line"], result["last_line"] + 1)
 
             digest = hashlib.sha256(content.encode()).hexdigest()
             no_change = json.loads(
