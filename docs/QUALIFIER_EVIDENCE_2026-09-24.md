@@ -85,3 +85,11 @@
 - 该**精确新 ZIP** 在旧版 arm64 Runner + 当前本地模拟器包装中运行自建模型协议夹具，目录 `../factory26-local-simulation/runs/qualifier-retry-browser-20260925/`。容器退出码 0，独立 Playwright 1/1，`score=null`、费用与 Token 账单为 `null`；模型协议请求 5 次、HTTP 尝试 5 次，浏览器探针点击并断言通过，本地 6/6 结构/构建/启动检查通过，官方 SDK 正常写入，生产轨迹 31/31 行哈希链有效且未发现未脱敏密钥。
 - 同一 ZIP 在本机缓存的主办方 amd64 基础镜像包装 `arcbench-local-current:20260924` 下**直启**，目录 `../factory26-local-simulation/runs/qualifier-retry-current-base-direct-20260925/`：容器退出码 0，模型协议请求及 HTTP 尝试各 4 次，SDK 正常，本地 6/6 检查通过，生产轨迹 27/27 行哈希链有效且未发现未脱敏密钥。此直启不做浏览器探针，也不等于完整当前 Runner；本机 ARM→amd64 QEMU 仍无法通过当前 Runner 的 Chromium 预检。镜像标签与摘要仅代表已缓存版本，不证明主办方后续没有更新。
 - 上述两个运行均使用**自建、固定响应的协议网关**，不是实际编码大模型；1/1 只是协议夹具，不是 BookStack/Keep 的通过率、公开赛排名或获奖概率。尚未取得真实模型的两道公开练习结果、真实成本与官方成绩；ARC-Bench 账号未登录，项目未上传、未正式提交。
+
+## 2026-09-25 正式赛口径核对与异步浏览器探针
+
+- 直接查看 [ARC-Bench 比赛公开列表](https://arc-bench.com/competition)：正式赛 `Agentic Software Factory Hackathon` 标为开放，列出 **2 项任务、200 个测试**；进入详情后，未登录页面只显示先登录并确认队伍的门槛，未展示正式任务包或测试正文。因此 200 是当前公开列表的口径，不是我们运行或验证过的测试数。BookStack/Keep 的 34+32 个公开基准测试属于练习，不能代替正式赛题。已缓存主办方基础镜像的 Docker Hub 摘要仍为 `sha256:40e003ed470dbd4c120b9019876ba77303d38dc8b34be7f6e313fe0563dd14de`，只证明这次检查没有发现该标签漂移。
+- [赛事官网](https://create.gosim.org/factory26/)当前写明初赛 9 月 24–30 日、排行榜前 20 进入决赛；自动采集 GUI 通过率、Token 效率和完成时间，权重尚待公布。官网 FAQ 称只需提交智能体，和此前提交页截图的 Demo 字段不一致；当前 ARC-Bench 正式赛详情被登录/队伍确认阻断，故不能断言 Demo 已取消或成为强制项。
+- 探针原先在打开首页及每次操作后固定等待 150 毫秒，可能把异步渲染或延迟反馈误判为失败。现对首页可见内容、每步正反文本断言再给至多 2 秒的有界等待，不改变隐藏测试或外部评分。源码提交 `669d2c8a6c73495361328e78e1339e32b6f9ffff`。主机单元测试 65 项中 63 项通过、2 项因缺 Playwright/Chromium 跳过；两项浏览器集成测试连同其余探针测试在旧版 arm64 Runner 的实际 Chromium 环境里 4/4 通过，包含首页与点击反馈各延迟 400 毫秒的情形。
+- 本次精确 ZIP `dist/langqi-forge-qualifier.zip` 的 SHA-256 为 `be7fe7e62fc440aef714a7b47df3e28822de2031de4f2eed1ac9515a3779bdf7`，16 个文件，`unzip -t` 通过，清单绑定上述源码提交。该 ZIP 在旧版 arm64 Runner + 当前模拟器包装的自建协议夹具中运行，目录 `../factory26-local-simulation/runs/qualifier-async-browser-20260925/`：容器退出码 0，模型接口 5 次、浏览器探针真实点击及文本断言通过、独立 Playwright 1/1，SDK 正常，本地 6/6 检查通过，生产轨迹 31/31 行哈希链有效且未发现未脱敏密钥。`score=null`，模型费用未知；这仍不是正式赛或真实编码模型的能力测量。
+- 新 ZIP 未在本机完成当前 amd64 Runner 的完整 GUI 运行；ARM→amd64 QEMU 浏览器预检的旧障碍仍在。没有 ARC-Bench 正式赛登录、上传、提交、真实模型 BookStack/Keep 练习结果或 200 项正式赛成绩。
