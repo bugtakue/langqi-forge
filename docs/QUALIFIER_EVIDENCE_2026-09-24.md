@@ -289,3 +289,10 @@
 - 当前精确候选包 `dist/langqi-forge-qualifier.zip` 从上述干净源码提交构建，17 个白名单文件，SHA-256 `89f8d4aa93fcaaecfd27e36c2f4d1c854dc6caa4ab0f9d44b966b37a5a4d7e77`，包内清单记录源码修订和干净树；`unzip -t` 通过。完整主机单测 **113 项：110 通过、3 项因浏览器环境跳过**，`git diff --check` 通过。测试协议修订 `6cd079f` 不进入 ZIP，因此不改变参赛包来源或哈希。
 - 对该**同一 ZIP**，旧版 arm64 Runner + 当前本地模拟器包装先以普通合成长需求夹具运行：`../factory26-local-simulation/runs/qualifier-spec-review-protocol-fixed-20260925/` 的独立 Playwright **2/2**。再要求假模型读完三页后重读第 0 页，否则拒绝进入应用编辑：`../factory26-local-simulation/runs/qualifier-spec-review-required-protocol-20260925/` 实际工具游标为 **0→4000→8000→0**，最后一次结果标记 `review=true`；SDK 两项 `IMPLEMENTED`、容器退出码 0、独立 Playwright **2/2**、生产轨迹 **76/76** 行哈希封印有效且未发现未脱敏夹具密钥。固定响应模型协议请求 14 次，Meter 拒绝连接，`score=null`、Token 和费用未知。首次协议尝试 `qualifier-spec-review-protocol-20260925/` 在假服务已读完后仍错误拒绝后续 `read_files`，因此 0/0 且无浏览器报告；修复假服务状态判断后重新运行，保留失败目录，不冒充第一次成功。
 - 这些是模拟模型的工具/压缩/部署链路验证；目前仍未取得百炼真实编码模型在公开 BookStack/Keep 的独立 GUI 通过率或费用，也未在真实 x86 上完成当前 amd64 Runner 的全流程。ARC-Bench 未登录、未上传、未提交；正式账号与提交继续留待队长后续指示。
+
+## 2026-09-25 当前官网与精确参赛包对照
+
+- 只读复核[主办方赛制与规则](https://create.gosim.org/factory26/rules)：当前仍列初赛 9/24–9/30、GitHub + Spreadsheets 功能复刻、组织方模型 Token 经统一网关计量；官网将 GUI 测试通过率、Token 效率、完成时间列为自动采集指标，同时写明权重待确认。该网页不提供未登录状态下的隐藏任务或正式计分细则，不据此推断队伍成绩。[ARC-Bench 竞赛列表](https://arc-bench.com/competition)当前公开显示正式赛 2 tasks / 200 tests；[正式赛详情](https://arc-bench.com/competitions/hackathon)在未登录状态要求先登录并由队长确认队伍，本轮没有进入该流程。
+- [Runtime API 文档](https://arc-bench.com/api-doc)仍要求 Python 包根目录 `main.py`、`requirements.txt`，运行态通过 `arcbench_agent_runtime` 高层 SDK 更新需求状态、Git 和可追溯数据，不允许自行构造事件。对上节精确 ZIP 在本地旧 Runner 中解出的 `submission/` 再次运行 `verify_source_manifest`：17 个文件集合、逐文件大小/哈希、`main.py`、`requirements.txt` 和源码修订 `6e61fb6...` 均一致；运行目录存在由 SDK/Runner 写入的事件流和追溯目录，生产轨迹已在上节通过 76/76 行封印检查。这证明本地打包及接口链路，不证明真实模型能完成 200 条正式测试。
+- ARC-Bench 公开榜单的“查看计分方式”弹窗展示通过率与人民币开销共同影响分数，缺少人民币开销数据的运行不参与该榜；这是当前**公开榜单**的界面说明，不代替官网待确认的正式赛权重。由于本地 Meter 不可用，上述协议运行的 `score=null`、费用未知，不能据 2/2 合成测试推断任何正式排名。
+- 对照后未发现需要改动 ZIP 的公开接口差异；下一道缺口仍是可用模型凭证下的真实公开练习及费用数据，以及登录后队伍确认才能看到的正式流程。用户此前要求正式登录、上传和提交留待其后续指示，本轮均未进行。
