@@ -37,11 +37,12 @@ requirements.yaml
 
 ## 本地运行
 
-需要 Python 3.10+、Node.js/npm、Chromium 与可用的 OpenAI-compatible 模型服务；主办方 Runner 自带浏览器，本机独立运行需安装 Playwright 浏览器。**不要把密钥写入仓库或 ZIP。**
+需要 Python 3.10+、Node.js/npm、Chromium 与可用的 OpenAI-compatible 模型服务；主办方 Runner 自带与浏览器二进制匹配的 Playwright，参赛包不覆盖其版本。本机独立运行时才单独安装 Playwright 与对应浏览器。**不要把密钥写入仓库或 ZIP。**
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install playwright==1.57.0  # 仅本机独立运行；Runner 不执行本行
 .venv/bin/python -m playwright install chromium
 export OPENAI_API_KEY='...'
 export OPENAI_BASE_URL='https://your-gateway.example/v1'
