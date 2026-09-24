@@ -12,13 +12,19 @@ MAX_COPY_FILES = 5_000
 MAX_COPY_BYTES = 100_000_000
 
 
-def _check_app_copy(root: Path) -> None:
+def validate_app_project(
+    root: Path, *, components: tuple[str, ...] = ("frontend", "backend")
+) -> None:
+    """Reject linked, special, or oversized app files before copying them."""
+
     file_count = 0
     total_bytes = 0
-    for component in ("frontend", "backend"):
+    for component in components:
         directory = root / component
         if directory.is_symlink() or not directory.is_dir():
-            raise RuntimeError(f"isolated app check requires a regular {component}/ directory")
+            raise RuntimeError(
+                f"isolated app check requires a regular {component}/ directory"
+            )
         for current, directories, files in os.walk(directory, followlinks=False):
             directories[:] = [name for name in directories if name not in IGNORED_PARTS]
             for name in directories:
@@ -37,11 +43,13 @@ def _check_app_copy(root: Path) -> None:
                     raise RuntimeError("application exceeds isolation copy limit")
 
 
-def stage_app_project(source: Path, target: Path) -> None:
+def stage_app_project(
+    source: Path, target: Path, *, components: tuple[str, ...] = ("frontend", "backend")
+) -> None:
     """Copy only generated app files, never sharing persistent state or links."""
 
-    _check_app_copy(source)
-    for component in ("frontend", "backend"):
+    validate_app_project(source, components=components)
+    for component in components:
         shutil.copytree(
             source / component,
             target / component,
@@ -49,4 +57,4 @@ def stage_app_project(source: Path, target: Path) -> None:
             ignore=shutil.ignore_patterns(*IGNORED_PARTS),
         )
     # A source path changing between preflight and copy must still fail closed.
-    _check_app_copy(target)
+    validate_app_project(target, components=components)

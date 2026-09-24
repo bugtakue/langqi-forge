@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
-from .isolation import stage_app_project
+from .isolation import stage_app_project, validate_app_project
 
 
 SAFE_ENVIRONMENT_KEYS = {
@@ -389,56 +389,114 @@ def _npm_install(directory: Path) -> tuple[int, str, float]:
 
 
 def frontend_build_check(root: Path) -> CheckResult:
+    started = time.monotonic()
     frontend = root / "frontend"
     related = ("frontend/package.json", "frontend/src", "frontend/build.mjs")
     if frontend.is_symlink() or not (frontend / "package.json").is_file():
         return CheckResult(
             "frontend_build", False, "frontend directory is unsafe or package.json missing", related, 0.0
         )
-    install_rc, install_output, install_seconds = _npm_install(frontend)
-    if install_rc != 0:
-        return CheckResult(
-            "frontend_build",
-            False,
-            f"npm install failed\n{install_output}",
-            related,
-            install_seconds,
-        )
     output_dir = frontend / "dist"
     if output_dir.is_symlink() or (output_dir.exists() and not output_dir.is_dir()):
         return CheckResult(
-            "frontend_build", False, "frontend/dist is not a safe build directory", related, install_seconds
+            "frontend_build",
+            False,
+            "frontend/dist is not a safe build directory",
+            related,
+            time.monotonic() - started,
         )
     try:
         if output_dir.is_dir():
             shutil.rmtree(output_dir)
     except OSError as exc:
         return CheckResult(
-            "frontend_build", False, f"could not clear frontend/dist before build: {exc}", related, install_seconds
+            "frontend_build",
+            False,
+            f"could not clear frontend/dist before build: {exc}",
+            related,
+            time.monotonic() - started,
         )
-    rc, output, seconds = _run(
-        ["npm", "run", "build"],
-        frontend,
-        600,
-        environment=_safe_environment(),
-    )
-    entry = output_dir / "index.html"
-    fresh_entry = (
-        rc == 0
-        and output_dir.is_dir()
-        and not output_dir.is_symlink()
-        and entry.is_file()
-        and not entry.is_symlink()
-        and entry.stat().st_size > 0
-    )
+    # Build scripts can write relative paths outside frontend/. Stage both app
+    # roots, then promote only the bounded, checked dist/ directory.
+    with tempfile.TemporaryDirectory(prefix="factory26-build-check-") as directory:
+        isolated_root = Path(directory)
+        backend_path = root / "backend"
+        components = (
+            ("frontend", "backend")
+            if backend_path.exists() or backend_path.is_symlink()
+            else ("frontend",)
+        )
+        try:
+            stage_app_project(root.resolve(), isolated_root, components=components)
+        except (OSError, RuntimeError) as exc:
+            return CheckResult(
+                "frontend_build",
+                False,
+                f"frontend build isolation failed: {exc}",
+                related,
+                time.monotonic() - started,
+            )
+        isolated_frontend = isolated_root / "frontend"
+        install_rc, install_output, _ = _npm_install(isolated_frontend)
+        if install_rc != 0:
+            return CheckResult(
+                "frontend_build",
+                False,
+                f"npm install failed\n{install_output}",
+                related,
+                time.monotonic() - started,
+            )
+        rc, output, _ = _run(
+            ["npm", "run", "build"],
+            isolated_frontend,
+            600,
+            environment=_safe_environment(),
+        )
+        isolated_dist = isolated_frontend / "dist"
+        entry = isolated_dist / "index.html"
+        fresh_entry = (
+            rc == 0
+            and isolated_dist.is_dir()
+            and not isolated_dist.is_symlink()
+            and entry.is_file()
+            and not entry.is_symlink()
+            and entry.stat().st_size > 0
+        )
+        if not fresh_entry:
+            summary = (
+                f"frontend build failed\n{output}"
+                if rc != 0
+                else "frontend build did not produce a nonempty dist/index.html"
+            )
+            return CheckResult(
+                "frontend_build",
+                False,
+                summary,
+                related,
+                time.monotonic() - started,
+            )
+        try:
+            validate_app_project(isolated_root, components=components)
+            with tempfile.TemporaryDirectory(
+                prefix=".dist-stage-", dir=frontend
+            ) as temporary:
+                promotion = Path(temporary) / "dist"
+                shutil.copytree(isolated_dist, promotion)
+                promotion.replace(output_dir)
+        except (OSError, RuntimeError) as exc:
+            return CheckResult(
+                "frontend_build",
+                False,
+                f"frontend build output is unsafe: {exc}",
+                related,
+                time.monotonic() - started,
+            )
     return CheckResult(
         "frontend_build",
-        fresh_entry,
-        "frontend build produced a fresh index.html"
-        if fresh_entry
-        else (f"frontend build failed\n{output}" if rc != 0 else "frontend build did not produce a nonempty dist/index.html"),
+        True,
+        "frontend build produced a fresh index.html in isolation",
         related,
-        install_seconds + seconds,
+        time.monotonic() - started,
     )
 
 

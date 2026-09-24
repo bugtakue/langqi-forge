@@ -114,6 +114,46 @@ await writeFile(statePath, JSON.stringify({ ...state, count: state.count + 1 }))
                 json.loads(state_path.read_text(encoding="utf-8")), {"count": 0}
             )
 
+    def test_frontend_build_check_does_not_modify_original_seed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold_workspace(root)
+            state_path = root / "backend/data/state.json"
+            state_path.write_text('{"count":0}\n', encoding="utf-8")
+            build_path = root / "frontend/build.mjs"
+            build_path.write_text(
+                build_path.read_text(encoding="utf-8")
+                + '''\nimport { readFile, writeFile } from "node:fs/promises";
+const statePath = path.resolve("../backend/data/state.json");
+const state = JSON.parse(await readFile(statePath, "utf8"));
+await writeFile(statePath, JSON.stringify({ ...state, count: state.count + 1 }));
+''',
+                encoding="utf-8",
+            )
+            result = frontend_build_check(root)
+            self.assertTrue(result.passed, result.summary)
+            self.assertTrue((root / "frontend/dist/index.html").is_file())
+            self.assertEqual(
+                json.loads(state_path.read_text(encoding="utf-8")), {"count": 0}
+            )
+
+    def test_frontend_build_rejects_linked_output_before_promotion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold_workspace(root)
+            build_path = root / "frontend/build.mjs"
+            build_path.write_text(
+                build_path.read_text(encoding="utf-8")
+                + '''\nimport { symlink } from "node:fs/promises";
+await symlink("../src/app.js", path.resolve("dist/linked.js"));
+''',
+                encoding="utf-8",
+            )
+            result = frontend_build_check(root)
+            self.assertFalse(result.passed)
+            self.assertIn("unsafe", result.summary)
+            self.assertFalse((root / "frontend/dist/index.html").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

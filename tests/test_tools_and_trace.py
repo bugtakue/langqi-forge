@@ -367,15 +367,15 @@ class ToolAndTraceTests(unittest.TestCase):
             )
             (frontend / "build.mjs").write_text(
                 "import { mkdirSync, writeFileSync } from 'node:fs';\n"
-                "writeFileSync('observed.txt', process.env.OPENAI_API_KEY || 'missing');\n"
                 "mkdirSync('dist', { recursive: true });\n"
+                "writeFileSync('dist/observed.txt', process.env.OPENAI_API_KEY || 'missing');\n"
                 "writeFileSync('dist/index.html', '<html></html>');\n",
                 encoding="utf-8",
             )
             with patch.dict(os.environ, {"OPENAI_API_KEY": "must-not-reach-build"}):
                 result = frontend_build_check(root)
             self.assertTrue(result.passed, result.summary)
-            self.assertEqual((frontend / "observed.txt").read_text(), "missing")
+            self.assertEqual((frontend / "dist/observed.txt").read_text(), "missing")
 
     def test_package_policy_rejects_lifecycle_hooks_and_local_dependencies(
         self,
