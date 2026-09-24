@@ -613,6 +613,14 @@ children:
             {"committed": False, "behavioral_probe_verified": False}
         )
         self.assertTrue(qualifier._behavioral_probe_tested(report))
+        report["browser_probe_repairs"].append(
+            {
+                "committed": False,
+                "changed_files": ["frontend/src/styles.css"],
+                "behavioral_probe_verified": False,
+            }
+        )
+        self.assertTrue(qualifier._behavioral_probe_tested(report))
 
     def test_final_repair_without_new_probe_is_reported_unverified(self) -> None:
         class RepairFixtureAgent:
@@ -686,6 +694,88 @@ children:
             ]
             repair_event = next(row for row in rows if row["event"] == "repair_finished")
             self.assertFalse(repair_event["payload"]["browser_probe"]["behavioral_probe_verified"])
+            self.assertTrue(repair_event["payload"]["staged_changes_committed"])
+            self.assertTrue(any(row["event"] == "repair_candidate_validation" for row in rows))
+
+    def test_failed_repair_never_overwrites_last_committed_app(self) -> None:
+        class RepairFixtureAgent:
+            complete_repair = False
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def implement(self, _nodes, related_files=(), *, task_outline="") -> AgentRun:
+                edited = json.loads(self.tools.execute("replace_text", {
+                    "path": "frontend/src/app.js",
+                    "old": "// The coding agent implements the requested application here.",
+                    "new": 'document.querySelector("#app").innerHTML = "<h1>Committed</h1>";',
+                }))
+                self.assert_edit(edited)
+                validated = json.loads(self.tools.execute("run_validation", {"scope": "quick"}))
+                self.assert_edit(validated)
+                self.model.request_count += 1
+                return AgentRun(True, "implemented", tuple(self.tools.changed_files), 1)
+
+            def repair(self, _failure_text, _related_files) -> AgentRun:
+                edited = json.loads(self.tools.execute("replace_text", {
+                    "path": "frontend/src/app.js",
+                    "old": "<h1>Committed</h1>",
+                    "new": "<h1>Uncommitted repair</h1>",
+                }))
+                self.assert_edit(edited)
+                return AgentRun(
+                    self.complete_repair,
+                    "repair attempted",
+                    tuple(self.tools.changed_files),
+                    1,
+                )
+
+            @staticmethod
+            def assert_edit(result: dict) -> None:
+                if not result["ok"]:
+                    raise AssertionError(result)
+
+        for complete_repair in (False, True):
+            with self.subTest(complete_repair=complete_repair):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    requirement_dir = self._requirement_dir(root)
+                    output = root / "output"
+                    actual_checks = qualifier.run_full_checks
+                    calls = 0
+
+                    def fail_final_and_candidate(path: Path, port: int):
+                        nonlocal calls
+                        calls += 1
+                        if calls >= 2:
+                            return [qualifier.CheckResult(
+                                "forced_repair", False, "fixture repair still fails",
+                                ("frontend/src/app.js",), 0.0,
+                            )]
+                        return actual_checks(path, port)
+
+                    RepairFixtureAgent.complete_repair = complete_repair
+                    with (
+                        patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                        patch.object(qualifier, "CodingAgent", RepairFixtureAgent),
+                        patch.object(qualifier, "run_full_checks", fail_final_and_candidate),
+                    ):
+                        status = qualifier.main([
+                            str(requirement_dir), "--output-dir", str(output),
+                        ])
+                    self.assertEqual(status, 1)
+                    self.assertIn(
+                        "<h1>Committed</h1>",
+                        (output / "frontend/src/app.js").read_text(),
+                    )
+                    self.assertNotIn(
+                        "Uncommitted repair",
+                        (output / "frontend/src/app.js").read_text(),
+                    )
+                    report = json.loads((output / ".arc/harness-report.json").read_text())
+                    self.assertFalse(report["browser_probe_repairs"][0]["committed"])
+                    self.assertEqual(calls, 3 if complete_repair else 2)
 
     def test_run_failure_is_reported_even_when_requirement_failure_event_raises(self) -> None:
         class BrokenRuntime:

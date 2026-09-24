@@ -210,7 +210,10 @@ def _behavioral_probe_tested(report: dict[str, Any]) -> bool:
         item for item in report["browser_probe_batches"]
         if item.get("committed", True)
     ]
-    repairs = report["browser_probe_repairs"]
+    repairs = [
+        item for item in report["browser_probe_repairs"]
+        if item.get("committed", True)
+    ]
     return (
         bool(batches)
         and all(item["behavioral_probe_verified"] for item in batches)
@@ -683,14 +686,31 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             trace.record("repair_started", round=repair_round, failures=failure_text)
-            repair_tools = WorkspaceTools(output_dir, trace, smoke_port)
-            repair = CodingAgent(
-                model, repair_tools, trace, max_turns=args.max_agent_turns
-            ).repair(failure_text, related)
+            committed = False
+            with tempfile.TemporaryDirectory(
+                prefix="factory26-repair-"
+            ) as staged_directory:
+                staged = Path(staged_directory)
+                stage_app_project(output_dir, staged)
+                repair_tools = WorkspaceTools(staged, trace, smoke_port)
+                repair = CodingAgent(
+                    model, repair_tools, trace, max_turns=args.max_agent_turns
+                ).repair(failure_text, related)
+                if repair.completed:
+                    candidate_checks = run_full_checks(staged, smoke_port)
+                    trace.record(
+                        "repair_candidate_validation",
+                        round=repair_round,
+                        checks=_check_results(candidate_checks),
+                    )
+                    if all(check.passed for check in candidate_checks):
+                        _promote_staged_app(staged, output_dir)
+                        committed = True
             repair_probe_evidence = {
                 "round": repair_round,
                 "changed_files": repair.changed_files,
                 "calls": repair_tools.browser_probe_calls,
+                "committed": committed,
                 "behavioral_probe_verified": (
                     repair_tools.browser_probe_verified_revision
                     == repair_tools.change_revision
@@ -703,9 +723,10 @@ def main(argv: list[str] | None = None) -> int:
                 completed=repair.completed,
                 changed_files=repair.changed_files,
                 turns=repair.turns,
+                staged_changes_committed=committed,
                 browser_probe=repair_probe_evidence,
             )
-            if not repair.completed:
+            if not committed:
                 break
             checks = run_full_checks(output_dir, smoke_port)
             trace.record("final_validation", repair_round=repair_round, checks=_check_results(checks))
