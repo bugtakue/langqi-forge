@@ -32,6 +32,7 @@ from .requirements import (
     flatten_atomic,
     load_requirement_tree,
     requirement_source_sha256,
+    task_outline as compile_task_outline,
 )
 from .submission_bundle import (
     SOURCE_MANIFEST_NAME,
@@ -346,11 +347,15 @@ def main(argv: list[str] | None = None) -> int:
         tree = load_requirement_tree(requirement_dir)
         nodes = _contextual_nodes(tree, flatten_atomic(tree))
         groups = batches(nodes, args.batch_size)
+        outline = compile_task_outline(tree, nodes)
+        outline_listed = int(json.loads(outline)["listed_requirements"])
         requirement_sha = requirement_source_sha256(requirement_dir)
         report.update(
             source=source,
             requirement_sha256=requirement_sha,
             requirement_count=len(nodes),
+            task_outline_listed_requirements=outline_listed,
+            task_outline_characters=len(outline),
         )
         arc_runtime = ArcRuntime.connect(output_dir)
         report["arcbench_runtime"] = (
@@ -366,6 +371,12 @@ def main(argv: list[str] | None = None) -> int:
             requirement_sha256=requirement_sha,
             requirement_ids=[node.req_id for node in nodes],
             manual_interventions=0,
+        )
+        trace.record(
+            "task_outline_compiled",
+            listed_requirements=outline_listed,
+            total_requirements=len(nodes),
+            characters=len(outline),
         )
         _write_json(
             output_dir / ".arc" / "compiled-plan.json",
@@ -497,7 +508,11 @@ def main(argv: list[str] | None = None) -> int:
                     try:
                         result = CodingAgent(
                             model, tools, trace, max_turns=args.max_agent_turns
-                        ).implement(active_group, related_files=handoff_paths)
+                        ).implement(
+                            active_group,
+                            related_files=handoff_paths,
+                            task_outline=outline,
+                        )
                     except RuntimeError as exc:
                         model_exception = True
                         trace.record(

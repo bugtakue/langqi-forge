@@ -106,7 +106,7 @@ class QualifierTests(unittest.TestCase):
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=()) -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
                 ids = tuple(node.req_id for node in nodes)
                 type(self).attempted.append(ids)
                 self.model.request_count += 1
@@ -201,7 +201,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=()) -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
                 ids = tuple(node.req_id for node in nodes)
                 type(self).attempted.append(ids)
                 self.model.request_count += 1
@@ -264,7 +264,7 @@ children:
             def __init__(self, model, tools, _trace, max_turns=20) -> None:
                 self.model = model
 
-            def implement(self, nodes, related_files=()) -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
                 type(self).attempted.append(tuple(node.req_id for node in nodes))
                 self.model.request_count += 1
                 return AgentRun(False, "fixture failed", (), 1)
@@ -317,7 +317,7 @@ children:
             def __init__(self, model, tools, _trace, max_turns=20) -> None:
                 self.model = model
 
-            def implement(self, nodes, related_files=()) -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
                 type(self).attempted += 1
                 self.model.request_count += 1
                 raise RuntimeError("fixture model gateway unavailable")
@@ -357,7 +357,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=()) -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
                 req_id = nodes[0].req_id
                 type(self).attempted.append(req_id)
                 self.model.request_count += 1
@@ -454,7 +454,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=()) -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
                 self.model.request_count += 1
                 return AgentRun(False, "fixture did not implement", (), 1)
 
@@ -520,7 +520,7 @@ children:
                 self.model.request_count += 1
                 return AgentRun(True, "repair fixture", tuple(self.tools.changed_files), 1)
 
-            def implement(self, _nodes, related_files=()) -> AgentRun:
+            def implement(self, _nodes, related_files=(), *, task_outline="") -> AgentRun:
                 result = self._edit(
                     "// The coding agent implements the requested application here.",
                     'document.querySelector("#app").innerHTML = "<h1>Example</h1>";',
@@ -622,13 +622,15 @@ children:
     def test_second_batch_receives_first_batch_source_path(self) -> None:
         class WritingAgent:
             observed: list[tuple[str, ...]] = []
+            outlines: list[dict] = []
 
             def __init__(self, model, tools, _trace, max_turns=20) -> None:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=()) -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
                 type(self).observed.append(tuple(related_files))
+                type(self).outlines.append(json.loads(task_outline))
                 name = "first" if nodes[0].req_id == "REQ-1" else "second"
                 written = json.loads(
                     self.tools.execute(
@@ -674,6 +676,7 @@ children:
                 encoding="utf-8",
             )
             WritingAgent.observed = []
+            WritingAgent.outlines = []
             with (
                 patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
                 patch.object(qualifier, "CodingAgent", WritingAgent),
@@ -690,6 +693,14 @@ children:
             self.assertEqual(status, 0)
             self.assertEqual(WritingAgent.observed[0], ())
             self.assertIn("frontend/src/first.js", WritingAgent.observed[1])
+            self.assertEqual(
+                [item["listed_requirements"] for item in WritingAgent.outlines],
+                [2, 2],
+            )
+            self.assertEqual(
+                [entry["id"] for entry in WritingAgent.outlines[0]["requirements"]],
+                ["REQ-1", "REQ-2"],
+            )
             rows = [
                 json.loads(line)
                 for line in (root / "output" / ".arc" / "production-trace.jsonl")

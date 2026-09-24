@@ -39,7 +39,11 @@ class TwoBatchGatewayTests(unittest.TestCase):
             with self.assertRaises(HTTPError) as error:
                 complete("Implement [REQ-2] without prior context")
             self.assertEqual(error.exception.code, 422)
-            handoff_prompt = "Implement [REQ-2]; prior path: frontend/src/first-feature.js"
+            handoff_prompt = (
+                'Whole-task index <untrusted_task_outline>{"requirements":[{"id":"REQ-1"},'
+                '{"id":"REQ-2"}]}</untrusted_task_outline> '
+                "Implement [REQ-2]; prior path: frontend/src/first-feature.js"
+            )
             first = complete(handoff_prompt)
             read_call = first["choices"][0]["message"]["tool_calls"][0]
             self.assertEqual(read_call["function"]["name"], "read_files")

@@ -56,6 +56,12 @@ class Handler(BaseHTTPRequestHandler):
         if not second_batch and "[REQ-1]" not in prompt:
             self.send_error(422, "unknown requirement batch")
             return
+        if (
+            "<untrusted_task_outline>" not in prompt
+            or '"id":"REQ-2"' not in prompt
+        ):
+            self.send_error(422, "whole-task architecture index was not supplied")
+            return
         if second_batch and "frontend/src/first-feature.js" not in prompt:
             self.send_error(422, "prior batch source path was not handed off")
             return

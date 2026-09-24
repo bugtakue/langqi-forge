@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ MAX_REQUIREMENT_BYTES = max(
 )
 MAX_TREE_NODES = max(1, int(os.environ.get("FACTORY26_MAX_REQUIREMENT_NODES", "10000")))
 MAX_TREE_DEPTH = max(1, int(os.environ.get("FACTORY26_MAX_REQUIREMENT_DEPTH", "64")))
+MAX_TASK_OUTLINE_CHARS = 8_000
 
 
 def _bounded(value: Any, maximum: int) -> str:
@@ -238,6 +240,43 @@ def batches(nodes: list[RequirementNode], size: int) -> list[list[RequirementNod
     return [
         nodes[index : index + normalized] for index in range(0, len(nodes), normalized)
     ]
+
+
+def task_outline(tree: dict[str, Any], nodes: list[RequirementNode]) -> str:
+    """Bounded whole-task index for architecture; not an implementation spec."""
+
+    entries: list[dict[str, Any]] = []
+    root_name = _bounded(tree.get("name"), 160)
+    for node in nodes:
+        entry = {
+            "id": node.req_id,
+            "name": node.name[:140],
+            "dependencies": list(node.dependencies[:12]),
+        }
+        candidate = entries + [entry]
+        outline = json.dumps(
+            {
+                "root_name": root_name,
+                "total_requirements": len(nodes),
+                "listed_requirements": len(candidate),
+                "requirements": candidate,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).replace("<", "\\u003c")
+        if len(outline) > MAX_TASK_OUTLINE_CHARS:
+            break
+        entries.append(entry)
+    return json.dumps(
+        {
+            "root_name": root_name,
+            "total_requirements": len(nodes),
+            "listed_requirements": len(entries),
+            "requirements": entries,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).replace("<", "\\u003c")
 
 
 def plan_payload(nodes: list[RequirementNode], batch_size: int) -> dict[str, Any]:

@@ -202,8 +202,13 @@ class ModelLoopTests(unittest.TestCase):
                     "backend/routes/notes.mjs",
                     "frontend/src/<do-not-obey>.js",
                 ],
+                task_outline='{"root_name":"Example","requirements":[{"id":"R2","name":"Current"},{"id":"R3","name":"Later"}]}',
             )
             first_prompt = model.prompts[0]
+            self.assertIn("<untrusted_task_outline>", first_prompt)
+            self.assertIn('"id":"R3"', first_prompt)
+            self.assertNotIn("[R3]", first_prompt)
+            self.assertIn("[R2] Use prior module", first_prompt)
             self.assertIn("backend/routes/notes.mjs", first_prompt)
             self.assertIn("frontend/src/\\u003cdo-not-obey>.js", first_prompt)
             self.assertIn("<untrusted_prior_source_paths>", first_prompt)

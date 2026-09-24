@@ -6,7 +6,7 @@
 
 入口接受主办方 `requirements/requirements.yaml` 路径及 `--output-dir`。输出根目录有 `frontend/` 与 `backend/`，后端由 `npm start` 按 `PORT` 监听，前端由 `npm run build` 产出 `frontend/dist/`。默认静态服务和 `/api/health` 是通用运行底座，不包含题目专用行为。
 
-`requirements.py` 校验树、按依赖排序原子需求；`qualifier.py` 把父级模块描述及父级显式 `visual_reference` 继承到各原子需求，避免遗漏父级背景。视觉图片清单同时读取描述中的 `reference/` 路径和显式 `visual_reference` 字段；是否可检查仍由图片路径、存在性、文件类型、大小和视觉网关配置共同决定。空页面、空样式、健康端点及通用 HTTP/原子 JSON 存储辅助函数由 `generic_scaffold.py` 创建，业务代码只能由模型工具调用写入。
+`requirements.py` 校验树、按依赖排序原子需求，并从**本次**需求生成最多 8,000 字符的全局架构目录：只有应用名、原子需求 ID、短名称和依赖，没有需求正文、测试答案或题目预制实现。`qualifier.py` 把父级模块描述及父级显式 `visual_reference` 继承到各原子需求，避免遗漏父级背景。视觉图片清单同时读取描述中的 `reference/` 路径和显式 `visual_reference` 字段；是否可检查仍由图片路径、存在性、文件类型、大小和视觉网关配置共同决定。空页面、空样式、健康端点及通用 HTTP/原子 JSON 存储辅助函数由 `generic_scaffold.py` 创建，业务代码只能由模型工具调用写入。
 
 `arc_runtime.py` 只调用主办方公开 `arcbench-runtime==0.1.0` SDK 的高层方法：`AgentRuntime.from_env(project_dir=...)`、运行状态、`traceability.store_requirement_tree`、需求实现状态及 `git.ensure_repo/commit`。平台事件格式和 `.arc/traceability/` 表由 SDK 生成，本参赛包不构造事件载荷。在 Runner 环境中 SDK 缺失会失败关闭。每批代码与对应需求状态由 SDK 一并提交；状态文件也在 Git 内，不能先提交代码、再写完成状态。提交失败会把当前需求标记为失败并使运行失败；即使某个需求级失败事件写入报错，也仍独立尝试写运行级失败事件，并在本地报告保留 SDK 报错。通用构建/启动检查不宣称逐需求 GUI 测试通过，也不会发送 `mark_test_passed`。本地 `.arc/production-trace.jsonl` 是额外的独立审计链，不代替平台事件。
 
@@ -19,7 +19,7 @@
 ## Prompts 与 Agent 迭代
 
 1. `agent.py:SYSTEM_PROMPT` 规定实现职责、不可信需求边界、前后端可运行、持久化、交互与后端状态校验；模型必须实际编辑文件并执行校验。
-2. `CodingAgent.implement` 为每一小批依赖有序需求构造用户 Prompt，包含需求 ID、描述、场景、父级上下文和相关文件。需求正文明确包裹为不可信数据。若同时提供三项 `VISUAL_*` 配置，Prompt 会列出本批实际存在的参考截图，模型可按需调用 `inspect_reference`；视觉描述仍是不可信线索，不得覆盖文字需求。
+2. `CodingAgent.implement` 为每一小批依赖有序需求构造用户 Prompt，包含当前需求 ID、描述、场景、父级上下文和相关文件；另给上述**全局架构目录**，让首批就知道后续会有何种模块，避免把数据与路由结构写死。目录与需求正文都按不可信数据包裹，Prompt 明确要求只实施 `<untrusted_requirements>` 中带方括号的当前 ID，不把目录中的未来项误作已指派任务。公开 BookStack/Keep 需求分别有 34/32 个原子节点，当前目录 2,825/2,422 字符，均完整列入；这只是静态覆盖核验，不能证明真实模型能正确规划。若同时提供三项 `VISUAL_*` 配置，Prompt 会列出本批实际存在的参考截图，模型可按需调用 `inspect_reference`；视觉描述仍是不可信线索，不得覆盖文字需求。
 3. 模型调用由 `model.py:OpenAIChatClient` 发往环境注入的 OpenAI-compatible `/chat/completions`。没有 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`MODEL` 就失败，不切换到预制业务实现。
 4. 每次模型响应可提出多个工具调用。批次在系统临时目录的应用副本中运行，必须有实际源码修改且最后一次修改通过 quick 校验（含不执行生成源码的 JavaScript 语法检查，以及清空旧 `dist` 后必须重新产出非空 `index.html`），随后进入 `ACCEPTANCE_AUDIT_PROMPT` 逐条审查。单纯再次调用 `run_validation` 不算完成审计；模型须给出以 `AUDIT PASS:` 开头的无工具总结，明确未验证部分。这个标记是模型自述，不是逐需求独立测试通过；审计若再改动，必须重新校验。模型明确给出 `AUDIT BLOCKED:` 则当前尝试立即失败，未验证修改不会晋升；连续三次无工具、无可接受进展也结束尝试，而不是追问到 20 回合。通过 quick 后可用 `browser_probe` 启动本地生成应用，按语义控件执行最多八步点击、填写、刷新等动作并断言可见文本；探针仅访问本地应用，不读取隐藏测试。若已使用探针但只做了无动作检查、断言失败或之后改了代码，必须在当前版本重新通过带断言的交互探针才能完成该批。探针是生成物自检，不是正式 GUI 得分。
 5. 完成的批次经文件类型/体积核查后才晋升到正式生成项目并由 SDK 提交；失败尝试的临时源码被丢弃。默认一个**多需求**批次若正常结束但未完成，按拓扑顺序拆为前后两半，各至多重试一次；前半仍失败时，后半依赖它的需求先标为 `FAILED`，其余独立项仍尝试。每个半批必须独立生成、校验与提交，不能用整批失败前的未验证改动冒充成果；重试半批仍失败则整半批记 `FAILED`，不推断其中哪个单项已实现。拆批深度上限为一层，每个原始批次最多两次额外会话；`--salvage-splits 0` 可禁用，模型调用抛出运行时错误或请求余量为零时也不再拆批，避免在认证/网关故障时加倍请求。依赖最终失败需求的后续节点不再尝试；独立批次继续。没有任何有效实现时返回非零；有有效实现且最终可构建启动时，部分失败以 `local-contract-partial` 和明确的失败需求列表交给 Runner 继续做独立 GUI 评测。这个状态**不是**全部需求完成，GUI 通过率与得分仍只能由平台测试确定。

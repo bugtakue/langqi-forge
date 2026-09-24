@@ -1,13 +1,47 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from factory26_harness.requirements import batches, flatten_atomic, load_requirement_tree
+from factory26_harness.requirements import (
+    MAX_TASK_OUTLINE_CHARS,
+    batches,
+    flatten_atomic,
+    load_requirement_tree,
+    task_outline,
+)
 
 
 class RequirementCompilerTests(unittest.TestCase):
+    def test_whole_task_outline_is_bounded_and_excludes_requirement_bodies(self) -> None:
+        tree = {
+            "id": "ROOT",
+            "name": "<untrusted> Project",
+            "type": "FOLDER",
+            "children": [
+                {
+                    "id": f"REQ-{index}",
+                    "name": f"Feature {index}",
+                    "type": "ATOMIC",
+                    "description": "DO NOT leak this body into the index",
+                    "dependencies": [f"REQ-{index - 1}"] if index else [],
+                }
+                for index in range(160)
+            ],
+        }
+        nodes = flatten_atomic(tree)
+        outline = task_outline(tree, nodes)
+        parsed = json.loads(outline)
+        self.assertLessEqual(len(outline), MAX_TASK_OUTLINE_CHARS)
+        self.assertEqual(parsed["total_requirements"], 160)
+        self.assertLess(parsed["listed_requirements"], 160)
+        self.assertEqual(parsed["listed_requirements"], len(parsed["requirements"]))
+        self.assertEqual(parsed["requirements"][1]["dependencies"], ["REQ-0"])
+        self.assertNotIn("DO NOT leak", outline)
+        self.assertNotIn("<untrusted>", outline)
+
     def test_dependency_order_is_stable(self) -> None:
         tree = {
             "id": "root",
