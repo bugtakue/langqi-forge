@@ -241,3 +241,10 @@
 - 从上述干净源码提交打包的精确候选为 `dist/langqi-forge-qualifier.zip`，SHA-256 `e133018789b08f71637285252740d03a33689c2d16fda08fccffe56caa73c7e5`，17 个白名单文件，`unzip -t` 通过。之后的协议夹具改动位于 `tests/` 且不进入 ZIP；当前 ZIP 仍绑定源码提交 `8f4c00a...`。
 - 该**精确 ZIP** 在旧版 arm64 Runner + 当前本地模拟器包装、固定响应两批服务下做两次隔离本地运行。基线目录 `../factory26-local-simulation/runs/qualifier-truncation-safe-protocol-20260925/`：模型协议请求 10 次，SDK 两项 `IMPLEMENTED`，本地 6/6 检查、Runner 独立 Playwright **2/2**，生产轨迹 59/59 行封印有效。截断注入目录 `../factory26-local-simulation/runs/qualifier-length-recovery-protocol-20260925/`：假服务首批先返回 `finish_reason=length` 和一个伪 `write_file`，下一次请求必须包含恢复提示且不能携带未配对的工具调用，否则返回 HTTP 422；最终模型协议请求 11 次、SDK 两项 `IMPLEMENTED`、本地 6/6 检查、Runner 独立 Playwright **2/2**、轨迹 62/62 行封印有效，生成项目里**不存在** `frontend/src/TRUNCATED_UNSAFE.js`。截断注入夹具提交为 `d9d21cd`，没有被打入参赛包。
 - 两次运行均使用自建固定响应假模型、公开协议自测题、旧版 arm64 Runner；不是百炼真实编码模型、BookStack/Keep 公开练习、当前完整 amd64/x86 Runner 或正式赛。Meter 不可用，两次 `score=null`、费用未知。正式 ARC-Bench 账号未登录，本轮没有上传或提交；要衡量实际竞争力仍需真实模型及独立 GUI 练习。
+
+## 2026-09-25 已验证批次的有界交接
+
+- 核对公开 BookStack/Keep 需求树及现有工具后，参考图像的本地纯像素摘要无法表达文字、结构和交互；缓存的旧版 Runner 没有 OCR、Pillow 或 ImageMagick。暂不加入未经真实收益验证的弱视觉降级或额外依赖，继续保留显式配置 `VISUAL_*` 时的视觉模型检查。当前更直接的跨批缺口是：后来批次虽然知道先前改过哪些文件，却没有先前选择的数据、接口和导航约定；复杂任务重开模型上下文时容易重复设计。此项是架构风险推断，不是已测得的 BookStack/Keep 失败率。
+- 源码提交 `4f62b58f25ae3982b7bb13e6368584f4fb1fe263` 要求模型在最后审计摘要里简要说明状态键、API 路由和导航合同；只有**成功且晋升**的批次摘要才保留，至多四条、合计 2,400 字符。下一批在单独的“不可信先前交接”标签中看到摘要，同时被要求先按实际源码核对；摘要不能变成新的需求指令或通过证明。失败批次与丢弃的临时编辑不会交接。新增测试覆盖跨批传递、失败拆批隔离、长度上限及标签注入转义；全套主机 **99 项测试：96 通过，3 项因本机浏览器环境跳过**。
+- 从上述干净源码提交打包的精确候选 `dist/langqi-forge-qualifier.zip`，SHA-256 `64b451fa6f71275795aafedea617aa88becfb7127e704db02deded915d3b7035`，17 个白名单文件，来源清单绑定 `4f62b58...`，`unzip -t` 全部通过。该 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的固定响应双批夹具运行于 `../factory26-local-simulation/runs/qualifier-bounded-handoff-protocol-20260925/`：第二批提示缺少第一批摘要时假服务会返回 HTTP 422；实际轨迹中的交接数从 0→1，第二批提示包含第一批摘要和已改源码路径。容器退出码 0、SDK 两项 `IMPLEMENTED`、模型协议请求 10 次、本地 6/6 检查、独立 Playwright **2/2**，59/59 行生产轨迹封印有效。
+- 本轮依然没有真实百炼模型 Key（本机剪贴板为空），故上述固定响应协议夹具不能证明公开 BookStack/Keep 的通过率、费用或相对竞品能力；Meter 不可用，`score=null`。没有登录 ARC-Bench，也没有上传或正式提交。
