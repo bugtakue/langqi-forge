@@ -268,3 +268,10 @@
 - 当前精确 ZIP `dist/langqi-forge-qualifier.zip` SHA-256 `794179f68fdf3fcdd2e3db3e17f9e7e2be9288775b2023f204a2ef90abada69e`，17 个白名单文件，包内清单绑定上述干净源码提交，`unzip -t` 通过；协议夹具与本证据文档不在 ZIP。全套本机 **105 项测试：102 通过、3 项因浏览器环境跳过**。
 - 旧版 arm64 Runner + 当前本地模拟器包装的精确 ZIP 协议运行目录为 `../factory26-local-simulation/runs/qualifier-audit-revision-protocol-20260925/`。固定响应假模型在第一批首次审计后额外写入 `frontend/src/audit-repair.js`，并要求再次验证和再次浏览器探针；假服务只有在**最新审计源码快照包含该文件**时才允许 `AUDIT PASS`，否则返回 HTTP 422。实际首批审计修订号 2→失效→3，第二批另有修订号 2 的审计；轨迹 3 次审计请求、1 次旧审计失效、**73/73** 行哈希封印有效，未发现未脱敏夹具密钥。SDK 两项 `IMPLEMENTED`，容器退出码 0，独立 Playwright **2/2**；固定响应协议请求 13 次。Meter 拒绝连接，`score=null`、真实费用未知。
 - 以上验证的是时序、协议、构建、部署、跨批与审计留痕，**不是**真实百炼模型完成 BookStack/Keep 的能力、当前完整 amd64 Runner 的 GUI 成绩、正式赛分数或对其他参赛者的优势。ARC-Bench 未登录、未上传、未提交；真实练习仍缺可用模型 Key。
+
+## 2026-09-25 官网边界复核与工作区发现安全
+
+- 只读查看[主办方规则页](https://create.gosim.org/factory26/rules)与 [ARC-Bench 竞赛列表](https://arc-bench.com/competition)：初赛页面仍列 GitHub + Spreadsheets 复刻、9/24–9/30、Top 20 晋级；ARC-Bench 当前公开列表显示正式赛 2 tasks / 200 tests。[正式赛详情](https://arc-bench.com/competitions/hackathon)在未登录状态要求队长确认队伍，不能据此猜测隐藏任务实现或自行提交。[Runtime API 文档](https://arc-bench.com/api-doc)继续要求 Python 根入口 `main.py`、`requirements.txt` 和内置 `arcbench_agent_runtime` 高层 SDK，不允许手写事件载荷。官网通用规则页仍写“三项指标权重待确认”，与队长收到的细化《参赛须知》和平台计分页粒度不同；本轮未据此改写已记录的细化计分口径。官网可读状态是当前观察，后续规则仍可能调整。
+- 检查 Harness 工具发现：单文件读取会拒绝越界/敏感路径，但 `search_text` 原先只校验搜索根目录，递归结果若是指向工作区外或 `.env` 的符号链接，仍会读出目标正文；`list_files` 也会列出这些链接。新增先失败回归确实从外部链接读出测试哨兵。源码提交 `58a47a7dbf95df90e054b4476aaa1f654c3104d0` 使列表与搜索逐项验证发现路径并跳过链接；普通安全文件仍可搜索。这是工作区工具的静态访问闸门，不等于对恶意脚本运行时的完整沙箱或 TOCTOU 证明。
+- 全套本机 **106 项测试：103 通过、3 项因浏览器环境跳过**，`git diff --check` 通过。干净源码树生成的当前精确候选 `dist/langqi-forge-qualifier.zip`：SHA-256 `25507050a33fc56fdc2c2a955b75d3e4f4fae9249eb899f7414d940c85420f71`，17 个白名单文件，包内清单绑定上述源码提交，`unzip -t` 通过。
+- 该精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装、固定响应双批假模型下运行于 `../factory26-local-simulation/runs/qualifier-safe-discovery-protocol-20260925/`：容器退出码 0、SDK 两项 `IMPLEMENTED`、独立 Playwright **2/2**、固定响应模型请求 13 次、生产轨迹 **73/73** 行哈希封印有效且未发现未脱敏测试密钥。该正常链路夹具不尝试读符号链接；越界拒绝由新增单元回归直接验证。Meter 不可用，`score=null`、费用未知。尚无真实百炼模型练习、当前完整 amd64 Runner GUI 成绩、ARC-Bench 登录或正式提交。
