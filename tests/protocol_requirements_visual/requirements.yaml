@@ -1,0 +1,12 @@
+id: ROOT
+name: Visual availability protocol fixture
+type: FOLDER
+description: Local runner integration test only; not a public task.
+children:
+  - id: REQ-1
+    name: Example heading
+    type: ATOMIC
+    description: Display one visible heading named Example.
+    visual_reference: [./reference/unavailable.png]
+    dependencies: []
+    scenarios: []
