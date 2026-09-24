@@ -7,7 +7,6 @@ remote URL. The browser can contact only this run's loopback application.
 from __future__ import annotations
 
 import os
-import shutil
 import signal
 import subprocess
 import tempfile
@@ -17,6 +16,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .checks import _npm_install, _port_available, _safe_environment, _wait_for_health
+from .isolation import stage_app_project
 
 
 MAX_STEPS = 8
@@ -24,9 +24,6 @@ MAX_ASSERTIONS = 4
 MAX_TEXT_CHARS = 2800
 OBSERVATION_SETTLE_SECONDS = 2.0
 ALLOWED_ACTIONS = {"click", "fill", "press", "select", "check", "reload", "navigate"}
-PROBE_COPY_IGNORED = {"node_modules", ".git", ".arc", ".cache", "coverage"}
-MAX_PROBE_COPY_FILES = 5_000
-MAX_PROBE_COPY_BYTES = 100_000_000
 
 
 def _bounded_text(value: Any, *, maximum: int = 200) -> str:
@@ -192,48 +189,6 @@ def _stop_server(process: subprocess.Popen[Any]) -> None:
             pass
 
 
-def _check_probe_copy(root: Path) -> None:
-    """Reject links and oversized projects before executing a staged app."""
-
-    file_count = 0
-    total_bytes = 0
-    for component in ("frontend", "backend"):
-        directory = root / component
-        if directory.is_symlink() or not directory.is_dir():
-            raise RuntimeError(f"browser probe requires a regular {component}/ directory")
-        for current, directories, files in os.walk(directory, followlinks=False):
-            directories[:] = [
-                name for name in directories if name not in PROBE_COPY_IGNORED
-            ]
-            for name in directories:
-                path = Path(current) / name
-                if path.is_symlink() or not path.is_dir():
-                    raise RuntimeError("browser probe cannot stage a linked directory")
-            for name in files:
-                if name in PROBE_COPY_IGNORED:
-                    continue
-                path = Path(current) / name
-                if path.is_symlink() or not path.is_file():
-                    raise RuntimeError("browser probe cannot stage a linked or special file")
-                file_count += 1
-                total_bytes += path.stat().st_size
-                if file_count > MAX_PROBE_COPY_FILES or total_bytes > MAX_PROBE_COPY_BYTES:
-                    raise RuntimeError("browser probe project exceeds isolation copy limit")
-
-
-def _stage_probe_project(source: Path, target: Path) -> None:
-    _check_probe_copy(source)
-    for component in ("frontend", "backend"):
-        shutil.copytree(
-            source / component,
-            target / component,
-            symlinks=True,
-            ignore=shutil.ignore_patterns(*PROBE_COPY_IGNORED),
-        )
-    # A source path changing between preflight and copy must still fail closed.
-    _check_probe_copy(target)
-
-
 def probe_local_app(root: Path, port: int, steps: list[dict[str, Any]]) -> dict[str, Any]:
     """Exercise an isolated copy so self-tests cannot consume evaluator seed data."""
 
@@ -245,7 +200,7 @@ def probe_local_app(root: Path, port: int, steps: list[dict[str, Any]]) -> dict[
         raise RuntimeError(f"browser probe port {port} is already occupied")
     with tempfile.TemporaryDirectory(prefix="factory26-browser-probe-") as directory:
         isolated_root = Path(directory)
-        _stage_probe_project(root, isolated_root)
+        stage_app_project(root, isolated_root)
         result = _probe_isolated_app(isolated_root, port, validated)
         return {**result, "workspace_isolated": True}
 

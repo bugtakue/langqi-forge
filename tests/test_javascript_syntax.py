@@ -13,6 +13,7 @@ from factory26_harness.checks import (
     javascript_syntax_check,
     run_full_checks,
     run_quick_checks,
+    startup_check,
 )
 from factory26_harness.generic_scaffold import scaffold_workspace
 from factory26_harness.trace import ProductionTrace
@@ -83,6 +84,35 @@ class JavaScriptSyntaxTests(unittest.TestCase):
             self.assertFalse(result.passed)
             self.assertIn("dist/index.html", result.summary)
             self.assertFalse((root / "frontend/dist/index.html").exists())
+
+    def test_startup_health_check_does_not_modify_original_seed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold_workspace(root)
+            state_path = root / "backend/data/state.json"
+            state_path.write_text('{"count":0}\n', encoding="utf-8")
+            server_path = root / "backend/server.mjs"
+            source = server_path.read_text(encoding="utf-8")
+            source = source.replace(
+                'import { readFile } from "node:fs/promises";',
+                'import { readFile, writeFile } from "node:fs/promises";',
+                1,
+            )
+            source = source.replace(
+                'const here = path.dirname(fileURLToPath(import.meta.url));',
+                '''const here = path.dirname(fileURLToPath(import.meta.url));
+const statePath = path.join(here, "data", "state.json");
+const state = JSON.parse(await readFile(statePath, "utf8"));
+await writeFile(statePath, JSON.stringify({ ...state, count: state.count + 1 }));''',
+                1,
+            )
+            server_path.write_text(source, encoding="utf-8")
+            self.assertTrue(frontend_build_check(root).passed)
+            result = startup_check(root, 3926)
+            self.assertTrue(result.passed, result.summary)
+            self.assertEqual(
+                json.loads(state_path.read_text(encoding="utf-8")), {"count": 0}
+            )
 
 
 if __name__ == "__main__":

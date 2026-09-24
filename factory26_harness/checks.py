@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+from .isolation import stage_app_project
+
 
 SAFE_ENVIRONMENT_KEYS = {
     "CI",
@@ -474,9 +476,8 @@ def _port_available(port: int) -> bool:
 
 def startup_check(root: Path, smoke_port: int) -> CheckResult:
     started = time.monotonic()
-    backend = root / "backend"
     related = ("backend/package.json", "backend/server.mjs", "frontend/dist")
-    if not (backend / "package.json").is_file():
+    if not (root / "backend/package.json").is_file():
         return CheckResult(
             "startup_health", False, "backend/package.json missing", related, 0.0
         )
@@ -488,6 +489,26 @@ def startup_check(root: Path, smoke_port: int) -> CheckResult:
             related,
             0.0,
         )
+    with tempfile.TemporaryDirectory(prefix="factory26-startup-check-") as directory:
+        isolated_root = Path(directory)
+        try:
+            stage_app_project(root.resolve(), isolated_root)
+        except (OSError, RuntimeError) as exc:
+            return CheckResult(
+                "startup_health",
+                False,
+                f"backend isolation failed: {exc}",
+                related,
+                time.monotonic() - started,
+            )
+        return _startup_check_isolated(
+            isolated_root / "backend", smoke_port, related, started
+        )
+
+
+def _startup_check_isolated(
+    backend: Path, smoke_port: int, related: tuple[str, ...], started: float
+) -> CheckResult:
     install_rc, install_output, _ = _npm_install(backend)
     if install_rc != 0:
         return CheckResult(

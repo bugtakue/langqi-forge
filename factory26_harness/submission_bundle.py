@@ -23,6 +23,7 @@ BUNDLE_MODULES = (
     "factory26_harness/browser_probe.py",
     "factory26_harness/checks.py",
     "factory26_harness/generic_scaffold.py",
+    "factory26_harness/isolation.py",
     "factory26_harness/model.py",
     "factory26_harness/qualifier.py",
     "factory26_harness/requirements.py",

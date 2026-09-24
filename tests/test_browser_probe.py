@@ -7,13 +7,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from factory26_harness.browser_probe import (
-    _stage_probe_project,
-    probe_local_app,
-    validate_steps,
-)
+from factory26_harness.browser_probe import probe_local_app, validate_steps
 from factory26_harness.checks import frontend_build_check
 from factory26_harness.generic_scaffold import scaffold_workspace
+from factory26_harness.isolation import stage_app_project
 from factory26_harness.trace import ProductionTrace
 from factory26_harness.workspace_tools import WorkspaceTools
 
@@ -33,7 +30,7 @@ class BrowserProbeTests(unittest.TestCase):
             )
             staged = root / "staged"
             staged.mkdir()
-            _stage_probe_project(source, staged)
+            stage_app_project(source, staged)
             (staged / "backend/data/state.json").write_text(
                 '{"count":1}\n', encoding="utf-8"
             )
@@ -45,7 +42,7 @@ class BrowserProbeTests(unittest.TestCase):
 
             (source / "frontend/src/escape").symlink_to(root / "outside")
             with self.assertRaisesRegex(RuntimeError, "linked or special file"):
-                _stage_probe_project(source, root / "rejected")
+                stage_app_project(source, root / "rejected")
 
     def test_steps_are_semantic_and_remote_navigation_is_rejected(self) -> None:
         for steps in (
