@@ -137,5 +137,5 @@
 
 - 未改动参赛 ZIP：SHA-256 仍为 `18671d0842b58e19298c813b68f8c08466fc8eb2694556b75d8b6e1445e38529`，包内来源清单绑定 `33f3f3d43db749a1ade4436bf9366e28a04b983f`。新脚本只在仓库 `scripts/`，不在 ZIP 白名单内。
 - `../factory26-local-simulation/runs/qualifier-current-gen-legacy-gui-20260925/` 由当前模拟器 `--prepare-only` 放入单需求协议夹具和一条公开浏览器断言，随后用本机缓存的当前 amd64 基础镜像直启**精确 ZIP**生成应用，固定响应假模型请求/尝试各 4 次，报告 `local-contract-passed`、6/6 本地检查通过；27/27 条生产轨迹通过完整哈希封印校验。此阶段没有运行当前 Runner 的 GUI 预检。
-- 该生成物再放入本机缓存的旧 arm64 浏览器镜像，使用 `--network none`、无模型密钥、非 root 用户及独立公开测试配置。首次诊断因容器缺可写 HOME，Chromium 在断言前报 crashpad 启动错误，报告为 0 通过/1 异常；保留此失败报告。补齐可写 HOME 后，`hybrid-playwright-isolated-config-report.json` 记录公开协议断言 1/1 通过、0 异常；`bash -n` 通过。复现脚本与限制见[跨架构公开 GUI 诊断](HYBRID_PUBLIC_GUI.md)。
+- 该生成物再放入本机缓存的旧 arm64 浏览器镜像，使用 `--network none`、无模型密钥、非 root 用户及独立公开测试配置。首次诊断因容器缺可写 HOME，Chromium 在断言前报 crashpad 启动错误，报告为 0 通过/1 异常；保留此失败报告。补齐可写 HOME 后，`hybrid-playwright-isolated-config-report.json` 记录公开协议断言 1/1 通过、0 异常。最终缩小挂载范围为仅只读 `scripts/`，以 `minimal-mount` 标签重跑仍为 1/1 通过、0 异常；`bash -n` 通过，重复标签时脚本拒绝覆盖旧报告。复现脚本与限制见[跨架构公开 GUI 诊断](HYBRID_PUBLIC_GUI.md)。
 - 这是**当前基础镜像生成 + 旧镜像浏览器**的混合本地诊断，不是当前完整 Runner，也不是两道公开练习或正式隐藏测试；自建夹具不测量真实模型编程能力，模型费用与正式分数仍为未知。本次 shell 环境未配置可直接用于练习的模型 Key，尚未获得 BookStack/Keep 的真实模型成绩。

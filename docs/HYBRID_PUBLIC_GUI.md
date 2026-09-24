@@ -2,7 +2,7 @@
 
 用途：当 macOS ARM 主机上的当前 amd64 Runner 因 QEMU Chromium 预检故障而不能跑完整 GUI 时，对**已经生成的应用**运行公开 Playwright 测试。生成阶段仍使用当前 amd64 基础镜像；浏览器阶段借用本机缓存的旧 arm64 镜像 `arcbench-local-legacy:20260924`。这两个阶段拼接，**不等于主办方当前完整 Runner**，也不能用于推断隐藏测试、正式得分或真实模型开销。
 
-前提：已有独立的本地模拟器 `--prepare-only` 工作区，至少包含 `template/frontend/dist/index.html`、`template/backend/server.mjs` 和 `tests/*.spec.ts`；并已在该工作区通过当前基础镜像生成应用。本诊断脚本不会调用模型，不传入模型密钥。测试时容器使用 `--network none`、只读挂载本仓库、仅给生成工作区写权限。不要在工作区存放个人密钥；生成应用仍是不可信程序。
+前提：已有独立的本地模拟器 `--prepare-only` 工作区，至少包含 `template/frontend/dist/index.html`、`template/backend/server.mjs` 和 `tests/*.spec.ts`；并已在该工作区通过当前基础镜像生成应用。本诊断脚本不会调用模型，不传入模型密钥。测试时容器使用 `--network none`、只读挂载本仓库的 `scripts/` 目录、仅给生成工作区写权限。不要在工作区存放个人密钥；生成应用仍是不可信程序。
 
 在本仓库根目录运行，替换准备好的工作区绝对路径与唯一标签：
 
@@ -11,9 +11,9 @@ diagnostic_workspace='/absolute/path/to/prepared-workspace'
 docker run --rm --platform linux/arm64 --network none \
   --user "$(id -u):$(id -g)" \
   --mount "type=bind,source=${diagnostic_workspace},target=/workspace" \
-  --mount "type=bind,source=$(pwd),target=/harness,readonly" \
+  --mount "type=bind,source=$(pwd)/scripts,target=/harness,readonly" \
   arcbench-local-legacy:20260924 \
-  bash /harness/scripts/run_hybrid_public_gui.sh /workspace run-001
+  bash /harness/run_hybrid_public_gui.sh /workspace run-001
 jq '.stats' "${diagnostic_workspace}/hybrid-playwright-run-001-report.json"
 ```
 

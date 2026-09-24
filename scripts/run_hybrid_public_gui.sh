@@ -21,7 +21,7 @@ for required in \
   "${project}/frontend/dist/index.html" \
   "${project}/backend/server.mjs" \
   "/opt/arcbench/node_modules/.bin/playwright" \
-  "/harness/scripts/hybrid.playwright.config.ts"; do
+  "/harness/hybrid.playwright.config.ts"; do
   if [[ ! -e "${required}" ]]; then
     printf 'missing hybrid GUI input: %s\n' "${required}" >&2
     exit 2
@@ -35,12 +35,12 @@ fi
 # prepare-only copies the public specs but the full Runner normally creates
 # this test package setup later. Keep this config separate from Runner files.
 if [[ -e "${config}" ]]; then
-  if ! cmp -s /harness/scripts/hybrid.playwright.config.ts "${config}"; then
+  if ! cmp -s /harness/hybrid.playwright.config.ts "${config}"; then
     printf 'refusing to replace a different hybrid GUI config: %s\n' "${config}" >&2
     exit 2
   fi
 else
-  cp /harness/scripts/hybrid.playwright.config.ts "${config}"
+  cp /harness/hybrid.playwright.config.ts "${config}"
 fi
 if [[ ! -e "${tests}/node_modules" ]]; then
   ln -s /opt/arcbench/node_modules "${tests}/node_modules"
