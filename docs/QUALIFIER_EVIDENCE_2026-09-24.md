@@ -162,3 +162,11 @@
 - 主机全套 80 项测试为 77 通过、3 项浏览器环境依赖跳过；旧 arm64 浏览器镜像内临时安装参赛包锁定的 `arcbench-runtime==0.1.0` 后，80/80 全通过。新的精确 ZIP `dist/langqi-forge-qualifier.zip` SHA-256 为 `e35dedaf38d12ca813546f331092d24347b865719c4d1237d49d89cab15dbc5b`，17 个文件，哈希清单绑定上述源码提交，`unzip -t` 通过；新增的共享隔离模块进入白名单，测试夹具未进入 ZIP。
 - 该 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装运行同一有状态协议夹具，目录 `../factory26-local-simulation/runs/qualifier-startup-isolation-protocol-20260925/`：容器退出码 0、固定响应模型请求/尝试各 5 次、SDK 完成、6/6 本地检查通过，独立 Playwright 先读到 `count=0` 再自行改成 1，测试 1/1；SDK Git 提交快照仍为 `count=0`，37/37 行生产轨迹有效。Meter 指向拒绝连接的本地地址，费用和分数 `null`。
 - 同一 ZIP 在缓存的当前 amd64 基础镜像直启普通协议夹具，目录 `../factory26-local-simulation/runs/qualifier-startup-isolation-current-direct-20260925/`：固定响应请求/尝试各 4 次，6/6 本地检查通过，SDK 完成，轨迹 27/27 行有效；借旧 arm64 浏览器镜像进行隔离诊断 1/1。该混合路径不等于当前完整 Runner，不提供真实模型的公开练习或正式赛成绩。
+
+## 2026-09-25 官网账号与公开榜单复核
+
+- 只读核对[主办方官网](https://create.gosim.org/factory26/)当前前端文案：报名网站账号与 ARC-Bench 账号分开，报名密码不会自动成为 ARC-Bench 密码；官网说明 ARC-Bench 登录方式另行通知。官网同时提示因参赛反馈及平台运行情况调整了初赛、决赛开始时间；当前页面的赛程文案为初赛 9/24–9/30、决赛 10/5–10/7。本项是官网当前展示，不代替队长收到的正式通知；如再次变更，以最新主办方通知为准。
+- [ARC-Bench 登录页](https://arc-bench.com/login)公开界面需要邮箱、密码；本轮未发现可用的自助密码重置入口。先前注册表单出现“邮箱已被使用”只能说明该邮箱无法再注册，**不证明**队长知道密码或现在已登录。不得拿报名网站密码自动尝试 ARC-Bench，也未发起新的注册、登录或密码重置请求。队长应先查主办方发送的 ARC-Bench 开通邮件/通知；仍无凭据时由队长走官方支持渠道请求恢复。
+- [官网公开榜单快照](https://create.gosim.org/factory26/arcbench-leaderboard.json)的 `competition.id=arc-bench-lite`，`updatedAt=2026-09-24T16:32:14.704Z`，读取时有 53 条记录；网站明确标注“公开赛榜单，非正式初赛排名”。其 66 项测试和可见成本/分数均不能当作正式两任务、200 项测试的排名，也不能当作本参赛包的成绩。部分快照行显示零模型成本与满分；原因未经核实，不据此优化或推断对手实力。
+- [官方 Runtime API](https://arc-bench.com/api-doc)仍要求 Python 根入口 `main.py`、`requirements.txt` 和 `arcbench_agent_runtime` 高层 SDK，不允许手写事件载荷；与当前 ZIP 合同一致。本地主办方模拟器 `HEAD` 与远端 `origin/HEAD` 同为 `4e62690ef0af48601150f248e1f993a300533357`，未发现因模拟器上游更新而必须重打包的变化。
+- 本轮 shell 环境没有练习用模型 Key，剪贴板为空；因此没有运行真实编码模型的 BookStack/Keep，不能补出真实 GUI 通过率或成本。当前 ZIP 未改动，SHA-256 仍为 `e35dedaf38d12ca813546f331092d24347b865719c4d1237d49d89cab15dbc5b`。没有登录、上传或提交。

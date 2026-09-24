@@ -4,6 +4,8 @@
 
 > 状态：目前是本地候选，**未上传、未产生官方成绩、未确认晋级**。此前 GitHub/Spreadsheet 公开样题的 304/304 属于旧版题目专用能力内核，不得作为本版成绩或合规证明。旧版源码与证据可从 Git 历史查阅，但不会进入本版参赛 ZIP。
 
+> 账号与榜单提示（2026-09-25 核对）：[报名官网](https://create.gosim.org/factory26/)明确说报名密码不会自动成为 ARC-Bench 密码；[ARC-Bench 登录页](https://arc-bench.com/login)需要独立的邮箱和密码。官网展示的 ARC-Bench-Lite 榜单是**公开赛**，页面明确标注“非正式初赛排名”，不能拿它证明本队的正式赛位次。队长没有 ARC-Bench 原密码时，不要重复注册或猜测密码；先通过主办方通知/官方渠道处理访问问题。详见[当前访问与赛规核对](docs/QUALIFIER_EVIDENCE_2026-09-24.md#2026-09-25-官网账号与公开榜单复核)。
+
 ## 与当前规则的对应
 
 - ZIP 根目录有 `main.py` 和 `requirements.txt`，入口遵循 `python3 main.py <requirements_dir> --output-dir <output_dir>`。
