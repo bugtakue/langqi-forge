@@ -1,5 +1,7 @@
 # 2026-09-24 本地验证记录
 
+本页按验证发生顺序追加。早期段落里「当前镜像尚未取得」等状态由文末较新的验证记录更新；每段运行结论仅适用于它明确列出的源码提交、ZIP 与环境。
+
 ## 已完成协议运行使用的源码与包
 
 - 源码分支：`codex/factory26-compliant-20260924`。
@@ -49,3 +51,11 @@
 - 对本地模拟包现有需求树实际解析：BookStack 为 34 条原子需求、默认 9 批；Keep 为 32 条、默认 8 批。两项合计 17 批。旧的固定 64 次请求、12 万输入 Token 安全上限可能在完成所有批次前耗尽，不能据协议夹具的 4 次请求推断真实任务可完赛。
 - 新版按「实际批次数 + 最多修复轮数」乘每阶段允许回合数设置全局请求安全上限，并同步放大累计 Token 安全上限；本地公开任务在默认参数下相当于每道分别有 220/200 个允许模型回合（含各自最多 2 轮修复），不是要求模型实际用满。显式环境变量上限仍优先，以防预算失控。模型响应若刚好触发累计 Token 上限，该次已产生的用量仍计入报告及脱敏轨迹。
 - 这只是修复可完成性和计量准确性，**不是对真实模型成本、两个任务通过率或晋级概率的验证**；真实模型 Key/练习券仍未在本地环境可用，且当前 Runner 镜像未核实为最新。
+
+## 当前主办方基础镜像与精确参赛包兼容性（最新）
+
+- 参赛包源码提交 `df7f2a935932a918b6d0d220f235260969ebda6b`；ZIP `dist/langqi-forge-qualifier.zip` 的 SHA-256 为 `1aa239e29ea5e3dfa672d3de4c5549199c9046a624b7ebef324e92edc8ce5cf7`，15 个文件，`unzip -t` 通过；单元测试 55/55 通过。该 ZIP 的来源清单绑定上述源码提交，后续文档提交不改变已验证 ZIP 的源码内容。
+- 已取得主办方 Docker Hub `gyataro/arcbench-runner:local-base`：本机基础镜像 ID `sha256:da61a60c2d488c1077a2cffb3f109eb312edd745ae402adecb15f2d33111f7fc`，仓库摘要 `sha256:40e003ed470dbd4c120b9019876ba77303d38dc8b34be7f6e313fe0563dd14de`，平台 `linux/amd64`。依本地模拟器脚本构建包装镜像 `arcbench-local-current:20260924`。这是取得镜像时的摘要，不保证主办方之后不更新标签。
+- 用该包装镜像走完整 `local_submit.py` 时，Runner 在**启动参赛智能体之前**的 Chromium 预检失败。运行目录 `../factory26-local-simulation/runs/qualifier-budget-current-runner-20260924/`，`container_exit_code=1`；错误包含 `qemu: uncaught target signal 5` 与 `inotify_init() failed: Function not implemented`。本机是 arm64，当前镜像只提供 amd64，因此这里不能据失败判定参赛代码或正式 x86 环境的 GUI 表现。
+- 绕开这项与智能体无关的浏览器预检后，将**同一 ZIP**在上述当前 amd64 基础镜像里直接运行主办方 `run_submission.py` 使用的入口/参数/环境合同：从镜像配置的 PyPI 镜像安装 `arcbench-runtime==0.1.0` 成功，使用自建模型协议夹具运行一条测试需求。运行目录 `../factory26-local-simulation/runs/qualifier-current-base-direct-20260924/`；报告 `status=local-contract-passed`、`arcbench_runtime=official-sdk`、`model_requests=4`，结构、包策略、交互策略、JavaScript 语法、前端构建、后端启动健康检查 6/6 通过。SDK 写入平台事件和需求状态，生成项目 Git 历史有初始提交及批次提交；独立生产轨迹 27/27 行哈希链有效，未发现未脱敏密钥。
+- 这个**直启兼容性试验不是完整 Runner/浏览器试验，也不是 BookStack、Keep 或正式赛成绩**。它证明当前基础镜像能安装参赛依赖、执行该 ZIP、与 SDK 交互并完成本地构建启动合同；完整当前 Runner GUI 仍需能运行 amd64 Chromium 的环境，真实模型完成公开练习仍需可用的练习模型凭据。
