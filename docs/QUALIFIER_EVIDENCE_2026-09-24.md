@@ -383,3 +383,12 @@
 - 再在同一 amd64 镜像中对生成项目调用镜像自身 `run_submission.py::run_web_template`，其前端构建和后端启动成功；首页 HTTP 200，`/api/health` HTTP 200 且 `ready=true`。这是对**同一精确 ZIP**的生成和部署兼容性证据，但绕过了本机 Apple Silicon→amd64 QEMU 下会崩溃的 Chromium 预检，**不是**当前完整 Runner GUI、真实模型 BookStack/Keep、人民币成本或正式比赛成绩。
 - 当前提交交接和未完成字段逐项列在 `docs/SUBMISSION_HANDOFF_2026-09-25.md`；仍未登录 ARC-Bench、上传或正式提交。
 - 同一精确 ZIP 又分别经本地模拟器 `--prepare-only` 解包到 `../factory26-local-simulation/runs/qualifier-starter-eight-{bookstack,keep}-preflight-20260925/`，两项均无解包/路径错误。此步骤**没有**调用真实模型、生成产品或运行公开 GUI 测试。
+
+## 2026-09-25 每批启动闸门与新精确候选包
+
+- 审计发现每批智能体自述完成后只凭 quick 校验便把代码晋升为后批基线；quick 会做语法和前端构建，却不会启动后端。一个语法正确、启动时抛错的后端可污染后续需求。源码提交 `88fb6167344b0f82c0e3f413fb1f195298aca939` 将完整的结构、政策、语法、构建、启动/健康检查前移到**每个未晋升的候选批次**；失败时仅在该副本内尝试一次有界修复并复核，仍失败则丢弃，不让后批继承。报告增加 `candidate_validations`，封印轨迹增加候选检查及修复事件。此闸门不等于逐需求行为或平台独立 GUI 通过。
+- 故障注入回归证明：`backend/server.mjs` 插入运行时 `throw` 后仍可过 quick，但候选启动检查拒绝晋升；修复成功才可晋升。另一项双批回归中第一批故意启动失败并拒绝修复，第二个独立需求仍从**未污染**的基线完成，报告为 `local-contract-partial`。因新增候选修复机会，模型容量估算相应预留，实际调用数不因预留自动增加。主机全套 **134 项：131 通过、3 项因本机浏览器环境跳过**；`git diff --check` 通过。
+- 从该干净源码提交生成新的精确候选包 `dist/langqi-forge-qualifier.zip`，SHA-256 `5397251e6796e24b2c5332ba571a43ccabb306a67b6823efc9ad10e67ed90d7c`，17 个白名单文件、`unzip -t` 通过，包内来源修订绑定 `88fb616...`。上节 `421d562...` 的包已被同路径新包替代。
+- **旧版 arm64 Runner + 当前本地模拟器包装**：新包在 `../factory26-local-simulation/runs/qualifier-batch-startup-guard-protocol-20260925/` 用自建固定响应假模型运行单条合成需求，官方 SDK 接入、协议模型请求 4 次、候选完整检查与最终 6/6 检查通过、独立 Playwright **1/1**、容器退出码 0。`candidate_validations[0].passed_before_repair=true`，未触发候选修复；生产轨迹 **29/29** 行哈希封印有效且无测试假 Key 明文。Meter 不可用，`score=null`、真实成本未知。
+- **当前缓存 amd64 基础镜像直启**：同一新包在 `../factory26-local-simulation/runs/qualifier-batch-startup-guard-current-direct-20260925/` 的 `arcbench-local-current:20260924` 中安装声明依赖并直接运行入口；官方 SDK、假模型请求 4 次、`local-contract-passed`、候选闸门与最终检查均全绿，轨迹 **29/29** 行封印有效。再调用该镜像的 `run_submission.py::run_web_template`，首页与 `/api/health` 均 HTTP 200，后者 `ready=true`。这仍绕开 Apple Silicon→amd64 QEMU 下崩溃的 Chromium 预检，**不是当前完整 Runner GUI 评测**；上述 1/1 也只是合成题，不是真实百炼模型 BookStack/Keep 通过率或正式赛成绩。
+- 本次只读 `git ls-remote public refs/heads/main` 仍为 `d0474d789c583b3c0d0dfbd133c4af8df270cfed`，不是该 ZIP 来源修订；未推送、未登录 ARC-Bench、未上传或正式提交。当前运行环境没有可用模型 Key，真实模型公开练习、人民币费用及当前 x86 全流程 GUI 仍待核验。
