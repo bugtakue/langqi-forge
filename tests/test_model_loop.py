@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from factory26_harness.agent import CodingAgent, _compact_tool_result
+from factory26_harness.agent import CodingAgent, _compact_tool_result, _source_snapshot
 from factory26_harness.model import (
     ModelBudgetExceeded,
     OpenAIChatClient,
@@ -135,6 +135,138 @@ class _StatusHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_audit_snapshot_represents_all_changed_files_under_a_shared_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            samples = {
+                "backend/server.mjs": "BACKEND_START\n" + "B" * 6_000 + "\nBACKEND_END",
+                "backend/data/state.json": '{"canonical":"state"}',
+                "frontend/src/app.js": "FRONTEND_START\n" + "F" * 6_000 + "\nFRONTEND_END",
+            }
+            for relative, content in samples.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            snapshot, manifest = _source_snapshot(root, samples, maximum_bytes=1_200)
+            self.assertEqual([item["path"] for item in manifest], list(samples))
+            self.assertTrue(all(item["included_bytes"] > 0 for item in manifest))
+            self.assertLessEqual(sum(item["included_bytes"] for item in manifest), 1_200)
+            self.assertIn("BACKEND_START", snapshot)
+            self.assertIn("BACKEND_END", snapshot)
+            self.assertIn("FRONTEND_START", snapshot)
+            self.assertIn("FRONTEND_END", snapshot)
+            self.assertIn("canonical", snapshot)
+            self.assertIn("read_file", snapshot)
+
+    def test_audit_snapshot_lists_omitted_files_when_budget_is_tiny(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative in ("backend/one.mjs", "backend/two.mjs", "frontend/src/three.js"):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("large source body" * 100, encoding="utf-8")
+            snapshot, manifest = _source_snapshot(
+                root,
+                ("backend/one.mjs", "backend/two.mjs", "frontend/src/three.js"),
+                maximum_bytes=2,
+            )
+            self.assertEqual(len(manifest), 3)
+            self.assertTrue(all(path in snapshot for path in (
+                "backend/one.mjs", "backend/two.mjs", "frontend/src/three.js"
+            )))
+            self.assertLessEqual(sum(item["included_bytes"] for item in manifest), 2)
+            self.assertIn("read_file", snapshot)
+
+    def test_audit_snapshot_discloses_files_beyond_file_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = tuple(f"frontend/src/file-{index:02}.js" for index in range(25))
+            for relative in paths:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("export const ready = true;", encoding="utf-8")
+            snapshot, manifest = _source_snapshot(root, paths)
+            self.assertEqual(len(manifest), 24)
+            self.assertIn(paths[-1], snapshot)
+            self.assertIn("1 changed files omitted", snapshot)
+            self.assertIn("use read_file", snapshot)
+
+    def test_acceptance_audit_prompt_lists_each_changed_layer(self) -> None:
+        class LayeredModel:
+            def __init__(self) -> None:
+                self.turn = 0
+                self.audit_content = ""
+
+            def complete(self, messages, _tools):
+                self.turn += 1
+                if self.turn == 1:
+                    calls = tuple(
+                        {
+                            "id": f"write-{index}",
+                            "type": "function",
+                            "function": {
+                                "name": "write_file",
+                                "arguments": json.dumps({"path": path, "content": content}),
+                            },
+                        }
+                        for index, (path, content) in enumerate((
+                            ("backend/routes/feature.mjs", "// BACKEND_START\n" + "x" * 7_000 + "\n// BACKEND_END"),
+                            ("backend/data/feature.json", '{"canonical":"state"}'),
+                            ("frontend/src/feature.js", "// FRONTEND_START\n" + "x" * 7_000 + "\n// FRONTEND_END"),
+                        ))
+                    )
+                elif self.turn == 2:
+                    calls = ({
+                        "id": "validate",
+                        "type": "function",
+                        "function": {
+                            "name": "run_validation",
+                            "arguments": '{"scope":"quick"}',
+                        },
+                    },)
+                else:
+                    self.audit_content = "\n".join(
+                        str(message.get("content") or "")
+                        for message in messages
+                        if message.get("role") == "user"
+                        and "<untrusted_changed_sources>" in str(message.get("content") or "")
+                    )
+                    calls = ()
+                return SimpleNamespace(
+                    tool_calls=calls,
+                    raw_message={
+                        "role": "assistant",
+                        "content": "AUDIT PASS: layered fixture" if not calls else "",
+                        **({"tool_calls": calls} if calls else {}),
+                    },
+                    content="AUDIT PASS: layered fixture" if not calls else "",
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for component, scripts in (
+                ("frontend", {"build": DUMMY_BUILD}),
+                ("backend", {"start": 'node -e ""'}),
+            ):
+                folder = root / component
+                folder.mkdir()
+                (folder / "package.json").write_text(
+                    json.dumps({"name": component, "private": True, "scripts": scripts}),
+                    encoding="utf-8",
+                )
+            trace = ProductionTrace(root / ".arc/trace.jsonl")
+            model = LayeredModel()
+            result = CodingAgent(model, WorkspaceTools(root, trace, 3926), trace, max_turns=4).implement(
+                [RequirementNode("R-LAYERS", "Layered fixture", "Edit three layers", (), (), (), {})]
+            )
+            self.assertTrue(result.completed)
+            for path in (
+                "backend/routes/feature.mjs", "backend/data/feature.json", "frontend/src/feature.js"
+            ):
+                self.assertIn(path, model.audit_content)
+            self.assertIn("canonical", model.audit_content)
+            self.assertIn("read_file", model.audit_content)
+
     def test_truncated_tool_call_is_discarded_before_any_workspace_edit(self) -> None:
         class TruncatedModel:
             def __init__(self) -> None:
@@ -926,6 +1058,7 @@ class ModelLoopTests(unittest.TestCase):
                     ]
                 )
             self.assertTrue(result.completed)
+            self.assertLessEqual(max(model.context_sizes), 8_000, model.context_sizes)
             rows = [
                 json.loads(line)
                 for line in trace.path.read_text(encoding="utf-8").splitlines()

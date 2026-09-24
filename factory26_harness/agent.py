@@ -91,9 +91,14 @@ quick validation and repeat the behavioral assertion before finishing.
 If any gap exists, patch only that gap and run quick validation once. If none exists,
 return a short no-tool summary beginning with `AUDIT PASS:` and name any behavior you
 could not verify. Include a concise handoff of state keys, API routes and navigation
-contracts for the next batch. Do not use `AUDIT PASS` if a requirement remains unimplemented."""
+contracts for the next batch. When an excerpt is truncated, use read_file for
+the relevant missing source before making a claim it cannot support. Do not use
+`AUDIT PASS` if a requirement remains unimplemented."""
+
+COMPACT_ACCEPTANCE_AUDIT_PROMPT = """Perform a requirement-by-requirement audit against the validated source. Check each scenario's UI action, backend validation, atomic persistence, immediate/refresh state, exact accessible labels and copy, local feedback, terminal transitions, and invalid-action safety. Read relevant missing source when an excerpt is truncated. Fix gaps and revalidate; otherwise reply `AUDIT PASS:` with unverified behavior and a brief state/API/navigation handoff. Never claim a missing requirement is complete."""
 
 MAX_SOURCE_SNAPSHOT_BYTES = 12_000
+MAX_SOURCE_SNAPSHOT_FILES = 24
 
 STARTER_SOURCE_PATHS = (
     "frontend/src/app.js",
@@ -180,13 +185,16 @@ def _source_snapshot(
     remaining = max(0, maximum_bytes)
     if remaining == 0:
         return "", []
-    sections: list[str] = []
-    manifest: list[dict[str, Any]] = []
+    sources: list[tuple[str, bytes, str]] = []
+    omitted_paths: list[str] = []
     seen: set[str] = set()
     for relative in relative_paths:
         if relative in seen:
             continue
         seen.add(relative)
+        if len(sources) >= MAX_SOURCE_SNAPSHOT_FILES:
+            omitted_paths.append(relative)
+            continue
         candidate = resolved_root / relative
         path = candidate.resolve()
         if (
@@ -197,14 +205,34 @@ def _source_snapshot(
         ):
             continue
         raw = path.read_bytes()
-        digest = hashlib.sha256(raw).hexdigest()
-        included = min(len(raw), remaining)
-        text = raw[:included].decode("utf-8", errors="replace")
+        sources.append((relative, raw, hashlib.sha256(raw).hexdigest()))
+    sections: list[str] = []
+    manifest: list[dict[str, Any]] = []
+    for index, (relative, raw, digest) in enumerate(sources):
+        # Reserve an equal share for every remaining file so one large source
+        # cannot hide all later files from the acceptance audit.
+        available_per_file = remaining // (len(sources) - index)
+        included = min(len(raw), available_per_file)
         truncated = included < len(raw)
+        if not truncated:
+            excerpt = raw.decode("utf-8", errors="replace")
+        elif included >= 16:
+            head_bytes = included * 2 // 3
+            tail_bytes = included - head_bytes
+            excerpt = (
+                raw[:head_bytes].decode("utf-8", errors="replace")
+                + "\n[... middle omitted by snapshot budget ...]\n"
+                + raw[-tail_bytes:].decode("utf-8", errors="replace")
+            )
+        else:
+            excerpt = raw[:included].decode("utf-8", errors="replace")
         sections.append(
-            f"--- {relative} (sha256={digest}) ---\n"
-            + text
-            + ("\n[truncated by audit snapshot budget]" if truncated else "")
+            f"--- {relative} (sha256={digest}, bytes={len(raw)}, excerpt_bytes={included}) ---\n"
+            + (excerpt or "[no excerpt bytes available]")
+            + (
+                "\n[truncated; use read_file with a line range to inspect the missing source]"
+                if truncated else ""
+            )
         )
         manifest.append(
             {
@@ -216,8 +244,13 @@ def _source_snapshot(
             }
         )
         remaining -= included
-        if remaining <= 0:
-            break
+    if omitted_paths:
+        shown = ", ".join(omitted_paths[:8])
+        remainder = f" and {len(omitted_paths) - 8} more" if len(omitted_paths) > 8 else ""
+        sections.append(
+            f"[snapshot file limit: {len(omitted_paths)} changed files omitted; "
+            f"use read_file to inspect them before AUDIT PASS: {shown}{remainder}]"
+        )
     return "\n\n".join(sections), manifest
 
 
@@ -350,18 +383,71 @@ class CodingAgent:
         }
 
         def request_acceptance_audit(changed: tuple[str, ...], *, trigger: str) -> None:
-            nonlocal acceptance_audit_requested, acceptance_audit_message
+            nonlocal acceptance_audit_requested, acceptance_audit_message, messages
             snapshot, snapshot_manifest = _source_snapshot(self.tools.root, changed)
+            audit_instruction = ACCEPTANCE_AUDIT_PROMPT
+
+            def audit_message(source: str) -> dict[str, Any]:
+                return {
+                    "role": "user",
+                    "content": (
+                        audit_instruction
+                        + "\n\n<untrusted_changed_sources>\n"
+                        + (source or "[snapshot unavailable; inspect changed files with read_file]")
+                        + "\n</untrusted_changed_sources>"
+                    ),
+                }
+
+            acceptance_audit_message = audit_message(snapshot)
+            if _context_characters(messages + [acceptance_audit_message]) > self.maximum_context_characters:
+                before_characters = _context_characters(messages)
+                checkpoint = {
+                    "changed_files": list(changed),
+                    "change_revision": self.tools.change_revision,
+                    "current_changes_validated": self.tools.current_changes_validated,
+                    "validation_scope": self.tools.validation_scope,
+                    "browser_probe_verified_revision": self.tools.browser_probe_verified_revision,
+                }
+                messages = messages[:2] + [{
+                    "role": "user",
+                    "content": (
+                        "Deterministic acceptance checkpoint. Earlier model/tool turns are "
+                        "sealed in the production trace and omitted here. The latest "
+                        "validated source excerpts follow; verify against them or read_file. "
+                        "State:\n"
+                        + json.dumps(checkpoint, ensure_ascii=False, sort_keys=True)
+                    ),
+                }]
+                if _context_characters(messages + [audit_message("")]) > self.maximum_context_characters - 400:
+                    audit_instruction = COMPACT_ACCEPTANCE_AUDIT_PROMPT
+                fixed_characters = _context_characters(messages + [audit_message("")])
+                target_characters = self.maximum_context_characters - 400
+                snapshot_budget = min(
+                    MAX_SOURCE_SNAPSHOT_BYTES,
+                    max(0, target_characters - fixed_characters - 400),
+                )
+                while True:
+                    snapshot, snapshot_manifest = _source_snapshot(
+                        self.tools.root, changed, maximum_bytes=snapshot_budget
+                    )
+                    acceptance_audit_message = audit_message(snapshot)
+                    if (
+                        _context_characters(messages + [acceptance_audit_message])
+                        <= target_characters
+                        or snapshot_budget == 0
+                    ):
+                        break
+                    snapshot_budget //= 2
+                self.trace.record(
+                    "agent_context_compacted",
+                    stage=stage,
+                    requirement_ids=requirement_ids,
+                    reason="acceptance_audit_context_limit",
+                    before_characters=before_characters,
+                    after_characters=_context_characters(messages + [acceptance_audit_message]),
+                    source_snapshot=snapshot_manifest,
+                )
             acceptance_audit_requested = True
-            acceptance_audit_message = {
-                "role": "user",
-                "content": (
-                    ACCEPTANCE_AUDIT_PROMPT
-                    + "\n\n<untrusted_changed_sources>\n"
-                    + (snapshot or "[snapshot unavailable]")
-                    + "\n</untrusted_changed_sources>"
-                ),
-            }
             self.trace.record(
                 "agent_acceptance_audit_requested",
                 stage=stage,
@@ -616,7 +702,7 @@ class CodingAgent:
                     compact_audit_message = {
                         "role": "user",
                         "content": (
-                            ACCEPTANCE_AUDIT_PROMPT
+                            COMPACT_ACCEPTANCE_AUDIT_PROMPT
                             + "\n\nUse the refreshed current-source snapshot in the "
                             "preceding deterministic checkpoint."
                         ),
