@@ -11,10 +11,10 @@
 - ZIP 根目录有 `main.py` 和 `requirements.txt`，入口遵循 `python3 main.py <requirements_dir> --output-dir <output_dir>`。
 - 运行后必须生成 `frontend/`、`backend/`，分别支持 `npm run build`、`npm start`；后端按 `PORT` 监听并提供 `/api/health`。不依赖只在本地模拟器支持的 `deploy.sh`。
 - 打包采用明确文件白名单。提交包不含 GitHub、Spreadsheet、BookStack、Keep 的页面、API、种子或业务实现；`generic_scaffold.py` 仅提供空前端、静态资源服务、健康检查及通用 HTTP/原子 JSON 存储辅助函数。
-- 正常生成路径必须调用平台注入的 OpenAI-compatible 模型网关。模型缺失、实现批次未完成或构建/启动失败均返回非零；不会把空 scaffold 冒充完成品。
+- 正常生成路径必须调用平台注入的 OpenAI-compatible 模型网关。模型缺失、没有任何有效实现或最终构建/启动失败均返回非零；不会把空 scaffold 冒充完成品。某一批失败时，未验证的改动会被丢弃并标记对应需求失败，独立需求继续尝试；已有有效实现可标为 `local-contract-partial` 交给独立 GUI 评测，而不伪称全部完成。
 - 通过官方 `arcbench-runtime` SDK 上报运行状态、需求实现状态、需求树追溯表及每批 Git 提交；不手写平台事件。独立哈希链仍保留 Prompt、工具调用与模型迭代。通用构建通过不等于需求的 GUI 测试通过，因此不会虚报逐需求 `test_passed`。
 - 旧成绩不是本版性能证据。任何真实通过率以主办方独立 GUI 评测为准。
-- 截至 2026-09-25，[ARC-Bench 正式赛公开列表](https://arc-bench.com/competition)显示两项任务、200 个测试；未登录时正式赛详情要求先确认队伍。BookStack/Keep 的 66 条公开基准用例是练习材料，不能等同正式赛题或 200 个测试。按队长收到的《参赛须知》版本，正式得分以**两个任务合计 GUI 测试通过率与合计人民币模型开销**计算：通过率每提高 1 个百分点的预计合理开销为 ¥1.2；低于该线的奖励指数为 0.1，高于该线的惩罚指数为 0.2。完成时间不是独立得分项，只在得分、通过率和开销全相同后用于破同分；每个任务另有 48 小时运行上限。PDF 的版本哈希和完整公式见[本地验证记录](docs/QUALIFIER_EVIDENCE_2026-09-24.md)，若主办方更新规则须重新核对。
+- 截至 2026-09-25，[ARC-Bench 正式赛公开列表](https://arc-bench.com/competition)显示两项任务、200 个测试；未登录时正式赛详情要求先确认队伍。BookStack/Keep 的 66 条公开基准用例是练习材料，不能等同正式赛题或 200 个测试。当前平台「排行榜计分方式」以**同一份提交**完成两个任务后的综合 GUI 通过率和人民币模型开销计算：合理开销为 `0.4 × 测试总数 × 通过率百分数 ÷ 100`，最低开销按 ¥0.10、开销比率限制在 0.01–100；低于或等于合理开销时奖励指数为 0.1，高于时惩罚指数为 0.2。若正式赛仍为 200 项测试，合理开销相当于每 1 个百分点 ¥0.8，**不同于**队长收到的 2026-09-20《参赛须知》所列 ¥1.2。平台当前按得分、通过率、较低开销、较早提交时间排序；旧 PDF 的单任务最长 48 小时与比赛券额度仍待队长登录后复核。规则版本与差异见[参赛运行说明](docs/QUALIFIER_OPERATIONS.md)及[本地验证记录](docs/QUALIFIER_EVIDENCE_2026-09-24.md)，正式运行前须再次核对。
 - 若运行环境另外提供 `VISUAL_API_KEY`、`VISUAL_BASE_URL`、`VISUAL_MODEL`，智能体会按需读取需求明确引用的 `reference/` 截图，通过视觉模型提取布局线索。图片只发往所配置的视觉网关，不写入生产轨迹或生成应用；没有完整视觉配置时不启用此工具。
 
 主办方本地模拟器：[hackathon-local-simulation](https://github.com/code-philia/hackathon-local-simulation)。报名与项目提交由队长操作；此处的打包命令**不会上传**。
@@ -25,10 +25,11 @@
 requirements.yaml
   → 校验并按依赖排序原子需求，继承必要的父级产品上下文
   → 创建与题目无关的可运行前后端
-  → 按小批次交给 CodingAgent，通过模型工具调用读取、改写、校验源码
+  → 按小批次在私有副本交给 CodingAgent，通过模型工具调用读取、改写、校验源码；成功才晋升
   → 将已编辑源码路径作为有界、非可信交接索引传给下一批，供其按需读取已有模块
   → 每批通过 quick 交互策略、JavaScript 语法和新鲜构建产物校验，并作一次模型验收审计
   → 可对本地生成应用执行有界浏览器交互与可见文本断言；失败后改码须重验
+  → 失败批次丢弃未验证代码，阻断依赖它的需求，保留独立已验证功能
   → 全量构建、启动、健康检查；失败可限轮修复
   → 官方 SDK 记录节点状态、追溯表和 Git 提交历史
   → .arc/production-trace.jsonl + harness-report.json
@@ -73,6 +74,7 @@ export VISUAL_MODEL='your-vision-model'
 - `.arc/compiled-plan.json`：需求批次与来源哈希；
 - `.arc/production-trace.jsonl`：Prompt、模型、工具和迭代的脱敏哈希链；
 - `.arc/harness-report.json`：本地构建/启动结果、模型调用次数和失败原因。
+- `local-contract-partial` 表示至少一批需求已实现、本地应用可构建启动，但报告列出的需求仍失败；它仅允许独立 GUI 测试获得可能的部分通过数，不是整题完成或官方分数。
 - 报告中的 `model_requests` 是成功返回的模型请求数，`model_http_attempts` 包含重试；两者不能混作真实费用。HTTP 408/425/429/5xx 最多尝试 3 次；`Retry-After` 等待上限默认 60 秒，可用 `FACTORY26_MAX_RETRY_AFTER_SECONDS` 在 0–120 秒内调整。认证等非临时错误不重试。
 - `.arc/runner-events.jsonl`、`.arc/traceability/`：由官方 SDK 写入的状态及追溯数据；工作区 Git 历史记录通用 scaffold 和生成批次。
 

@@ -10,7 +10,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import socket
+import tempfile
 import time
 import uuid
 from collections.abc import Iterable
@@ -18,10 +20,11 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from .agent import CodingAgent
+from .agent import AgentRun, CodingAgent
 from .arc_runtime import ArcRuntime
 from .checks import CheckResult, run_full_checks
 from .generic_scaffold import scaffold_workspace
+from .isolation import stage_app_project, validate_app_project
 from .model import OpenAIChatClient
 from .requirements import (
     RequirementNode,
@@ -180,7 +183,10 @@ def _check_results(results: list[CheckResult]) -> list[dict[str, Any]]:
 def _behavioral_probe_tested(report: dict[str, Any]) -> bool:
     """A later source repair invalidates an earlier browser-probe claim."""
 
-    batches = report["browser_probe_batches"]
+    batches = [
+        item for item in report["browser_probe_batches"]
+        if item.get("committed", True)
+    ]
     repairs = report["browser_probe_repairs"]
     return (
         bool(batches)
@@ -215,6 +221,43 @@ def _recent_handoff_paths(
         chosen.append(path)
         characters += len(path)
     return list(reversed(chosen))
+
+
+def _promote_staged_app(staged: Path, output: Path) -> None:
+    """Replace only agent-owned app trees, restoring the last good trees on error."""
+
+    validate_app_project(staged)
+    # The model executes only in a private system temp directory. Copy its
+    # validated result to the output filesystem after it has stopped, then
+    # use same-filesystem renames for a rollback-capable promotion.
+    with tempfile.TemporaryDirectory(
+        prefix="factory26-promote-", dir=output.parent
+    ) as promotion_directory:
+        promotion = Path(promotion_directory)
+        for component in ("frontend", "backend"):
+            shutil.copytree(staged / component, promotion / component, symlinks=True)
+        validate_app_project(promotion)
+        backup = promotion / ".previous-app"
+        backup.mkdir()
+        promoted: list[str] = []
+        try:
+            for component in ("frontend", "backend"):
+                current = output / component
+                candidate = promotion / component
+                previous = backup / component
+                current.rename(previous)
+                try:
+                    candidate.rename(current)
+                except BaseException:
+                    previous.rename(current)
+                    raise
+                promoted.append(component)
+            validate_app_project(output)
+        except BaseException:
+            for component in reversed(promoted):
+                (output / component).rename(promotion / component)
+                (backup / component).rename(output / component)
+            raise
 
 
 def _report_arc_failure(
@@ -352,7 +395,10 @@ def main(argv: list[str] | None = None) -> int:
             "human_intervention_checkpoint",
             intervention_required=False,
             intervention_count=0,
-            policy="autonomous generation; failures stop rather than claim completion",
+            policy=(
+                "autonomous generation; failed batches discard unverified edits and "
+                "remain failed while independent batches may continue"
+            ),
         )
         visual_settings = tuple(
             bool(os.environ.get(name, "").strip())
@@ -370,12 +416,34 @@ def main(argv: list[str] | None = None) -> int:
                 "visual_gateway_unavailable",
                 reason="incomplete VISUAL_API_KEY/VISUAL_BASE_URL/VISUAL_MODEL configuration",
             )
+        failed_ids: set[str] = set()
         for index, group in enumerate(groups, 1):
-            requirement_ids = [node.req_id for node in group]
+            blocked: list[RequirementNode] = []
+            for node in group:
+                if any(dependency in failed_ids for dependency in node.dependencies):
+                    blocked.append(node)
+                    failed_ids.add(node.req_id)
+            if blocked:
+                blocked_ids = [node.req_id for node in blocked]
+                report["failed_requirements"].extend(blocked_ids)
+                trace.record(
+                    "implementation_dependency_blocked",
+                    batch=index,
+                    requirement_ids=blocked_ids,
+                    failed_dependencies=sorted(
+                        {dependency for node in blocked for dependency in node.dependencies if dependency in failed_ids}
+                    ),
+                )
+                if arc_runtime is not None:
+                    arc_runtime.fail_batch(blocked_ids, "Prerequisite implementation failed")
+            active_group = [node for node in group if node not in blocked]
+            if not active_group:
+                continue
+            requirement_ids = [node.req_id for node in active_group]
             active_batch_ids = requirement_ids
             if arc_runtime is not None:
                 arc_runtime.begin_batch(requirement_ids)
-            named_references = _named_reference_images(group)
+            named_references = _named_reference_images(active_group)
             reference_paths = tuple(
                 path
                 for path in named_references
@@ -390,19 +458,40 @@ def main(argv: list[str] | None = None) -> int:
                 visual_references_unavailable=sorted(set(named_references) - set(reference_paths))
                 if visual_client is not None else [],
             )
-            tools = WorkspaceTools(
-                output_dir,
-                trace,
-                smoke_port,
-                visual_client=visual_client,
-                reference_paths=reference_paths,
-            )
-            result = CodingAgent(
-                model, tools, trace, max_turns=args.max_agent_turns
-            ).implement(group, related_files=handoff_paths)
+            # A failed model turn must not leave half-written code in the app that
+            # later batches and the independent evaluator will execute.
+            with tempfile.TemporaryDirectory(
+                prefix="factory26-batch-"
+            ) as staged_directory:
+                staged = Path(staged_directory)
+                stage_app_project(output_dir, staged)
+                tools = WorkspaceTools(
+                    staged,
+                    trace,
+                    smoke_port,
+                    visual_client=visual_client,
+                    reference_paths=reference_paths,
+                )
+                try:
+                    result = CodingAgent(
+                        model, tools, trace, max_turns=args.max_agent_turns
+                    ).implement(active_group, related_files=handoff_paths)
+                except RuntimeError as exc:
+                    trace.record(
+                        "implementation_batch_exception",
+                        batch=index,
+                        requirement_ids=requirement_ids,
+                        error=str(exc),
+                    )
+                    result = AgentRun(
+                        False, str(exc), tuple(sorted(tools.changed_files)), 0
+                    )
+                if result.completed:
+                    _promote_staged_app(staged, output_dir)
             probe_evidence = {
                 "batch": index,
                 "calls": tools.browser_probe_calls,
+                "committed": result.completed,
                 "behavioral_probe_verified": (
                     tools.browser_probe_verified_revision == tools.change_revision
                 ),
@@ -416,16 +505,24 @@ def main(argv: list[str] | None = None) -> int:
                 changed_files=result.changed_files,
                 turns=result.turns,
                 summary=result.summary,
+                staged_changes_committed=result.completed,
                 browser_probe=probe_evidence,
             )
             if not result.completed:
-                report["failed_requirements"] = requirement_ids
-                raise RuntimeError(f"implementation batch {index} did not validate")
+                failed_ids.update(requirement_ids)
+                report["failed_requirements"].extend(requirement_ids)
+                if arc_runtime is not None:
+                    arc_runtime.fail_batch(requirement_ids, result.summary)
+                active_batch_ids = []
+                continue
             handoff_paths = _recent_handoff_paths(handoff_paths, result.changed_files)
             if arc_runtime is not None:
                 arc_runtime.finish_batch(index, requirement_ids)
             report["implemented_requirements"].extend(requirement_ids)
             active_batch_ids = []
+
+        if not report["implemented_requirements"]:
+            raise RuntimeError("no requirement batch completed; refusing empty scaffold")
 
         checks = run_full_checks(output_dir, smoke_port)
         trace.record("final_validation", checks=_check_results(checks))
@@ -478,12 +575,18 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError("final build/start validation failed")
         if model.request_count < 1:
             raise RuntimeError("no model request completed")
-        report["status"] = "local-contract-passed"
+        report["status"] = (
+            "local-contract-partial"
+            if report["failed_requirements"]
+            else "local-contract-passed"
+        )
         report["behavioral_probe_tested"] = _behavioral_probe_tested(report)
         # Only the platform's separate GUI suite can set this distinction.
         report["behavioral_gui_tested"] = False
         if arc_runtime is not None:
-            arc_runtime.complete()
+            if report["failed_requirements"]:
+                arc_runtime.commit_failed_requirements()
+            arc_runtime.complete(partial=bool(report["failed_requirements"]))
         trace.record(
             "run_completed",
             status=report["status"],

@@ -67,8 +67,20 @@ class ArcRuntime:
     def commit_repairs(self) -> None:
         self.sdk.git.commit("repair: pass local build and startup checks")
 
-    def complete(self) -> None:
-        self.sdk.events.mark_run_completed("Local build/start contract passed; GUI evaluation pending")
+    def commit_failed_requirements(self) -> None:
+        # A later successful batch may already have included these states.
+        # Otherwise preserve the final FAILED projection in Git as well as in
+        # the SDK event stream and independent production trace.
+        self.sdk.git.commit("record failed requirement states")
+
+    def complete(self, *, partial: bool = False) -> None:
+        message = (
+            "Partial implementation retained; failed requirements remain FAILED; "
+            "local build/start passed and GUI evaluation is pending"
+            if partial
+            else "Local build/start contract passed; GUI evaluation pending"
+        )
+        self.sdk.events.mark_run_completed(message)
 
     def fail(self, message: str) -> None:
         self.sdk.events.mark_run_failed(message[:500])

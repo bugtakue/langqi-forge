@@ -14,6 +14,63 @@ from factory26_harness.arc_runtime import ArcRuntime
 
 
 class ArcRuntimeTests(unittest.TestCase):
+    def test_terminal_failed_requirement_state_is_committed_for_partial_run(self) -> None:
+        try:
+            importlib.import_module("arcbench_agent_runtime")
+        except ModuleNotFoundError:
+            self.skipTest("install submission requirements to exercise official SDK")
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            arc_dir = output / ".arc"
+            with patch.dict(
+                os.environ,
+                {
+                    "ARCBENCH_RUNNER_EVENTS_PATH": str(arc_dir / "runner-events.jsonl"),
+                    "ARCBENCH_TRACEABILITY_DIR": str(arc_dir / "traceability"),
+                },
+            ):
+                runtime = ArcRuntime.connect(output)
+                assert runtime is not None
+                runtime.start(
+                    {
+                        "id": "ROOT",
+                        "type": "FOLDER",
+                        "children": [
+                            {"id": "REQ-1", "type": "ATOMIC"},
+                            {"id": "REQ-2", "type": "ATOMIC"},
+                        ],
+                    }
+                )
+                (output / "frontend").mkdir()
+                (output / "frontend/app.js").write_text("// neutral\n")
+                runtime.commit_scaffold()
+                runtime.begin_batch(["REQ-1"])
+                (output / "frontend/app.js").write_text("// implemented\n")
+                runtime.finish_batch(1, ["REQ-1"])
+                runtime.begin_batch(["REQ-2"])
+                runtime.fail_batch(["REQ-2"], "fixture could not validate")
+                runtime.commit_failed_requirements()
+                runtime.complete(partial=True)
+            committed = json.loads(
+                subprocess.check_output(
+                    ["git", "show", "HEAD:.arc/traceability/node_states.json"],
+                    cwd=output,
+                    text=True,
+                )
+            )
+            self.assertEqual(committed["REQ-1"]["state"], "IMPLEMENTED")
+            self.assertEqual(committed["REQ-2"]["state"], "FAILED")
+            events = [
+                json.loads(line)
+                for line in (arc_dir / "runner-events.jsonl").read_text().splitlines()
+            ]
+            completed = [
+                item for item in events
+                if item.get("type") == "runner_state" and item.get("state") == "completed"
+            ]
+            self.assertEqual(len(completed), 1)
+            self.assertIn("Partial", completed[0]["message"])
+
     def test_failed_git_commit_can_be_followed_by_explicit_failed_state(self) -> None:
         sequence: list[str] = []
 

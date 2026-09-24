@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -97,6 +98,134 @@ class ScriptedModel:
 
 
 class QualifierTests(unittest.TestCase):
+    def test_failed_batch_drops_its_edits_and_keeps_independent_credit(self) -> None:
+        class PartialFixtureAgent:
+            attempted: list[str] = []
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def implement(self, nodes, related_files=()) -> AgentRun:
+                req_id = nodes[0].req_id
+                type(self).attempted.append(req_id)
+                self.model.request_count += 1
+                if req_id == "REQ-1":
+                    old, new = (
+                        "// The coding agent implements the requested application here.",
+                        'document.querySelector("#app").innerHTML = "<h1>First</h1>";',
+                    )
+                elif req_id == "REQ-2":
+                    old, new = "<h1>First</h1>", "<h1>Poison</h1>"
+                elif req_id == "REQ-4":
+                    old, new = "<h1>First</h1>", "<h1>Final</h1>"
+                else:
+                    raise AssertionError("dependent REQ-3 should not be attempted")
+                edited = json.loads(
+                    self.tools.execute(
+                        "replace_text",
+                        {"path": "frontend/src/app.js", "old": old, "new": new},
+                    )
+                )
+                if not edited["ok"]:
+                    raise AssertionError(edited)
+                if req_id == "REQ-2":
+                    return AgentRun(False, "fixture stopped before validation", tuple(self.tools.changed_files), 1)
+                validated = json.loads(self.tools.execute("run_validation", {"scope": "quick"}))
+                if not validated["ok"]:
+                    raise AssertionError(validated)
+                return AgentRun(True, "fixture validated", tuple(self.tools.changed_files), 1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirements = root / "requirements"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: ROOT
+name: Partial credit fixture
+type: FOLDER
+children:
+  - {id: REQ-1, name: Foundation, type: ATOMIC, description: Create a heading.}
+  - {id: REQ-2, name: Failing feature, type: ATOMIC, description: Edit the heading.}
+  - {id: REQ-3, name: Dependent feature, type: ATOMIC, description: Depends on failure, dependencies: [REQ-2]}
+  - {id: REQ-4, name: Independent feature, type: ATOMIC, description: Extend foundation, dependencies: [REQ-1]}
+""",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            PartialFixtureAgent.attempted = []
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", PartialFixtureAgent),
+            ):
+                status = qualifier.main(
+                    [str(requirements), "--output-dir", str(output), "--batch-size", "1"]
+                )
+            self.assertEqual(status, 0)
+            self.assertEqual(PartialFixtureAgent.attempted, ["REQ-1", "REQ-2", "REQ-4"])
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertEqual(report["status"], "local-contract-partial")
+            self.assertEqual(report["implemented_requirements"], ["REQ-1", "REQ-4"])
+            self.assertEqual(report["failed_requirements"], ["REQ-2", "REQ-3"])
+            self.assertFalse(report["browser_probe_batches"][1]["committed"])
+            app = (output / "frontend/src/app.js").read_text()
+            self.assertIn("<h1>Final</h1>", app)
+            self.assertNotIn("Poison", app)
+            rows = [
+                json.loads(line)
+                for line in (output / ".arc/production-trace.jsonl").read_text().splitlines()
+            ]
+            self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
+            self.assertTrue(
+                any(row["event"] == "implementation_dependency_blocked" for row in rows)
+            )
+            if report["arcbench_runtime"] == "official-sdk":
+                states = json.loads((output / ".arc/traceability/node_states.json").read_text())
+                self.assertEqual(states["REQ-1"]["state"], "IMPLEMENTED")
+                self.assertEqual(states["REQ-2"]["state"], "FAILED")
+                self.assertEqual(states["REQ-3"]["state"], "FAILED")
+                self.assertEqual(states["REQ-4"]["state"], "IMPLEMENTED")
+                committed_states = json.loads(
+                    subprocess.check_output(
+                        [
+                            "git", "-C", str(output), "show",
+                            "HEAD:.arc/traceability/node_states.json",
+                        ],
+                        text=True,
+                    )
+                )
+                self.assertEqual(committed_states["REQ-2"]["state"], "FAILED")
+                self.assertEqual(committed_states["REQ-3"]["state"], "FAILED")
+
+    def test_no_completed_batch_still_fails_closed(self) -> None:
+        class FailingFixtureAgent:
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def implement(self, nodes, related_files=()) -> AgentRun:
+                self.model.request_count += 1
+                return AgentRun(False, "fixture did not implement", (), 1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = self._requirement_dir(root)
+            output = root / "output"
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", FailingFixtureAgent),
+            ):
+                status = qualifier.main([str(requirement_dir), "--output-dir", str(output)])
+            self.assertEqual(status, 1)
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["implemented_requirements"], [])
+            self.assertEqual(report["failed_requirements"], ["REQ-1"])
+            self.assertIn(
+                "The coding agent implements the requested application here",
+                (output / "frontend/src/app.js").read_text(),
+            )
+
     def test_behavioral_probe_claim_requires_final_repair_probe(self) -> None:
         report = {
             "browser_probe_batches": [{"behavioral_probe_verified": True}],
@@ -111,6 +240,10 @@ class QualifierTests(unittest.TestCase):
         )
         self.assertFalse(qualifier._behavioral_probe_tested(report))
         report["browser_probe_repairs"][0]["behavioral_probe_verified"] = True
+        self.assertTrue(qualifier._behavioral_probe_tested(report))
+        report["browser_probe_batches"].append(
+            {"committed": False, "behavioral_probe_verified": False}
+        )
         self.assertTrue(qualifier._behavioral_probe_tested(report))
 
     def test_final_repair_without_new_probe_is_reported_unverified(self) -> None:
