@@ -93,22 +93,42 @@ def _contextual_nodes(
 ) -> list[RequirementNode]:
     """Carry folder context into prompts without encoding any task-specific logic."""
     contexts: dict[str, list[str]] = {}
-    stack: list[tuple[dict[str, Any], list[str]]] = [(tree, [])]
+    inherited_references: dict[str, tuple[str, ...]] = {}
+    stack: list[tuple[dict[str, Any], list[str], tuple[str, ...]]] = [
+        (tree, [], ())
+    ]
     while stack:
-        raw, inherited = stack.pop()
+        raw, inherited, parent_references = stack.pop()
         children = raw.get("children") or []
         context = inherited
+        references = parent_references
         if children:
             name = str(raw.get("name") or "").strip()[:200]
             description = str(raw.get("description") or "").strip()[:1200]
             context = inherited + [" — ".join(value for value in (name, description) if value)]
+            raw_references = raw.get("visual_reference") or []
+            if not isinstance(raw_references, list):
+                raise ValueError("folder visual_reference must be an array")
+            references = tuple(
+                dict.fromkeys(
+                    [
+                        *parent_references,
+                        *(
+                            str(value).strip()[:2000]
+                            for value in raw_references
+                            if str(value).strip()
+                        ),
+                    ]
+                )
+            )
         else:
             identifier = str(raw.get("id") or raw.get("req_id") or "").strip()
             if identifier:
                 contexts[identifier] = context
+                inherited_references[identifier] = references
         if isinstance(children, list):
             stack.extend(
-                (child, context)
+                (child, context, references)
                 for child in reversed(children)
                 if isinstance(child, dict)
             )
@@ -118,9 +138,28 @@ def _contextual_nodes(
             description="\n".join(
                 [*(f"Product context: {item}" for item in contexts.get(node.req_id, []) if item), node.description]
             ),
+            visual_reference=tuple(
+                dict.fromkeys(
+                    (
+                        *inherited_references.get(node.req_id, ()),
+                        *node.visual_reference,
+                    )
+                )
+            ),
         )
         for node in nodes
     ]
+
+
+def _named_reference_images(nodes: Iterable[RequirementNode]) -> tuple[str, ...]:
+    """Honor both images in prose and the explicit visual_reference field."""
+
+    descriptions = [
+        text
+        for node in nodes
+        for text in (node.description, *node.visual_reference)
+    ]
+    return referenced_images(descriptions)
 
 
 def _source_identity() -> dict[str, Any]:
@@ -320,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
             active_batch_ids = requirement_ids
             if arc_runtime is not None:
                 arc_runtime.begin_batch(requirement_ids)
-            named_references = referenced_images([node.description for node in group])
+            named_references = _named_reference_images(group)
             reference_paths = tuple(
                 path
                 for path in named_references

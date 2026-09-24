@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -358,6 +360,91 @@ children:
         node = qualifier._contextual_nodes(tree, flatten_atomic(tree))[0]
         self.assertIn("Relevant product context", node.description)
         self.assertIn("Implement the action", node.description)
+
+    def test_explicit_visual_reference_field_reaches_batch_image_inventory(self) -> None:
+        tree = {
+            "id": "ROOT",
+            "type": "FOLDER",
+            "name": "Container",
+            "description": "Parent image ![image](./reference/parent.jpg)",
+            "visual_reference": ["./reference/parent-listed.webp"],
+            "children": [
+                {
+                    "id": "REQ-1",
+                    "type": "ATOMIC",
+                    "name": "Action",
+                    "description": "Implement the action.",
+                    "visual_reference": [
+                        "./reference/only-listed.png",
+                        "reference/parent.jpg",
+                    ],
+                }
+            ],
+        }
+        nodes = qualifier._contextual_nodes(tree, flatten_atomic(tree))
+        self.assertEqual(
+            qualifier._named_reference_images(nodes),
+            (
+                "reference/only-listed.png",
+                "reference/parent-listed.webp",
+                "reference/parent.jpg",
+            ),
+        )
+
+    def test_explicit_visual_reference_is_available_to_real_batch_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = root / "requirements"
+            reference_dir = requirement_dir / "reference"
+            reference_dir.mkdir(parents=True)
+            (requirement_dir / "requirements.yaml").write_text(
+                """id: ROOT
+name: Visual fixture
+type: FOLDER
+children:
+  - id: REQ-1
+    name: Example heading
+    type: ATOMIC
+    description: Display one visible heading named Example.
+    visual_reference: [./reference/only-listed.png]
+""",
+                encoding="utf-8",
+            )
+            (reference_dir / "only-listed.png").write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9XPdUAAAAASUVORK5CYII="
+                )
+            )
+            output = root / "output"
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.dict(
+                    os.environ,
+                    {
+                        "VISUAL_API_KEY": "fixture-only",
+                        "VISUAL_BASE_URL": "https://vision.example.test/v1",
+                        "VISUAL_MODEL": "fixture-vision",
+                    },
+                ),
+            ):
+                status = qualifier.main(
+                    [str(requirement_dir), "--output-dir", str(output)]
+                )
+            self.assertEqual(status, 0)
+            rows = [
+                json.loads(line)
+                for line in (output / ".arc" / "production-trace.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            batch = next(
+                row for row in rows if row["event"] == "implementation_batch_started"
+            )
+            self.assertEqual(
+                batch["payload"]["visual_references_available"],
+                ["reference/only-listed.png"],
+            )
+            self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
 
 
 if __name__ == "__main__":
