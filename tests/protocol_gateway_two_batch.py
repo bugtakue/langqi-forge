@@ -37,6 +37,9 @@ STARTER_PATHS = [
 class Handler(BaseHTTPRequestHandler):
     requests = 0
     fail_second = False
+    truncate_first = False
+    truncated_once = False
+    recovery_verified = False
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
@@ -65,6 +68,50 @@ class Handler(BaseHTTPRequestHandler):
         if second_batch and "frontend/src/first-feature.js" not in prompt:
             self.send_error(422, "prior batch source path was not handed off")
             return
+        if type(self).truncate_first and not second_batch and not type(self).truncated_once:
+            type(self).truncated_once = True
+            type(self).requests += 1
+            body = {
+                "id": "fixture-length-truncated-tool-call",
+                "choices": [{
+                    "finish_reason": "length",
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [{
+                            "id": "truncated-unsafe-write",
+                            "type": "function",
+                            "function": {
+                                "name": "write_file",
+                                "arguments": json.dumps({
+                                    "path": "frontend/src/TRUNCATED_UNSAFE.js",
+                                    "content": "This output must never be executed.",
+                                }),
+                            },
+                        }],
+                    },
+                }],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+            }
+            encoded = json.dumps(body).encode("utf-8")
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
+            return
+        if type(self).truncate_first and not second_batch and not type(self).recovery_verified:
+            if not any(
+                message.get("role") == "user"
+                and "None of its tool calls were executed" in str(message.get("content") or "")
+                for message in messages
+            ) or any(
+                message.get("role") == "assistant" and message.get("tool_calls")
+                for message in messages
+            ):
+                self.send_error(422, "truncated tool call was not discarded safely")
+                return
+            type(self).recovery_verified = True
         previous_tools = [
             call.get("function", {}).get("name")
             for message in messages
@@ -165,9 +212,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=19786)
     parser.add_argument("--fail-second", action="store_true")
+    parser.add_argument("--truncate-first", action="store_true")
     args = parser.parse_args()
     port = args.port
     Handler.fail_second = args.fail_second
+    Handler.truncate_first = args.truncate_first
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"two-batch protocol fixture listening on {port}", flush=True)
     server.serve_forever()
