@@ -6,6 +6,7 @@ import re
 import signal
 import socket
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -69,6 +70,10 @@ class CheckResult:
 
 
 def _safe_environment(**extra: str) -> dict[str, str]:
+    # The official runner may omit HOME entirely. npm requires a homedir, but
+    # inheriting the user's real HOME would expose private npm configuration.
+    safe_home = Path(tempfile.gettempdir()) / f"factory26-check-home-{os.getpid()}"
+    safe_home.mkdir(mode=0o700, parents=True, exist_ok=True)
     environment = {
         key: value
         for key, value in os.environ.items()
@@ -77,8 +82,11 @@ def _safe_environment(**extra: str) -> dict[str, str]:
     environment.update(
         {
             "CI": "1",
+            "HOME": str(safe_home),
             "NPM_CONFIG_IGNORE_SCRIPTS": "true",
             "npm_config_ignore_scripts": "true",
+            "npm_config_userconfig": os.devnull,
+            "npm_config_cache": str(safe_home / "npm-cache"),
             **extra,
         }
     )

@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from factory26_harness.checks import (
+    _safe_environment,
     frontend_build_check,
     interaction_policy_check,
     package_policy_check,
@@ -25,6 +26,16 @@ from factory26_harness.workspace_tools import WorkspaceTools
 
 
 class ToolAndTraceTests(unittest.TestCase):
+    def test_safe_validation_environment_has_private_home_without_model_key(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"HOME": "/tmp/user-home-not-for-validation", "OPENAI_API_KEY": "private"},
+        ):
+            environment = _safe_environment()
+        self.assertNotIn("OPENAI_API_KEY", environment)
+        self.assertNotEqual(environment["HOME"], "/tmp/user-home-not-for-validation")
+        self.assertTrue(Path(environment["HOME"]).is_dir())
+
     def test_batch_read_returns_multiple_hash_bound_files_in_one_tool_call(
         self,
     ) -> None:
