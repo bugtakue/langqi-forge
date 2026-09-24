@@ -25,6 +25,9 @@ Hard rules:
 - Keep frontend/ buildable with `npm run build` and backend/ startable with `npm start` using PORT.
 - Never start a server yourself; use run_validation, which uses a safe smoke port.
 - Preserve `/api/health` and persistent backend state across refresh and process restart.
+- Generic helpers are available at `backend/storage.mjs` (loadState/saveState/updateState),
+  `backend/http.mjs` (readJsonBody/sendJson), and `frontend/src/api.js` (requestJson).
+  Inspect their source before use; they contain no task-specific route or behavior.
 - Implement real behavior, not screenshots or hard-coded answers.
 - Use visible labels, semantic buttons, `type="text"`, persistent DOM validation messages, and real disabled states.
 - Never use `alert()`, `confirm()`, or `prompt()` for product feedback. Put each action's error/status

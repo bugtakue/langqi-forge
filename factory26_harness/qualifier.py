@@ -147,8 +147,12 @@ def main(argv: list[str] | None = None) -> int:
     requirement_dir = Path(args.requirements_dir).expanduser().resolve()
     output_dir = Path(args.output_dir).expanduser().resolve()
     require_external_output_directory(SOURCE_ROOT, output_dir)
+    if output_dir == SOURCE_ROOT or SOURCE_ROOT in output_dir.parents:
+        raise SystemExit("output directory must be outside the agent source tree")
     if output_dir == requirement_dir or requirement_dir in output_dir.parents:
         raise SystemExit("output directory must not be inside the requirements directory")
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise SystemExit("output directory must be empty before a new run")
     output_dir.mkdir(parents=True, exist_ok=True)
     trace = ProductionTrace(output_dir / ".arc" / "production-trace.jsonl")
     started = time.monotonic()

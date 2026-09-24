@@ -6,7 +6,7 @@
 
 入口接受主办方 `requirements/requirements.yaml` 路径及 `--output-dir`。输出根目录有 `frontend/` 与 `backend/`，后端由 `npm start` 按 `PORT` 监听，前端由 `npm run build` 产出 `frontend/dist/`。默认静态服务和 `/api/health` 是通用运行底座，不包含题目专用行为。
 
-`requirements.py` 校验树、按依赖排序原子需求；`qualifier.py` 把父级模块描述并入各原子需求 Prompt，避免遗漏父级背景。空页面、空样式和健康端点由 `generic_scaffold.py` 创建，业务代码只能由模型工具调用写入。
+`requirements.py` 校验树、按依赖排序原子需求；`qualifier.py` 把父级模块描述并入各原子需求 Prompt，避免遗漏父级背景。空页面、空样式、健康端点及通用 HTTP/原子 JSON 存储辅助函数由 `generic_scaffold.py` 创建，业务代码只能由模型工具调用写入。
 
 ## Prompts 与 Agent 迭代
 

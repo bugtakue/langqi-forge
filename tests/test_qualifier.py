@@ -155,6 +155,17 @@ children:
             self.assertEqual(report["implemented_requirements"], [])
             self.assertNotIn("Example", (output / "frontend/src/app.js").read_text())
 
+    def test_preexisting_output_is_rejected_before_model_or_file_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = self._requirement_dir(root)
+            output = root / "output"
+            output.mkdir()
+            (output / "existing.txt").write_text("keep me", encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "must be empty"):
+                qualifier.main([str(requirement_dir), "--output-dir", str(output)])
+            self.assertEqual((output / "existing.txt").read_text(), "keep me")
+
     def test_context_is_data_and_preserved_for_atomic_prompt(self) -> None:
         tree = {
             "id": "ROOT",

@@ -8,7 +8,7 @@
 
 - ZIP 根目录有 `main.py` 和 `requirements.txt`，入口遵循 `python3 main.py <requirements_dir> --output-dir <output_dir>`。
 - 运行后必须生成 `frontend/`、`backend/`，分别支持 `npm run build`、`npm start`；后端按 `PORT` 监听并提供 `/api/health`。不依赖只在本地模拟器支持的 `deploy.sh`。
-- 打包采用明确文件白名单。提交包不含 GitHub、Spreadsheet、BookStack、Keep 的页面、API、种子或业务实现；`generic_scaffold.py` 仅提供空前端、静态资源服务和健康检查。
+- 打包采用明确文件白名单。提交包不含 GitHub、Spreadsheet、BookStack、Keep 的页面、API、种子或业务实现；`generic_scaffold.py` 仅提供空前端、静态资源服务、健康检查及通用 HTTP/原子 JSON 存储辅助函数。
 - 正常生成路径必须调用平台注入的 OpenAI-compatible 模型网关。模型缺失、实现批次未完成或构建/启动失败均返回非零；不会把空 scaffold 冒充完成品。
 - 旧成绩不是本版性能证据。任何真实通过率以主办方独立 GUI 评测为准。
 

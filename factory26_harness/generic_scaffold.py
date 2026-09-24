@@ -95,6 +95,67 @@ createServer(async (request, response) => {
 }).listen(port, host);
 '''
 
+STORAGE_MJS = '''import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
+
+const dataPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "state.json");
+let previousWrite = Promise.resolve();
+
+export async function loadState() {
+  return JSON.parse(await readFile(dataPath, "utf8"));
+}
+
+export async function saveState(next) {
+  await mkdir(path.dirname(dataPath), { recursive: true });
+  const temporary = `${dataPath}.${randomUUID()}.tmp`;
+  await writeFile(temporary, JSON.stringify(next));
+  await rename(temporary, dataPath);
+  return next;
+}
+
+export function updateState(updater) {
+  const task = previousWrite.then(async () => {
+    const current = await loadState();
+    const next = await updater(structuredClone(current));
+    if (next === undefined) throw new Error("state updater returned undefined");
+    return saveState(next);
+  });
+  previousWrite = task.catch(() => {});
+  return task;
+}
+'''
+
+HTTP_MJS = '''export async function readJsonBody(request, maximumBytes = 1_000_000) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > maximumBytes) throw new Error("request body too large");
+    chunks.push(chunk);
+  }
+  if (!chunks.length) return {};
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+export function sendJson(response, status, body) {
+  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(body));
+}
+'''
+
+API_JS = '''export async function requestJson(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || `Request failed: ${response.status}`);
+  return result;
+}
+'''
+
 
 def scaffold_workspace(root: Path) -> list[str]:
     """Create only generic runtime files; never copy a task-specific template."""
@@ -103,9 +164,12 @@ def scaffold_workspace(root: Path) -> list[str]:
         "frontend/build.mjs": BUILD_SCRIPT,
         "frontend/src/index.html": INDEX_HTML,
         "frontend/src/app.js": "// The coding agent implements the requested application here.\n",
+        "frontend/src/api.js": API_JS,
         "frontend/src/styles.css": "/* The coding agent implements the requested styling here. */\n",
         "backend/package.json": json.dumps(BACKEND_PACKAGE, indent=2) + "\n",
         "backend/server.mjs": SERVER_MJS,
+        "backend/storage.mjs": STORAGE_MJS,
+        "backend/http.mjs": HTTP_MJS,
         "backend/data/state.json": "{}\n",
     }
     created: list[str] = []
