@@ -25,7 +25,7 @@ from .arc_runtime import ArcRuntime
 from .checks import CheckResult, run_full_checks
 from .generic_scaffold import scaffold_workspace
 from .isolation import stage_app_project, validate_app_project
-from .model import OpenAIChatClient
+from .model import ModelBudgetExceeded, ModelGatewayUnavailable, OpenAIChatClient
 from .requirements import (
     RequirementNode,
     batches,
@@ -484,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
                 reason=visual_status,
             )
         failed_ids: set[str] = set()
+        terminal_model_error: str | None = None
         for index, group in enumerate(groups, 1):
             pending: list[tuple[list[RequirementNode], int]] = [(group, 0)]
             attempt = 0
@@ -560,6 +561,8 @@ def main(argv: list[str] | None = None) -> int:
                         )
                     except RuntimeError as exc:
                         model_exception = True
+                        if isinstance(exc, (ModelGatewayUnavailable, ModelBudgetExceeded)):
+                            terminal_model_error = str(exc)
                         trace.record(
                             "implementation_batch_exception",
                             batch=index,
@@ -620,6 +623,14 @@ def main(argv: list[str] | None = None) -> int:
                     report["failed_requirements"].extend(requirement_ids)
                     if arc_runtime is not None:
                         arc_runtime.fail_batch(requirement_ids, result.summary)
+                    if terminal_model_error is not None:
+                        trace.record(
+                            "model_gateway_circuit_open",
+                            batch=index,
+                            requirement_ids=requirement_ids,
+                            reason=terminal_model_error,
+                        )
+                        break
                     continue
                 handoff_paths = _recent_handoff_paths(handoff_paths, result.changed_files)
                 handoff_notes = _recent_handoff_notes(
@@ -629,9 +640,31 @@ def main(argv: list[str] | None = None) -> int:
                     arc_runtime.finish_batch(index, requirement_ids)
                 report["implemented_requirements"].extend(requirement_ids)
                 active_batch_ids = []
+            if terminal_model_error is not None:
+                finished_ids = set(report["implemented_requirements"]) | set(
+                    report["failed_requirements"]
+                )
+                remaining_ids = [
+                    node.req_id for node in nodes if node.req_id not in finished_ids
+                ]
+                if remaining_ids:
+                    failed_ids.update(remaining_ids)
+                    report["failed_requirements"].extend(remaining_ids)
+                    trace.record(
+                        "implementation_skipped_after_model_failure",
+                        requirement_ids=remaining_ids,
+                        reason=terminal_model_error,
+                    )
+                    if arc_runtime is not None:
+                        arc_runtime.fail_batch(remaining_ids, terminal_model_error)
+                report["model_gateway_stop_reason"] = terminal_model_error
+                break
 
         if not report["implemented_requirements"]:
-            raise RuntimeError("no requirement batch completed; refusing empty scaffold")
+            raise RuntimeError(
+                "no requirement batch completed; "
+                + (terminal_model_error or "refusing empty scaffold")
+            )
 
         checks = run_full_checks(output_dir, smoke_port)
         trace.record("final_validation", checks=_check_results(checks))

@@ -37,6 +37,7 @@ STARTER_PATHS = [
 class Handler(BaseHTTPRequestHandler):
     requests = 0
     fail_second = False
+    auth_fail_second = False
     truncate_first = False
     truncated_once = False
     recovery_verified = False
@@ -79,6 +80,15 @@ class Handler(BaseHTTPRequestHandler):
             or "REQ-1: AUDIT PASS: two-batch fixture only" not in prompt
         ):
             self.send_error(422, "prior batch contract summary was not handed off")
+            return
+        if second_batch and type(self).auth_fail_second:
+            type(self).requests += 1
+            encoded = b"invalid key: fixture-sensitive-value"
+            self.send_response(401)
+            self.send_header("content-type", "text/plain")
+            self.send_header("content-length", str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
             return
         if type(self).truncate_first and not second_batch and not type(self).truncated_once:
             type(self).truncated_once = True
@@ -314,6 +324,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=19786)
     parser.add_argument("--fail-second", action="store_true")
+    parser.add_argument("--auth-fail-second", action="store_true")
     parser.add_argument("--truncate-first", action="store_true")
     parser.add_argument("--repair-first-audit", action="store_true")
     parser.add_argument("--require-full-spec-first", action="store_true")
@@ -323,6 +334,7 @@ def main() -> None:
         parser.error("--review-full-spec-first requires --require-full-spec-first")
     port = args.port
     Handler.fail_second = args.fail_second
+    Handler.auth_fail_second = args.auth_fail_second
     Handler.truncate_first = args.truncate_first
     Handler.repair_first_audit = args.repair_first_audit
     Handler.require_full_spec_first = args.require_full_spec_first

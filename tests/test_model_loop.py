@@ -16,6 +16,7 @@ from unittest.mock import patch
 from factory26_harness.agent import CodingAgent, _compact_tool_result, _source_snapshot
 from factory26_harness.model import (
     ModelBudgetExceeded,
+    ModelGatewayUnavailable,
     OpenAIChatClient,
     _retry_after_seconds,
 )
@@ -747,7 +748,7 @@ class ModelLoopTests(unittest.TestCase):
         responses: list[tuple[int, str | None, bytes]],
         *,
         retry_cap: int = 60,
-    ) -> tuple[OpenAIChatClient, list[dict], list[int], str | None]:
+    ) -> tuple[OpenAIChatClient, list[dict], list[int], str | None, type[RuntimeError] | None]:
         _StatusHandler.calls = 0
         _StatusHandler.responses = responses
         server = ThreadingHTTPServer(("127.0.0.1", 0), _StatusHandler)
@@ -768,15 +769,17 @@ class ModelLoopTests(unittest.TestCase):
                 ):
                     client = OpenAIChatClient(trace)
                     error = None
+                    error_type = None
                     try:
                         client.complete([{"role": "user", "content": "test"}], [])
                     except RuntimeError as exc:
                         error = str(exc)
+                        error_type = type(exc)
                 rows = [
                     json.loads(line)
                     for line in trace.path.read_text(encoding="utf-8").splitlines()
                 ]
-                return client, rows, [call.args[0] for call in sleep.call_args_list], error
+                return client, rows, [call.args[0] for call in sleep.call_args_list], error, error_type
         finally:
             server.shutdown()
             thread.join(timeout=2)
@@ -786,10 +789,11 @@ class ModelLoopTests(unittest.TestCase):
         success = json.dumps(
             {"choices": [{"message": {"role": "assistant", "content": "done"}}]}
         ).encode("utf-8")
-        client, rows, sleeps, error = self._run_status_sequence(
+        client, rows, sleeps, error, error_type = self._run_status_sequence(
             [(429, "3", b"busy"), (503, None, b"unavailable"), (200, None, success)]
         )
         self.assertIsNone(error)
+        self.assertIsNone(error_type)
         self.assertEqual(client.http_attempt_count, 3)
         self.assertEqual(client.request_count, 1)
         self.assertEqual(sleeps, [3, 2])
@@ -799,10 +803,11 @@ class ModelLoopTests(unittest.TestCase):
 
     def test_authentication_failure_does_not_retry_or_log_provider_body(self) -> None:
         private_body = b"invalid key: nonstandard-private-test-value"
-        client, rows, sleeps, error = self._run_status_sequence(
+        client, rows, sleeps, error, error_type = self._run_status_sequence(
             [(401, "1", private_body)]
         )
         self.assertEqual(error, "attempt 1: HTTP 401")
+        self.assertIs(error_type, ModelGatewayUnavailable)
         self.assertEqual(client.http_attempt_count, 1)
         self.assertEqual(client.request_count, 0)
         self.assertEqual(sleeps, [])
@@ -812,10 +817,11 @@ class ModelLoopTests(unittest.TestCase):
         self.assertFalse(failure["will_retry"])
 
     def test_long_retry_after_fails_closed_without_early_retry(self) -> None:
-        client, rows, sleeps, error = self._run_status_sequence(
+        client, rows, sleeps, error, error_type = self._run_status_sequence(
             [(429, "90", b"wait")], retry_cap=60
         )
         self.assertEqual(error, "attempt 1: HTTP 429 (Retry-After exceeds local cap)")
+        self.assertIs(error_type, ModelGatewayUnavailable)
         self.assertEqual(client.http_attempt_count, 1)
         self.assertEqual(sleeps, [])
         failure = next(row["payload"] for row in rows if row["event"] == "model_error")
@@ -823,10 +829,11 @@ class ModelLoopTests(unittest.TestCase):
         self.assertFalse(failure["will_retry"])
 
     def test_malformed_success_response_is_not_billed_as_a_second_request(self) -> None:
-        client, rows, sleeps, error = self._run_status_sequence(
+        client, rows, sleeps, error, error_type = self._run_status_sequence(
             [(200, None, b'{"choices":[]}')]
         )
         self.assertEqual(error, "invalid model response")
+        self.assertIs(error_type, ModelGatewayUnavailable)
         self.assertEqual(client.http_attempt_count, 1)
         self.assertEqual(client.request_count, 0)
         self.assertEqual(sleeps, [])

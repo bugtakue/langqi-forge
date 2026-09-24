@@ -19,6 +19,10 @@ class ModelBudgetExceeded(RuntimeError):
     """A deterministic local model budget was exceeded."""
 
 
+class ModelGatewayUnavailable(RuntimeError):
+    """The configured model gateway cannot complete further requests."""
+
+
 @dataclass(frozen=True)
 class ModelReply:
     content: str
@@ -164,7 +168,7 @@ class OpenAIChatClient:
                 request_count=self.request_count,
                 maximum_requests=self.max_requests,
             )
-            raise RuntimeError(
+            raise ModelBudgetExceeded(
                 f"model request budget exhausted at {self.max_requests} calls"
             )
         payload: dict[str, Any] = {
@@ -307,7 +311,9 @@ class OpenAIChatClient:
                     time.sleep(delay)
                     continue
                 suffix = " (Retry-After exceeds local cap)" if exceeds_cap else ""
-                raise RuntimeError(f"attempt {attempt}: HTTP {status}{suffix}") from exc
+                raise ModelGatewayUnavailable(
+                    f"attempt {attempt}: HTTP {status}{suffix}"
+                ) from exc
             except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
                 will_retry = attempt < max_attempts
                 error_type = type(exc).__name__
@@ -321,7 +327,9 @@ class OpenAIChatClient:
                 if will_retry:
                     time.sleep(attempt)
                     continue
-                raise RuntimeError(f"attempt {attempt}: {error_type}") from exc
+                raise ModelGatewayUnavailable(
+                    f"attempt {attempt}: {error_type}"
+                ) from exc
             except (KeyError, TypeError, ValueError) as exc:
                 self.trace.record(
                     "model_error",
@@ -329,5 +337,5 @@ class OpenAIChatClient:
                     error=f"invalid model response: {type(exc).__name__}",
                     will_retry=False,
                 )
-                raise RuntimeError("invalid model response") from exc
+                raise ModelGatewayUnavailable("invalid model response") from exc
         raise AssertionError("model retry loop exhausted unexpectedly")

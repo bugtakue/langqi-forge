@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from factory26_harness import qualifier
 from factory26_harness.agent import AgentRun
-from factory26_harness.model import ModelReply
+from factory26_harness.model import ModelGatewayUnavailable, ModelReply
 from factory26_harness.requirements import flatten_atomic
 from factory26_harness.trace import verify_trace_rows
 
@@ -98,6 +98,117 @@ class ScriptedModel:
 
 
 class QualifierTests(unittest.TestCase):
+    def test_first_batch_gateway_failure_stops_without_claiming_a_scaffold(self) -> None:
+        class UnavailableAgent:
+            attempted = 0
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                pass
+
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+                type(self).attempted += 1
+                raise ModelGatewayUnavailable("attempt 1: HTTP 401")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirements = root / "requirements"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: ROOT
+name: Gateway failure fixture
+type: FOLDER
+children:
+  - {id: REQ-1, name: First, type: ATOMIC, description: First feature.}
+  - {id: REQ-2, name: Second, type: ATOMIC, description: Second feature.}
+""",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            UnavailableAgent.attempted = 0
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", UnavailableAgent),
+            ):
+                status = qualifier.main(
+                    [str(requirements), "--output-dir", str(output), "--batch-size", "1"]
+                )
+            self.assertEqual(status, 1)
+            self.assertEqual(UnavailableAgent.attempted, 1)
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failed_requirements"], ["REQ-1", "REQ-2"])
+            self.assertIn("HTTP 401", report["error"])
+            self.assertFalse(report["implemented_requirements"])
+
+    def test_model_gateway_failure_preserves_finished_work_without_more_requests(self) -> None:
+        class GatewayFailureAgent:
+            attempted: list[str] = []
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+                req_id = nodes[0].req_id
+                type(self).attempted.append(req_id)
+                if req_id != "REQ-1":
+                    raise ModelGatewayUnavailable("attempt 1: HTTP 401")
+                self.model.request_count += 1
+                edited = json.loads(self.tools.execute("replace_text", {
+                    "path": "frontend/src/app.js",
+                    "old": "// The coding agent implements the requested application here.",
+                    "new": 'document.querySelector("#app").innerHTML = "<h1>First</h1>";',
+                }))
+                if not edited["ok"]:
+                    raise AssertionError(edited)
+                checked = json.loads(self.tools.execute("run_validation", {"scope": "quick"}))
+                if not checked["ok"]:
+                    raise AssertionError(checked)
+                return AgentRun(True, "validated first feature", tuple(self.tools.changed_files), 1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirements = root / "requirements"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: ROOT
+name: Gateway failure fixture
+type: FOLDER
+children:
+  - {id: REQ-1, name: First, type: ATOMIC, description: First feature.}
+  - {id: REQ-2, name: Second, type: ATOMIC, description: Second feature.}
+  - {id: REQ-3, name: Third, type: ATOMIC, description: Third feature.}
+""",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            GatewayFailureAgent.attempted = []
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", GatewayFailureAgent),
+            ):
+                status = qualifier.main(
+                    [str(requirements), "--output-dir", str(output), "--batch-size", "1"]
+                )
+            self.assertEqual(status, 0)
+            self.assertEqual(GatewayFailureAgent.attempted, ["REQ-1", "REQ-2"])
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertEqual(report["status"], "local-contract-partial")
+            self.assertEqual(report["implemented_requirements"], ["REQ-1"])
+            self.assertEqual(report["failed_requirements"], ["REQ-2", "REQ-3"])
+            self.assertEqual(report["model_gateway_stop_reason"], "attempt 1: HTTP 401")
+            self.assertIn("<h1>First</h1>", (output / "frontend/src/app.js").read_text())
+            rows = [json.loads(line) for line in
+                    (output / ".arc/production-trace.jsonl").read_text().splitlines()]
+            self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
+            self.assertTrue(any(row["event"] == "model_gateway_circuit_open" for row in rows))
+            skipped = next(row for row in rows if row["event"] == "implementation_skipped_after_model_failure")
+            self.assertEqual(skipped["payload"]["requirement_ids"], ["REQ-3"])
+            if report["arcbench_runtime"] == "official-sdk":
+                states = json.loads((output / ".arc/traceability/node_states.json").read_text())
+                self.assertEqual([states[f"REQ-{index}"]["state"] for index in range(1, 4)],
+                                 ["IMPLEMENTED", "FAILED", "FAILED"])
+
     def test_failed_four_node_batch_salvages_validated_half(self) -> None:
         class SplitFixtureAgent:
             attempted: list[tuple[str, ...]] = []
