@@ -93,3 +93,12 @@
 - 探针原先在打开首页及每次操作后固定等待 150 毫秒，可能把异步渲染或延迟反馈误判为失败。现对首页可见内容、每步正反文本断言再给至多 2 秒的有界等待，不改变隐藏测试或外部评分。源码提交 `669d2c8a6c73495361328e78e1339e32b6f9ffff`。主机单元测试 65 项中 63 项通过、2 项因缺 Playwright/Chromium 跳过；两项浏览器集成测试连同其余探针测试在旧版 arm64 Runner 的实际 Chromium 环境里 4/4 通过，包含首页与点击反馈各延迟 400 毫秒的情形。
 - 本次精确 ZIP `dist/langqi-forge-qualifier.zip` 的 SHA-256 为 `be7fe7e62fc440aef714a7b47df3e28822de2031de4f2eed1ac9515a3779bdf7`，16 个文件，`unzip -t` 通过，清单绑定上述源码提交。该 ZIP 在旧版 arm64 Runner + 当前模拟器包装的自建协议夹具中运行，目录 `../factory26-local-simulation/runs/qualifier-async-browser-20260925/`：容器退出码 0，模型接口 5 次、浏览器探针真实点击及文本断言通过、独立 Playwright 1/1，SDK 正常，本地 6/6 检查通过，生产轨迹 31/31 行哈希链有效且未发现未脱敏密钥。`score=null`，模型费用未知；这仍不是正式赛或真实编码模型的能力测量。
 - 新 ZIP 未在本机完成当前 amd64 Runner 的完整 GUI 运行；ARM→amd64 QEMU 浏览器预检的旧障碍仍在。没有 ARC-Bench 正式赛登录、上传、提交、真实模型 BookStack/Keep 练习结果或 200 项正式赛成绩。
+
+## 2026-09-25 跨批次源码交接
+
+- 对公开练习需求树做静态编排检查：BookStack 34 条默认分 9 批，Keep 32 条分 8 批；BookStack 某些批次跨仪表盘/书架、书架/图书、图书/章节等模块边界。先前每批重开模型会话时只提示固定五个入口文件，主流程没有传入先前批次新增的功能模块路径。这是代码层面可直接确认的上下文断裂风险，但尚不能据此估算实际 GUI 分数。
+- 提交 `b7b3b9c377c400acce24a4b72a42720a04d8cae6` 将此前成功批次**实际由工具编辑**的源码路径作为有界索引交给下一批：最近修改优先，最多 60 个路径，路径正文合计不超过 4,000 字符；文件名作为不可信数据包裹，模型必须再按需读取内容。`implementation_batch_started.prior_source_paths` 同步记录交接清单，不将文件名视为验收证明。
+- 新增两批主流程集成测试，验证第一批写出的新模块进入第二批提示词与哈希链轨迹；另测顺序/上限/标签转义。主机单元测试运行 68 项，66 项通过、2 项因主机缺 Playwright/Chromium 跳过。
+- 新精确 ZIP `dist/langqi-forge-qualifier.zip`：SHA-256 `e9cfe63f30cc6ef7c9e60a08d6eb0e970640be12eba07b446e3feaf15724cf0b`，16 个文件，`unzip -t` 通过，包内清单绑定 `b7b3b9c...`。该 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装上执行**单批自建协议夹具**，目录 `../factory26-local-simulation/runs/qualifier-handoff-browser-20260925/`：容器退出码 0，模型协议请求 5 次，浏览器探针通过，独立 Playwright 1/1，官方 SDK 正常，本地检查 6/6，生产轨迹 31/31 行完整且未发现未脱敏密钥。单批协议运行只验证新包无回归；跨批交接由上述两批集成测试验证，二者都不能证明真实大模型解题效果。
+- 同一精确 ZIP 在本机缓存的主办方当前 amd64 基础镜像包装 `arcbench-local-current:20260924` 下直启，目录 `../factory26-local-simulation/runs/qualifier-handoff-current-base-direct-20260925/`：进程退出码 0，模型协议请求/HTTP 尝试各 4 次，官方 SDK 正常，本地 6/6 检查通过，生产轨迹 27/27 行有效且未发现未脱敏密钥。这个直启不运行浏览器探针，不能代替本机因 QEMU 浏览器预检失败而缺失的当前 Runner 完整 GUI 试验。
+- 真实模型 BookStack/Keep 练习结果、正式赛 200 测试成绩、实际 Token 效率和费用仍缺失；本轮没有账号登录、上传或提交。
