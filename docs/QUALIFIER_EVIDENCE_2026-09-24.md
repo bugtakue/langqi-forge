@@ -186,3 +186,9 @@
 - 同一精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的有状态固定响应夹具运行于 `../factory26-local-simulation/runs/qualifier-build-mutation-gate-20260925/`：容器退出码 0、SDK 需求状态 `IMPLEMENTED`、本地 6/6 检查通过、独立 Playwright **1/1**、生产轨迹 37/37 行通过封印校验。Git 提交里的 `backend/data/state.json` 仍为 `{"count":0}`；独立浏览器操作后的工作树为 `{"count":1}`，符合夹具预期。Meter 连接被拒，分数与成本为 `null`。
 - 同一 ZIP 在缓存的当前 amd64 基础镜像 `arcbench-local-current:20260924` 按主办方 `run_submission.py` 的依赖安装与生成入口直启，目录 `../factory26-local-simulation/runs/qualifier-build-mutation-gate-current-direct-20260925/`：固定响应模型请求/HTTP 尝试各 4 次，SDK 状态 `IMPLEMENTED`、本地 6/6 检查通过，生产轨迹 27/27 行有效。该生成物经旧 arm64 浏览器镜像的无网络混合诊断，`hybrid-playwright-build-mutation-gate-20260925-report.json` 为 expected=1、unexpected=0、skipped=0。**当前镜像生成 + 旧镜像浏览器不是当前完整 Runner**，不能替代真实模型公开练习或正式隐藏测试。
 - 这个闸门是对临时副本中 `npm run build` 的可见文件事后比对，不能防止绝对路径、网络副作用或 `npm install` 生命周期脚本，也不保证不同平台环境下构建完全一致；不能称为任意生成代码的完整沙箱。当前仍没有真实编码模型的 BookStack/Keep 独立 GUI 通过率和费用，未登录、未上传、未提交。
+
+## 2026-09-25 官网赛程与平台计分复核
+
+- [GOSIM 规则页](https://create.gosim.org/factory26/rules)当前写明初赛 **9/24–9/30**、决赛 **10/5–10/7**；最初留在浏览器里的首页标签曾显示旧的 9/21 与 10/1，重新载入后也更新为新赛程。初赛前 20 进入决赛。只读打开登录账号的队伍资料，队伍名称确认为「琅岐岛民」；未修改或保存资料。
+- [ARC-Bench 竞赛页](https://arc-bench.com/competition)当前把正式赛标为 2 任务、200 测试。其「排行榜计分方式」弹窗给出的合理开销是 `0.4 × N × p / 100`，最低计费 ¥0.10、成本比率钳在 0.01–100，实际开销不高于合理开销时指数 0.1，超出时 0.2；综合榜只给同一份提交完成全部任务的运行计分，并按得分、通过率、较低开销、较早提交时间排序。以当前 `N=200` 推导合理开销为 `0.8p`，与 9/20《参赛须知》的 `1.2p` 不一致；前文的 PDF 公式与示例属历史材料，不应再用来规划正式预算。GOSIM 规则页仍称完成时间是采集指标但权重待公布，故也不能由这个榜单弹窗推出最终所有赛制细节。
+- 正式赛详情页在未登录 ARC-Bench 时只显示「确认队伍后进入比赛」和登录入口；GOSIM 官网登录不等于 ARC-Bench 登录。当前 shell 中 `OPENAI_API_KEY`、`DASHSCOPE_API_KEY`、`BAILIAN_API_KEY` 均未配置，系统剪贴板为空；插件目录也未找到可直连百炼或 ARC-Bench 的插件。因此本轮没有真实编码模型的公开练习费用/通过率，亦未在 ARC-Bench 登录、上传或提交。上述官网只读核验没有改变参赛 ZIP：SHA-256 仍为 `13677294278cee719885ef71f95563381b0abc74422c117667aceb00d34c2edf`。
