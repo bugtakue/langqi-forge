@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from factory26_harness import qualifier
 from factory26_harness.agent import AgentRun
+from factory26_harness.checks import CheckResult
 from factory26_harness.model import ModelGatewayUnavailable, ModelReply
 from factory26_harness.requirements import flatten_atomic
 from factory26_harness.trace import verify_trace_rows
@@ -1042,11 +1043,15 @@ children:
     name: First
     type: ATOMIC
     description: Create a feature.
-  - id: REQ-2
-    name: Second
-    type: ATOMIC
-    description: Extend the feature.
+  - id: MODULE-2
+    name: Later module
+    type: FOLDER
     dependencies: [REQ-1]
+    children:
+      - id: REQ-2
+        name: Second
+        type: ATOMIC
+        description: Extend the feature.
 """,
                 encoding="utf-8",
             )
@@ -1079,6 +1084,15 @@ children:
                 [entry["id"] for entry in WritingAgent.outlines[0]["requirements"]],
                 ["REQ-1", "REQ-2"],
             )
+            self.assertEqual(
+                WritingAgent.outlines[0]["folder_dependencies"],
+                [{"id": "MODULE-2", "name": "Later module", "dependencies": ["REQ-1"]}],
+            )
+            compiled_plan = json.loads(
+                (root / "output" / ".arc" / "compiled-plan.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(compiled_plan["folder_dependencies"], WritingAgent.outlines[0]["folder_dependencies"])
+            self.assertEqual(compiled_plan["batches"], [["REQ-1"], ["REQ-2"]])
             rows = [
                 json.loads(line)
                 for line in (root / "output" / ".arc" / "production-trace.jsonl")
@@ -1108,6 +1122,27 @@ children:
         )
         return requirement_dir
 
+    def test_initial_scaffold_failure_retains_exact_check_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = self._requirement_dir(root)
+            output = root / "output"
+            failure = CheckResult(
+                "startup_health", False, "smoke port occupied",
+                ("backend/server.mjs",), 0.0,
+            )
+            with patch.object(qualifier, "run_full_checks", return_value=[failure]):
+                status = qualifier.main(
+                    [str(requirement_dir), "--output-dir", str(output)]
+                )
+            report = json.loads(
+                (output / ".arc" / "harness-report.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(status, 1)
+            self.assertEqual(report.get("model_requests", 0), 0)
+            self.assertEqual(report["initial_checks"][0]["summary"], "smoke port occupied")
+            self.assertFalse(report["initial_checks"][0]["passed"])
+
     def test_model_writes_code_and_leaves_sealed_trace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1117,11 +1152,13 @@ children:
                 status = qualifier.main(
                     [str(requirement_dir), "--output-dir", str(output)]
                 )
-            self.assertEqual(status, 0)
             report = json.loads(
                 (output / ".arc" / "harness-report.json").read_text()
             )
+            self.assertEqual(status, 0, report)
             self.assertEqual(report["status"], "local-contract-passed")
+            self.assertEqual(len(report["initial_checks"]), 6)
+            self.assertTrue(all(item["passed"] for item in report["initial_checks"]))
             self.assertEqual(report["implemented_requirements"], ["REQ-1"])
             self.assertFalse(report["behavioral_probe_tested"])
             self.assertFalse(report["behavioral_gui_tested"])

@@ -411,41 +411,63 @@ def batches(nodes: list[RequirementNode], size: int) -> list[list[RequirementNod
     ]
 
 
+def folder_dependency_index(tree: dict[str, Any]) -> list[dict[str, Any]]:
+    """Bounded-field module links for architecture prompts and plan audits."""
+
+    index: list[dict[str, Any]] = []
+    for raw in _walk(tree):
+        if not _list_field(raw, "children"):
+            continue
+        dependencies = _list_field(raw, "dependencies")
+        if dependencies:
+            index.append({
+                "id": _safe_identifier(raw.get("id") or raw.get("req_id"), label="folder id"),
+                "name": _bounded(raw.get("name"), 140),
+                "dependencies": [
+                    _safe_identifier(value, label="folder dependency")
+                    for value in dependencies
+                ],
+            })
+    return index
+
+
 def task_outline(tree: dict[str, Any], nodes: list[RequirementNode]) -> str:
     """Bounded whole-task index for architecture; not an implementation spec."""
 
     entries: list[dict[str, Any]] = []
+    folder_entries = folder_dependency_index(tree)
+    listed_folders: list[dict[str, Any]] = []
     root_name = _bounded(tree.get("name"), 160)
+
+    def encoded(requirements: list[dict[str, Any]], folders: list[dict[str, Any]]) -> str:
+        return json.dumps(
+            {
+                "root_name": root_name,
+                "total_requirements": len(nodes),
+                "listed_requirements": len(requirements),
+                "requirements": requirements,
+                "total_folder_dependencies": len(folder_entries),
+                "listed_folder_dependencies": len(folders),
+                "folder_dependencies": folders,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).replace("<", "\\u003c")
+
     for node in nodes:
         entry = {
             "id": node.req_id,
             "name": node.name[:140],
             "dependencies": list(node.dependencies[:12]),
         }
-        candidate = entries + [entry]
-        outline = json.dumps(
-            {
-                "root_name": root_name,
-                "total_requirements": len(nodes),
-                "listed_requirements": len(candidate),
-                "requirements": candidate,
-            },
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).replace("<", "\\u003c")
-        if len(outline) > MAX_TASK_OUTLINE_CHARS:
+        if len(encoded(entries + [entry], listed_folders)) > MAX_TASK_OUTLINE_CHARS:
             break
         entries.append(entry)
-    return json.dumps(
-        {
-            "root_name": root_name,
-            "total_requirements": len(nodes),
-            "listed_requirements": len(entries),
-            "requirements": entries,
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).replace("<", "\\u003c")
+    for folder in folder_entries:
+        if len(encoded(entries, listed_folders + [folder])) > MAX_TASK_OUTLINE_CHARS:
+            break
+        listed_folders.append(folder)
+    return encoded(entries, listed_folders)
 
 
 def plan_payload(nodes: list[RequirementNode], batch_size: int) -> dict[str, Any]:

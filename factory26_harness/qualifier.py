@@ -30,6 +30,7 @@ from .requirements import (
     RequirementNode,
     batches,
     flatten_atomic,
+    folder_dependency_index,
     load_requirement_tree,
     requirement_source_sha256,
     task_outline as compile_task_outline,
@@ -418,13 +419,16 @@ def main(argv: list[str] | None = None) -> int:
         nodes = _contextual_nodes(tree, flatten_atomic(tree))
         groups = batches(nodes, args.batch_size)
         outline = compile_task_outline(tree, nodes)
-        outline_listed = int(json.loads(outline)["listed_requirements"])
+        outline_index = json.loads(outline)
+        outline_listed = int(outline_index["listed_requirements"])
+        folder_index = folder_dependency_index(tree)
         requirement_sha = requirement_source_sha256(requirement_dir)
         report.update(
             source=source,
             requirement_sha256=requirement_sha,
             requirement_count=len(nodes),
             task_outline_listed_requirements=outline_listed,
+            task_outline_listed_folder_dependencies=int(outline_index["listed_folder_dependencies"]),
             task_outline_characters=len(outline),
         )
         arc_runtime = ArcRuntime.connect(output_dir)
@@ -446,6 +450,8 @@ def main(argv: list[str] | None = None) -> int:
             "task_outline_compiled",
             listed_requirements=outline_listed,
             total_requirements=len(nodes),
+            listed_folder_dependencies=int(outline_index["listed_folder_dependencies"]),
+            total_folder_dependencies=len(folder_index),
             characters=len(outline),
         )
         _write_json(
@@ -457,6 +463,7 @@ def main(argv: list[str] | None = None) -> int:
                     [node.req_id for node in group]
                     for group in groups
                 ],
+                "folder_dependencies": folder_index,
                 "salvage_splits": args.salvage_splits,
                 "route": "model-generated-implementation",
                 "task_specific_prebuilt_code": False,
@@ -468,7 +475,8 @@ def main(argv: list[str] | None = None) -> int:
             arc_runtime.commit_scaffold()
         smoke_port = _smoke_port(args.web_port)
         initial_checks = run_full_checks(output_dir, smoke_port)
-        trace.record("generic_scaffold_checked", checks=_check_results(initial_checks))
+        report["initial_checks"] = _check_results(initial_checks)
+        trace.record("generic_scaffold_checked", checks=report["initial_checks"])
         if not all(check.passed for check in initial_checks):
             raise RuntimeError("generic scaffold failed its own build/start checks")
 

@@ -10,6 +10,7 @@ from factory26_harness.requirements import (
     MAX_TASK_OUTLINE_CHARS,
     batches,
     flatten_atomic,
+    folder_dependency_index,
     load_requirement_tree,
     task_outline,
 )
@@ -58,6 +59,32 @@ class RequirementCompilerTests(unittest.TestCase):
         nodes = _contextual_nodes(tree, flatten_atomic(tree))
         child = next(node for node in nodes if node.req_id == "CHILD")
         self.assertIn("Folder dependencies: BASE", child.compact_spec())
+
+    def test_architecture_index_preserves_folder_dependencies_without_bodies(self) -> None:
+        tree = {
+            "id": "ROOT", "type": "FOLDER", "name": "Project",
+            "children": [
+                {"id": "BASE", "type": "ATOMIC", "name": "Foundation"},
+                {
+                    "id": "FOLLOW", "type": "FOLDER", "name": "Follow-on module",
+                    "description": "SECRET_FUTURE_BODY",
+                    "dependencies": ["BASE"],
+                    "children": [{"id": "LATER", "type": "ATOMIC", "name": "Later action"}],
+                },
+            ],
+        }
+        index = folder_dependency_index(tree)
+        self.assertEqual(index, [{
+            "id": "FOLLOW", "name": "Follow-on module", "dependencies": ["BASE"],
+        }])
+        outline = task_outline(tree, flatten_atomic(tree))
+        parsed = json.loads(outline)
+        self.assertEqual(parsed["folder_dependencies"], index)
+        self.assertEqual(parsed["listed_folder_dependencies"], 1)
+        self.assertEqual(parsed["total_folder_dependencies"], 1)
+        self.assertEqual(parsed["listed_requirements"], 2)
+        self.assertNotIn("SECRET_FUTURE_BODY", outline)
+        self.assertLessEqual(len(outline), MAX_TASK_OUTLINE_CHARS)
 
     def test_parent_folder_dependencies_order_batches_without_hard_failure_edges(self) -> None:
         tree = {
