@@ -59,6 +59,8 @@ export VISUAL_MODEL='your-vision-model'
 
 正式评测由平台注入模型 API Key，无需随 ZIP 上传个人 Key；本地公开练习仍需可用的练习 Key。本地没有密钥时只能跑单元/协议测试，不能宣称真实智能体成绩。当前固定响应夹具已完成单批和两批浏览器链路自测（两批独立测试 2/2），只代表测试基础设施贯通，不代表 BookStack/Keep 的通过率；详见本地验证记录。
 
+本机为 ARM 架构，缓存的当前 amd64 Runner 在 QEMU 下仍无法完成 Chromium 预检。为排查生成物的公开 GUI 行为，可用[跨架构本地浏览器诊断](docs/HYBRID_PUBLIC_GUI.md)：在当前 amd64 基础镜像里生成应用，再用旧 arm64 浏览器镜像运行公开 Playwright 测试。此桥接只用于本地诊断，既不是当前完整 Runner，也没有正式/隐藏测试成绩。
+
 ```bash
 .venv/bin/python -m unittest tests.test_qualifier tests.test_submission_bundle
 ```
