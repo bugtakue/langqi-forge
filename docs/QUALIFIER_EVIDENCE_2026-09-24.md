@@ -139,3 +139,11 @@
 - `../factory26-local-simulation/runs/qualifier-current-gen-legacy-gui-20260925/` 由当前模拟器 `--prepare-only` 放入单需求协议夹具和一条公开浏览器断言，随后用本机缓存的当前 amd64 基础镜像直启**精确 ZIP**生成应用，固定响应假模型请求/尝试各 4 次，报告 `local-contract-passed`、6/6 本地检查通过；27/27 条生产轨迹通过完整哈希封印校验。此阶段没有运行当前 Runner 的 GUI 预检。
 - 该生成物再放入本机缓存的旧 arm64 浏览器镜像，使用 `--network none`、无模型密钥、非 root 用户及独立公开测试配置。首次诊断因容器缺可写 HOME，Chromium 在断言前报 crashpad 启动错误，报告为 0 通过/1 异常；保留此失败报告。补齐可写 HOME 后，`hybrid-playwright-isolated-config-report.json` 记录公开协议断言 1/1 通过、0 异常。最终缩小挂载范围为仅只读 `scripts/`，以 `minimal-mount` 标签重跑仍为 1/1 通过、0 异常；`bash -n` 通过，重复标签时脚本拒绝覆盖旧报告。复现脚本与限制见[跨架构公开 GUI 诊断](HYBRID_PUBLIC_GUI.md)。
 - 这是**当前基础镜像生成 + 旧镜像浏览器**的混合本地诊断，不是当前完整 Runner，也不是两道公开练习或正式隐藏测试；自建夹具不测量真实模型编程能力，模型费用与正式分数仍为未知。本次 shell 环境未配置可直接用于练习的模型 Key，尚未获得 BookStack/Keep 的真实模型成绩。
+
+## 2026-09-25 显式视觉引用补全与新 ZIP 回归
+
+- 源码提交 `ed146fe667897391bd0b758d891f22d2ffdfb0eb` 修复通用需求读取漏项：批次参考图清单原先只扫描描述文字，现在也扫描原子需求 `visual_reference`，并将父级文件夹的显式引用继承到原子需求。文件仍须通过 `reference/` 路径、签名、大小、非软链及视觉网关配置检查；不增加题目预制页面或绕过调用预算。单元测试分别覆盖父级/原子字段清单和实际运行批次工具可见性。全套 77 项测试中 75 项通过、2 项因本机缺匹配的浏览器环境跳过。
+- 对公开 BookStack/Keep 需求做只读输入审计：分别为 34/32 条原子需求，默认四条一批时单批规格文本最长 5,081/4,261 字符；最长父级描述 273/224 字符、最长原子描述 351/396 字符、最长场景步骤 278/231 字符，均未触及当前提示词字段截断上限。引用图片路径分别有 19/22 个，其中实际存在 19/20 个；Keep 的 `reference/label_filtered_list.png` 与 `reference/search_keyword.png` 在本地公开材料中缺失，不能假装已读到图片。这只证明公开需求可被读取，不证明应用已实现。
+- 从干净源码树打包的精确候选为 `dist/langqi-forge-qualifier.zip`，SHA-256 `63e6c602adbbbfbe9efc4274f03b555f465fbff90ffdfb1af7ebeb72efc7845f`，16 个文件，清单绑定上述源码提交，`unzip -t` 通过。测试、文档、诊断脚本和公开任务材料均不在 ZIP 中。
+- 该精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的协议运行目录 `../factory26-local-simulation/runs/qualifier-visual-field-protocol-20260925/` 中，容器退出码 0，独立协议夹具 Playwright 1/1，模型固定响应请求/尝试各 5 次，浏览器探针通过，SDK 需求状态 `IMPLEMENTED`、运行状态完成，生产轨迹 31/31 行哈希链有效。Meter 返回 HTTP 401，费用和分数均为 `null`；1/1 不是公开练习或正式赛通过率。
+- 同一 ZIP 在本机缓存的当前 amd64 基础镜像中直启生成，目录 `../factory26-local-simulation/runs/qualifier-visual-field-current-direct-20260925/`：本地 6/6 检查通过，固定响应请求/尝试各 4 次，SDK 运行完成、轨迹 27/27 行有效。再用旧 arm64 浏览器镜像的隔离诊断跑该生成物，公开协议夹具断言 1/1。直启绕开了当前 Runner 在 ARM→amd64 QEMU 的 Chromium 预检，因此**不是当前完整 Runner**；仍没有真实编码模型、BookStack/Keep GUI 通过率或正式成绩。
