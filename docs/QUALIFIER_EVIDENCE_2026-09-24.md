@@ -261,3 +261,10 @@
 - 新增回归覆盖三层改动文件同时可见、极小快照预算、超出文件数上限和验收上下文限制。本机全套 **103 项测试：100 通过、3 项因本机浏览器环境跳过**；`git diff --check` 与 `unzip -t` 通过。由干净源码树生成的精确候选 ZIP `dist/langqi-forge-qualifier.zip`：SHA-256 `58c054f3f509f19a1c4011d8250dbd64b820277214f2ee1f47e127f114ec3988`，17 个白名单文件，包内清单绑定上述源码提交；测试夹具与证据文档不在 ZIP。
 - 该精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的固定响应两批协议回归中，工作区为 `../factory26-local-simulation/runs/qualifier-audit-snapshot-protocol-20260925/`：容器退出码 0，SDK 两项 `IMPLEMENTED`，本地协议生成/部署完成，独立 Playwright **2/2**；生产轨迹 **59/59** 行哈希封印有效、未发现未脱敏测试密钥。该夹具两批均发生验收请求，但没有触发长上下文压缩；压缩路径由单元测试覆盖。Meter 不可用，`score=null`、Token 与费用未知。
 - 此 2/2 仅证明精确包没有破坏假模型协议、跨批交接与独立浏览器夹具；不是百炼真实模型的 BookStack/Keep 成绩、当前完整 amd64 Runner 成绩或正式赛分数。本轮没有账号登录、上传或提交；真实模型练习仍需可用 Key，正式提交仍留待队长明确指示。
+
+## 2026-09-25 修订号绑定的最终验收
+
+- 源码提交 `2ffcedb56822bfb9ab1df8b3721608b826df232e` 修正最终审计的时序漏洞：此前模型在同一响应中先 `run_validation` 再改文件，会收到针对未校验源码的验收提示；或者首轮审计后补代码，完成前不会再收到最新版源码审计。两项回归先在旧实现失败，现以 `change_revision` 绑定审计：后续任何实际写入都会撤销旧审计提示并记 `agent_acceptance_audit_invalidated`；只有当前修订号再次通过校验，才发送新的源码快照并允许该版本的 `AUDIT PASS`。这使补丁后的验收多花模型回合，但避免用旧审计结论冒充新代码已审，净得分影响仍待真实模型/计费验证。
+- 当前精确 ZIP `dist/langqi-forge-qualifier.zip` SHA-256 `794179f68fdf3fcdd2e3db3e17f9e7e2be9288775b2023f204a2ef90abada69e`，17 个白名单文件，包内清单绑定上述干净源码提交，`unzip -t` 通过；协议夹具与本证据文档不在 ZIP。全套本机 **105 项测试：102 通过、3 项因浏览器环境跳过**。
+- 旧版 arm64 Runner + 当前本地模拟器包装的精确 ZIP 协议运行目录为 `../factory26-local-simulation/runs/qualifier-audit-revision-protocol-20260925/`。固定响应假模型在第一批首次审计后额外写入 `frontend/src/audit-repair.js`，并要求再次验证和再次浏览器探针；假服务只有在**最新审计源码快照包含该文件**时才允许 `AUDIT PASS`，否则返回 HTTP 422。实际首批审计修订号 2→失效→3，第二批另有修订号 2 的审计；轨迹 3 次审计请求、1 次旧审计失效、**73/73** 行哈希封印有效，未发现未脱敏夹具密钥。SDK 两项 `IMPLEMENTED`，容器退出码 0，独立 Playwright **2/2**；固定响应协议请求 13 次。Meter 拒绝连接，`score=null`、真实费用未知。
+- 以上验证的是时序、协议、构建、部署、跨批与审计留痕，**不是**真实百炼模型完成 BookStack/Keep 的能力、当前完整 amd64 Runner 的 GUI 成绩、正式赛分数或对其他参赛者的优势。ARC-Bench 未登录、未上传、未提交；真实练习仍缺可用模型 Key。
