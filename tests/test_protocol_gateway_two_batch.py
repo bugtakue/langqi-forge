@@ -11,6 +11,82 @@ from tests.protocol_gateway_two_batch import Handler
 
 
 class TwoBatchGatewayTests(unittest.TestCase):
+    def test_long_prior_source_requires_real_continuation_before_second_edit(self) -> None:
+        Handler.require_source_page_second = True
+        Handler.source_tail_seen = False
+        Handler.require_full_spec_first = False
+        Handler.fail_second = False
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        prompt = (
+            'Whole-task index <untrusted_task_outline>{"requirements":[{"id":"REQ-1"},'
+            '{"id":"REQ-2"}]}</untrusted_task_outline> Implement [REQ-2]; '
+            "prior path: frontend/src/first-feature.js "
+            "<untrusted_prior_batch_handoffs>REQ-1: AUDIT PASS: two-batch fixture only"
+            "</untrusted_prior_batch_handoffs>"
+        )
+
+        def complete(tool: str, result: dict) -> dict:
+            messages = [
+                {"role": "system", "content": "fixture"},
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": "", "tool_calls": [{
+                    "id": "prior", "type": "function",
+                    "function": {"name": tool, "arguments": "{}"},
+                }]},
+                {"role": "tool", "tool_call_id": "prior", "content": json.dumps(result)},
+            ]
+            request = Request(
+                f"http://127.0.0.1:{server.server_port}/v1/chat/completions",
+                data=json.dumps({"messages": messages}).encode("utf-8"),
+                headers={"content-type": "application/json"},
+            )
+            with urlopen(request, timeout=2) as response:
+                return json.load(response)
+
+        try:
+            with self.assertRaises(HTTPError) as missing:
+                complete("read_files", {"files": [{
+                    "path": "frontend/src/first-feature.js",
+                    "content_truncated": False,
+                }]})
+            self.assertEqual(missing.exception.code, 422)
+            page = complete("read_files", {"files": [{
+                "path": "frontend/src/first-feature.js",
+                "content_truncated": True,
+                "next_start_line": 198,
+            }]})
+            first_call = page["choices"][0]["message"]["tool_calls"][0]
+            self.assertEqual(first_call["function"]["name"], "read_file")
+            self.assertEqual(
+                json.loads(first_call["function"]["arguments"])["start_line"], 198
+            )
+            more = complete("read_file", {
+                "path": "frontend/src/first-feature.js",
+                "content": "// prefix only",
+                "next_start_line": 401,
+            })
+            self.assertEqual(
+                json.loads(more["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"])["start_line"],
+                401,
+            )
+            edited = complete("read_file", {
+                "path": "frontend/src/first-feature.js",
+                "content": "// SOURCE_TAIL_VISIBLE_TO_NEXT_BATCH",
+                "next_start_line": None,
+            })
+            self.assertEqual(
+                [call["function"]["name"] for call in edited["choices"][0]["message"]["tool_calls"]],
+                ["write_file", "replace_text"],
+            )
+        finally:
+            Handler.require_source_page_second = False
+            Handler.source_tail_seen = False
+            server.shutdown()
+            thread.join(timeout=2)
+            server.server_close()
+
     def test_second_batch_requires_handoff_and_can_read_prior_module(self) -> None:
         Handler.fail_second = False
         Handler.require_full_spec_first = False

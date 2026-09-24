@@ -32,6 +32,11 @@ STARTER_PATHS = [
     "backend/server.mjs",
     "backend/data/state.json",
 ]
+LONG_FIRST_MODULE = (
+    'export const message = "Example";\n'
+    + "//\n" * 500
+    + "// SOURCE_TAIL_VISIBLE_TO_NEXT_BATCH\n"
+)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -47,6 +52,8 @@ class Handler(BaseHTTPRequestHandler):
     full_spec_verified = False
     review_full_spec_first = False
     full_spec_revisited = False
+    require_source_page_second = False
+    source_tail_seen = False
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
@@ -206,6 +213,58 @@ class Handler(BaseHTTPRequestHandler):
                     return
         if spec_page_action is not None:
             name_and_arguments = [spec_page_action]
+        elif type(self).require_source_page_second and second_batch and last_tool in {"read_files", "read_file"}:
+            tool_results = [
+                json.loads(str(message.get("content") or "{}"))
+                for message in messages
+                if isinstance(message, dict) and message.get("role") == "tool"
+            ]
+            if not tool_results:
+                self.send_error(422, "source read returned no tool result")
+                return
+            latest = tool_results[-1]
+            if last_tool == "read_files":
+                source = next(
+                    (
+                        item for item in latest.get("files") or []
+                        if item.get("path") == "frontend/src/first-feature.js"
+                    ),
+                    None,
+                )
+                if not source or not source.get("content_truncated"):
+                    self.send_error(422, "long prior source was not marked as incomplete")
+                    return
+                cursor = source.get("next_start_line")
+                if not isinstance(cursor, int) or cursor <= 1:
+                    self.send_error(422, "missing long-source continuation line")
+                    return
+                name_and_arguments = [(
+                    "read_file",
+                    {"path": "frontend/src/first-feature.js", "start_line": cursor},
+                )]
+            elif latest.get("path") != "frontend/src/first-feature.js":
+                self.send_error(422, "wrong prior source was read")
+                return
+            elif "SOURCE_TAIL_VISIBLE_TO_NEXT_BATCH" in str(latest.get("content") or ""):
+                type(self).source_tail_seen = True
+                last_tool = "read_files"
+                name_and_arguments = []
+            elif isinstance(latest.get("next_start_line"), int):
+                name_and_arguments = [(
+                    "read_file",
+                    {
+                        "path": "frontend/src/first-feature.js",
+                        "start_line": latest["next_start_line"],
+                    },
+                )]
+            else:
+                self.send_error(422, "prior source tail was not read")
+                return
+            if type(self).source_tail_seen:
+                name_and_arguments = [
+                    ("write_file", {"path": "frontend/src/second-feature.js", "content": SECOND_MODULE}),
+                    ("replace_text", {"path": "frontend/src/app.js", "old": FIRST_APP, "new": SECOND_APP}),
+                ]
         elif second_batch and type(self).fail_second:
             name_and_arguments = []
         elif not last_tool:
@@ -225,7 +284,13 @@ class Handler(BaseHTTPRequestHandler):
                 name_and_arguments = [
                     (
                         "write_file",
-                        {"path": "frontend/src/first-feature.js", "content": 'export const message = "Example";\n'},
+                        {
+                            "path": "frontend/src/first-feature.js",
+                            "content": (
+                                LONG_FIRST_MODULE if type(self).require_source_page_second
+                                else 'export const message = "Example";\n'
+                            ),
+                        },
                     ),
                     (
                         "replace_text",
@@ -329,6 +394,7 @@ def main() -> None:
     parser.add_argument("--repair-first-audit", action="store_true")
     parser.add_argument("--require-full-spec-first", action="store_true")
     parser.add_argument("--review-full-spec-first", action="store_true")
+    parser.add_argument("--require-source-page-second", action="store_true")
     args = parser.parse_args()
     if args.review_full_spec_first and not args.require_full_spec_first:
         parser.error("--review-full-spec-first requires --require-full-spec-first")
@@ -339,6 +405,8 @@ def main() -> None:
     Handler.repair_first_audit = args.repair_first_audit
     Handler.require_full_spec_first = args.require_full_spec_first
     Handler.review_full_spec_first = args.review_full_spec_first
+    Handler.require_source_page_second = args.require_source_page_second
+    Handler.source_tail_seen = False
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"two-batch protocol fixture listening on {port}", flush=True)
     server.serve_forever()
