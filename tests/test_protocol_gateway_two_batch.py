@@ -13,6 +13,7 @@ from tests.protocol_gateway_two_batch import Handler
 class TwoBatchGatewayTests(unittest.TestCase):
     def test_second_batch_requires_handoff_and_can_read_prior_module(self) -> None:
         Handler.fail_second = False
+        Handler.require_full_spec_first = False
         Handler.requests = 0
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -66,6 +67,62 @@ class TwoBatchGatewayTests(unittest.TestCase):
             self.assertEqual(blocked["choices"][0]["message"]["tool_calls"], [])
         finally:
             Handler.fail_second = False
+            server.shutdown()
+            thread.join(timeout=2)
+            server.server_close()
+
+    def test_long_spec_protocol_rejects_missing_reader_and_premature_edit(self) -> None:
+        Handler.require_full_spec_first = True
+        Handler.full_spec_verified = False
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        prompt = (
+            'Whole-task index <untrusted_task_outline>{"requirements":'
+            '[{"id":"REQ-1"},{"id":"REQ-2"}]}</untrusted_task_outline> '
+            "Implement [REQ-1]"
+        )
+
+        def complete(expose_reader: bool, prior_tool: str = "") -> dict:
+            messages = [
+                {"role": "system", "content": "fixture"},
+                {"role": "user", "content": prompt},
+            ]
+            if prior_tool:
+                messages.append({
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{"function": {"name": prior_tool}}],
+                })
+            payload = {"messages": messages}
+            if expose_reader:
+                payload["tools"] = [
+                    {"function": {"name": "read_requirement_spec"}}
+                ]
+            request = Request(
+                f"http://127.0.0.1:{server.server_port}/v1/chat/completions",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"content-type": "application/json"},
+            )
+            with urlopen(request, timeout=2) as response:
+                return json.load(response)
+
+        try:
+            with self.assertRaises(HTTPError) as missing:
+                complete(False)
+            self.assertEqual(missing.exception.code, 422)
+            first = complete(True)
+            call = first["choices"][0]["message"]["tool_calls"][0]
+            self.assertEqual(call["function"]["name"], "read_requirement_spec")
+            self.assertEqual(
+                json.loads(call["function"]["arguments"])["start_char"], 0
+            )
+            with self.assertRaises(HTTPError) as premature:
+                complete(True, "read_files")
+            self.assertEqual(premature.exception.code, 422)
+            self.assertFalse(Handler.full_spec_verified)
+        finally:
+            Handler.require_full_spec_first = False
             server.shutdown()
             thread.join(timeout=2)
             server.server_close()

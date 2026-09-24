@@ -1,0 +1,43 @@
+id: ROOT
+name: Long-spec protocol fixture
+type: FOLDER
+description: Synthetic local protocol input only; not a public competition task.
+children:
+  - id: REQ-1
+    name: First module
+    type: ATOMIC
+    description: Render an Example heading and working Try button from a new frontend module.
+    dependencies: []
+    scenarios:
+      - &repeated
+        name: Synthetic requirement preservation scenario
+        steps:
+          - keyword: Then
+            content: >-
+              The generated application must preserve the Example heading and keep the Try control
+              reachable with a semantic button role after each refresh. This synthetic paragraph
+              exists to exercise long public requirements in the local protocol fixture. It is
+              repeated through YAML scenario aliases so that the bounded initial prompt cannot
+              silently discard later specification pages. The state after clicking Try must show
+              Clicked as visible text. A later batch must preserve this behavior while adding a
+              second action. The harness must read all specification pages before writing files.
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+      - *repeated
+  - id: REQ-2
+    name: Follow-up module
+    type: ATOMIC
+    description: Preserve the first behavior and add a Second button that shows Ready.
+    dependencies: [REQ-1]
+    scenarios: []
