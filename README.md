@@ -12,7 +12,7 @@
 - 正常生成路径必须调用平台注入的 OpenAI-compatible 模型网关。模型缺失、实现批次未完成或构建/启动失败均返回非零；不会把空 scaffold 冒充完成品。
 - 通过官方 `arcbench-runtime` SDK 上报运行状态、需求实现状态、需求树追溯表及每批 Git 提交；不手写平台事件。独立哈希链仍保留 Prompt、工具调用与模型迭代。通用构建通过不等于需求的 GUI 测试通过，因此不会虚报逐需求 `test_passed`。
 - 旧成绩不是本版性能证据。任何真实通过率以主办方独立 GUI 评测为准。
-- 截至 2026-09-25，[ARC-Bench 正式赛公开列表](https://arc-bench.com/competition)显示两项任务、200 个测试；未登录时正式赛详情要求先确认队伍。BookStack/Keep 的 66 条公开基准用例是练习材料，不能等同正式赛题或 200 个测试。赛事官网列出的自动评分维度为 GUI 通过率、Token 效率、完成时间，具体权重仍待公布。
+- 截至 2026-09-25，[ARC-Bench 正式赛公开列表](https://arc-bench.com/competition)显示两项任务、200 个测试；未登录时正式赛详情要求先确认队伍。BookStack/Keep 的 66 条公开基准用例是练习材料，不能等同正式赛题或 200 个测试。按队长收到的《参赛须知》版本，正式得分以**两个任务合计 GUI 测试通过率与合计人民币模型开销**计算：通过率每提高 1 个百分点的预计合理开销为 ¥1.2；低于该线的奖励指数为 0.1，高于该线的惩罚指数为 0.2。完成时间不是独立得分项，只在得分、通过率和开销全相同后用于破同分；每个任务另有 48 小时运行上限。PDF 的版本哈希和完整公式见[本地验证记录](docs/QUALIFIER_EVIDENCE_2026-09-24.md)，若主办方更新规则须重新核对。
 - 若运行环境另外提供 `VISUAL_API_KEY`、`VISUAL_BASE_URL`、`VISUAL_MODEL`，智能体会按需读取需求明确引用的 `reference/` 截图，通过视觉模型提取布局线索。图片只发往所配置的视觉网关，不写入生产轨迹或生成应用；没有完整视觉配置时不启用此工具。
 
 主办方本地模拟器：[hackathon-local-simulation](https://github.com/code-philia/hackathon-local-simulation)。报名与项目提交由队长操作；此处的打包命令**不会上传**。
@@ -57,7 +57,7 @@ export VISUAL_MODEL='your-vision-model'
   --output-dir /absolute/path/to/generated-project
 ```
 
-模型服务也可以由比赛平台注入；本地没有密钥时只能跑单元/协议测试，不能宣称真实智能体成绩。当前用协议夹具完成过一次浏览器链路自测（1/1），只代表测试基础设施贯通，不代表 BookStack/Keep 的通过率；详见本地验证记录。
+正式评测由平台注入模型 API Key，无需随 ZIP 上传个人 Key；本地公开练习仍需可用的练习 Key。本地没有密钥时只能跑单元/协议测试，不能宣称真实智能体成绩。当前固定响应夹具已完成单批和两批浏览器链路自测（两批独立测试 2/2），只代表测试基础设施贯通，不代表 BookStack/Keep 的通过率；详见本地验证记录。
 
 ```bash
 .venv/bin/python -m unittest tests.test_qualifier tests.test_submission_bundle
