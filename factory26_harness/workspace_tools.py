@@ -8,13 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .checks import (
-    frontend_build_check,
-    interaction_policy_check,
-    package_policy_check,
-    run_full_checks,
-    structure_check,
-)
+from .checks import run_full_checks, run_quick_checks, structure_check
 from .trace import ProductionTrace
 from .visual_reference import VisualReferenceClient
 
@@ -534,13 +528,7 @@ class WorkspaceTools:
         if scope == "structure":
             results = [structure_check(self.root)]
         elif scope == "quick":
-            results = [structure_check(self.root)]
-            if results[-1].passed:
-                results.append(package_policy_check(self.root))
-            if results[-1].passed:
-                results.append(interaction_policy_check(self.root))
-            if results[-1].passed:
-                results.append(frontend_build_check(self.root))
+            results = run_quick_checks(self.root)
         elif scope == "full":
             results = run_full_checks(self.root, self.smoke_port)
         else:

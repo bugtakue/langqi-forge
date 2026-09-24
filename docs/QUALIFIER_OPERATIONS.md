@@ -13,7 +13,7 @@
 1. `agent.py:SYSTEM_PROMPT` 规定实现职责、不可信需求边界、前后端可运行、持久化、交互与后端状态校验；模型必须实际编辑文件并执行校验。
 2. `CodingAgent.implement` 为每一小批依赖有序需求构造用户 Prompt，包含需求 ID、描述、场景、父级上下文和相关文件。需求正文明确包裹为不可信数据。若同时提供三项 `VISUAL_*` 配置，Prompt 会列出本批实际存在的参考截图，模型可按需调用 `inspect_reference`；视觉描述仍是不可信线索，不得覆盖文字需求。
 3. 模型调用由 `model.py:OpenAIChatClient` 发往环境注入的 OpenAI-compatible `/chat/completions`。没有 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`MODEL` 就失败，不切换到预制业务实现。
-4. 每次模型响应可提出多个工具调用。批次必须有实际源码修改且最后一次修改通过 quick 校验，随后进入 `ACCEPTANCE_AUDIT_PROMPT` 逐条审查；审计若再改动，必须重新校验。
+4. 每次模型响应可提出多个工具调用。批次必须有实际源码修改且最后一次修改通过 quick 校验（含不执行生成源码的 JavaScript 语法检查），随后进入 `ACCEPTANCE_AUDIT_PROMPT` 逐条审查；审计若再改动，必须重新校验。
 5. 全部批次结束后独立执行结构、包策略、交互策略、前端构建、后端启动/健康检查。失败时最多运行配置的修复轮次。局部检查通过不等于 GUI 行为通过。
 
 默认每批 4 条原子需求、最多 20 个模型回合、最多 2 个最终修复轮。运行时可在安全范围内通过 CLI 调整，真实 Token/成本由模型服务和主办方计量为准。每批会在轨迹中保留 `agent_session_started`、`model_request`、`model_response`、`tool_call`、`tool_result`、`agent_acceptance_audit_requested`、`implementation_batch_finished` 等事件。

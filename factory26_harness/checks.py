@@ -55,6 +55,10 @@ CREATED_DOM_NODE_PATTERN = re.compile(
     r"document\s*\.\s*createElement\s*\(\s*([\"'])([A-Za-z0-9-]+)\2"
 )
 INTERACTION_SOURCE_SUFFIXES = {".html", ".js", ".jsx", ".mjs", ".ts", ".tsx"}
+NODE_CHECK_SUFFIXES = {".js", ".mjs", ".cjs"}
+IGNORED_SOURCE_PARTS = {"node_modules", "dist", "coverage", ".git", ".arc"}
+MAX_NODE_CHECK_FILES = 120
+MAX_NODE_CHECK_FILE_BYTES = 2_000_000
 
 
 @dataclass(frozen=True)
@@ -100,6 +104,11 @@ def _run(
     *,
     environment: dict[str, str] | None = None,
 ) -> tuple[int, str, float]:
+    def text_output(value: str | bytes | None) -> str:
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace")
+        return value or ""
+
     started = time.monotonic()
     try:
         completed = subprocess.run(
@@ -113,10 +122,10 @@ def _run(
             timeout=timeout,
             check=False,
         )
-        output = ((completed.stdout or "") + "\n" + (completed.stderr or "")).strip()
+        output = (text_output(completed.stdout) + "\n" + text_output(completed.stderr)).strip()
         return completed.returncode, output[-4000:], time.monotonic() - started
     except subprocess.TimeoutExpired as exc:
-        output = ((exc.stdout or "") + "\n" + (exc.stderr or "")).strip()
+        output = (text_output(exc.stdout) + "\n" + text_output(exc.stderr)).strip()
         return (
             124,
             f"timeout after {timeout}s\n{output[-3000:]}",
@@ -317,6 +326,51 @@ def interaction_policy_check(root: Path) -> CheckResult:
     )
 
 
+def javascript_syntax_check(root: Path) -> CheckResult:
+    """Parse generated JavaScript without executing it or relying on a copy-only build."""
+    started = time.monotonic()
+    paths: list[Path] = []
+    for source_root in (root / "frontend" / "src", root / "backend"):
+        if not source_root.is_dir():
+            continue
+        for path in sorted(source_root.rglob("*")):
+            if (
+                not path.is_file()
+                or path.suffix.lower() not in NODE_CHECK_SUFFIXES
+                or any(part in IGNORED_SOURCE_PARTS for part in path.relative_to(root).parts)
+            ):
+                continue
+            paths.append(path)
+    if len(paths) > MAX_NODE_CHECK_FILES:
+        return CheckResult(
+            "javascript_syntax",
+            False,
+            f"too many JavaScript source files: {len(paths)} > {MAX_NODE_CHECK_FILES}",
+            tuple(str(path.relative_to(root)) for path in paths[:MAX_NODE_CHECK_FILES]),
+            time.monotonic() - started,
+        )
+    errors: list[str] = []
+    for path in paths:
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            errors.append(f"{relative} is a symlink")
+        elif path.stat().st_size > MAX_NODE_CHECK_FILE_BYTES:
+            errors.append(f"{relative} exceeds {MAX_NODE_CHECK_FILE_BYTES} bytes")
+        else:
+            rc, output, _ = _run(["node", "--check", str(path)], path.parent, 10)
+            if rc != 0:
+                errors.append(f"{relative}: {output or f'node --check exited {rc}'}")
+        if len(errors) >= 10:
+            break
+    return CheckResult(
+        "javascript_syntax",
+        not errors,
+        f"JavaScript syntax passed ({len(paths)} files)" if not errors else "\n".join(errors),
+        tuple(str(path.relative_to(root)) for path in paths),
+        time.monotonic() - started,
+    )
+
+
 def _npm_install(directory: Path) -> tuple[int, str, float]:
     package = json.loads((directory / "package.json").read_text(encoding="utf-8"))
     dependencies = package.get("dependencies") or {}
@@ -456,14 +510,21 @@ def startup_check(root: Path, smoke_port: int) -> CheckResult:
             process.stdout.close()
 
 
-def run_full_checks(root: Path, smoke_port: int) -> list[CheckResult]:
+def run_quick_checks(root: Path) -> list[CheckResult]:
     results = [structure_check(root)]
     if results[-1].passed:
         results.append(package_policy_check(root))
     if results[-1].passed:
         results.append(interaction_policy_check(root))
     if results[-1].passed:
+        results.append(javascript_syntax_check(root))
+    if results[-1].passed:
         results.append(frontend_build_check(root))
+    return results
+
+
+def run_full_checks(root: Path, smoke_port: int) -> list[CheckResult]:
+    results = run_quick_checks(root)
     if results[-1].passed:
         results.append(startup_check(root, smoke_port))
     return results
