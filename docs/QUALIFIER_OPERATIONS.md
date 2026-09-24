@@ -10,6 +10,8 @@
 
 `arc_runtime.py` 只调用主办方公开 `arcbench-runtime==0.1.0` SDK 的高层方法：`AgentRuntime.from_env(project_dir=...)`、运行状态、`traceability.store_requirement_tree`、需求实现状态及 `git.ensure_repo/commit`。平台事件格式和 `.arc/traceability/` 表由 SDK 生成，本参赛包不构造事件载荷。在 Runner 环境中 SDK 缺失会失败关闭。每批代码与对应需求状态一并提交，提交失败会使运行失败；通用构建/启动检查不宣称逐需求 GUI 测试通过，也不会发送 `mark_test_passed`。本地 `.arc/production-trace.jsonl` 是额外的独立审计链，不代替平台事件。
 
+报告里的 `behavioral_probe_tested` 仅表示每批至少完成一次带可见文本断言的本地浏览器探针；`behavioral_gui_tested=false` 继续表示尚未取得平台独立 GUI 评测。两者不能相互替代。Runner 自带与其 Chromium 匹配的 Python Playwright，参赛包的 `requirements.txt` 不安装或覆盖该版本。
+
 ## Prompts 与 Agent 迭代
 
 1. `agent.py:SYSTEM_PROMPT` 规定实现职责、不可信需求边界、前后端可运行、持久化、交互与后端状态校验；模型必须实际编辑文件并执行校验。

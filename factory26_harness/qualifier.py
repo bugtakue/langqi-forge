@@ -364,6 +364,11 @@ def main(argv: list[str] | None = None) -> int:
         if model.request_count < 1:
             raise RuntimeError("no model request completed")
         report["status"] = "local-contract-passed"
+        report["behavioral_probe_tested"] = bool(report["browser_probe_batches"]) and all(
+            item["behavioral_probe_verified"]
+            for item in report["browser_probe_batches"]
+        )
+        # Only the platform's separate GUI suite can set this distinction.
         report["behavioral_gui_tested"] = False
         if arc_runtime is not None:
             arc_runtime.complete()
