@@ -134,6 +134,8 @@ def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
         "file_count",
         "current_changes_validated",
         "validated_change_revision",
+        "behavioral_checks",
+        "behavioral_assertions",
     ):
         if key in payload:
             summary[key] = payload[key]
@@ -157,6 +159,10 @@ def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
         ][:8]
     if payload.get("error"):
         summary["error"] = str(payload["error"])[:600]
+    for key in ("assertion_failures", "page_errors", "blocked_external_hosts"):
+        values = payload.get(key)
+        if isinstance(values, list):
+            summary[key] = values[:2]
     return summary
 
 
@@ -485,6 +491,18 @@ class CodingAgent:
                         observed_files
                     ),
                     "validation_scope": self.tools.validation_scope,
+                    "browser_probe_calls": self.tools.browser_probe_calls,
+                    "browser_probe_calls_remaining": max(
+                        0,
+                        self.tools.maximum_browser_probe_calls
+                        - self.tools.browser_probe_calls,
+                    ),
+                    "browser_probe_requires_recheck": (
+                        self.tools.browser_probe_requires_recheck
+                    ),
+                    "browser_probe_verified_revision": (
+                        self.tools.browser_probe_verified_revision
+                    ),
                     "latest_tool_results": compact_results,
                 }
                 checkpoint_intro = (

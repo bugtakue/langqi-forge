@@ -22,6 +22,8 @@
 
 默认每批 4 条原子需求、最多 20 个模型回合、最多 2 个最终修复轮。总模型请求上限按实际批次数与允许回合数计算（默认上限 600 次），累计输入/输出 Token 安全上限随之放大；`FACTORY26_MAX_MODEL_REQUESTS`、`FACTORY26_MAX_TOTAL_PROMPT_TOKENS`、`FACTORY26_MAX_TOTAL_COMPLETION_TOKENS` 可显式覆盖并会写入运行报告。这些是上限，不是预算目标或成绩承诺；真实 Token/成本由模型服务和主办方计量为准。每批会在轨迹中保留 `agent_session_started`、`model_request`、`model_response`、`tool_call`、`tool_result`、`agent_acceptance_audit_requested`、`implementation_batch_finished` 等事件。
 
+超长会话触发上下文压缩时，检查点保留当前源码哈希、校验版本，以及浏览器探针已用次数、剩余额度、是否需要重验和最近一次断言/页面错误摘要；完整原始调用仍在独立生产轨迹中。压缩不把失败探针改写为通过。
+
 ## 工具调用与安全
 
 `workspace_tools.py` 暴露：`list_files`、`read_file`、`read_files`、`search_text`、`write_file`、`replace_text`、`run_validation`、`browser_probe`；完整视觉配置时再按批次开放 `inspect_reference`。后者只接受需求正文明确引用且文件实际存在的 `reference/` 图片，默认最多 8 次视觉请求，缓存重复图片；只记录图片 SHA、模型响应与用量，不记录图片字节或密钥。浏览器探针默认每批最多 3 次，仅在当前源码已通过 quick/full 时开放；只允许语义定位及本地路径导航，阻断外部 HTTP 请求，以不含模型密钥的环境启动后端。写入只允许 `frontend/`、`backend/`，禁止访问 `.env`、密钥、控制目录和越界路径；覆写文件要求当前 SHA-256；有文件数、字节数及模型回合/Token 上限。模型生成的代码经 `checks.py` 在剥离密钥的环境中构建和启动。生产轨迹由 `trace.py` 脱敏并逐行哈希链接。

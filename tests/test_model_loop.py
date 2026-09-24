@@ -11,7 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from factory26_harness.agent import CodingAgent
+from factory26_harness.agent import CodingAgent, _compact_tool_result
 from factory26_harness.model import ModelBudgetExceeded, OpenAIChatClient
 from factory26_harness.requirements import RequirementNode
 from factory26_harness.trace import ProductionTrace
@@ -98,6 +98,27 @@ class _ModelHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_browser_probe_tool_summary_keeps_bounded_behavioral_evidence(self) -> None:
+        summary = _compact_tool_result(
+            "browser_probe",
+            {
+                "ok": False,
+                "behavioral_checks": 2,
+                "behavioral_assertions": 3,
+                "assertion_failures": [
+                    {"step": 1, "missing": ["Saved"], "unexpected": []},
+                    {"step": 2, "missing": [], "unexpected": ["Error"]},
+                    {"step": 3, "missing": ["Other"], "unexpected": []},
+                ],
+                "page_errors": ["TypeError", "ReferenceError", "ExtraError"],
+                "blocked_external_hosts": ["example.com"],
+            },
+        )
+        self.assertEqual(summary["behavioral_checks"], 2)
+        self.assertEqual(summary["behavioral_assertions"], 3)
+        self.assertEqual(len(summary["assertion_failures"]), 2)
+        self.assertEqual(summary["page_errors"], ["TypeError", "ReferenceError"])
+
     def test_workload_budget_scales_to_multi_batch_public_tasks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             trace = ProductionTrace(Path(directory) / "trace.jsonl")
@@ -502,6 +523,10 @@ class ModelLoopTests(unittest.TestCase):
             ]
             self.assertTrue(compacted)
             self.assertLess(compacted[0]["payload"]["after_characters"], 8_000)
+            checkpoint = compacted[0]["payload"]["checkpoint"]
+            self.assertEqual(checkpoint["browser_probe_calls"], 0)
+            self.assertEqual(checkpoint["browser_probe_verified_revision"], -1)
+            self.assertFalse(checkpoint["browser_probe_requires_recheck"])
             self.assertTrue((root / "frontend" / "src" / "large.js").is_file())
 
     def test_context_compaction_includes_the_current_source_snapshot(
