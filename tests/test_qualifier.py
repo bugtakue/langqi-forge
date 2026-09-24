@@ -97,6 +97,95 @@ class ScriptedModel:
 
 
 class QualifierTests(unittest.TestCase):
+    def test_behavioral_probe_claim_requires_final_repair_probe(self) -> None:
+        report = {
+            "browser_probe_batches": [{"behavioral_probe_verified": True}],
+            "browser_probe_repairs": [],
+        }
+        self.assertTrue(qualifier._behavioral_probe_tested(report))
+        report["browser_probe_repairs"].append(
+            {
+                "changed_files": ["frontend/src/app.js"],
+                "behavioral_probe_verified": False,
+            }
+        )
+        self.assertFalse(qualifier._behavioral_probe_tested(report))
+        report["browser_probe_repairs"][0]["behavioral_probe_verified"] = True
+        self.assertTrue(qualifier._behavioral_probe_tested(report))
+
+    def test_final_repair_without_new_probe_is_reported_unverified(self) -> None:
+        class RepairFixtureAgent:
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def _edit(self, old: str, new: str) -> AgentRun:
+                changed = json.loads(
+                    self.tools.execute(
+                        "replace_text",
+                        {"path": "frontend/src/app.js", "old": old, "new": new},
+                    )
+                )
+                if not changed["ok"]:
+                    raise AssertionError(changed)
+                validated = json.loads(
+                    self.tools.execute("run_validation", {"scope": "quick"})
+                )
+                if not validated["ok"]:
+                    raise AssertionError(validated)
+                self.model.request_count += 1
+                return AgentRun(True, "repair fixture", tuple(self.tools.changed_files), 1)
+
+            def implement(self, _nodes, related_files=()) -> AgentRun:
+                result = self._edit(
+                    "// The coding agent implements the requested application here.",
+                    'document.querySelector("#app").innerHTML = "<h1>Example</h1>";',
+                )
+                self.tools.browser_probe_calls = 1
+                self.tools.browser_probe_verified_revision = self.tools.change_revision
+                return result
+
+            def repair(self, _failure_text, _related_files) -> AgentRun:
+                return self._edit("<h1>Example</h1>", "<h1>Example repaired</h1>")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = self._requirement_dir(root)
+            output = root / "output"
+            actual_checks = qualifier.run_full_checks
+            calls = 0
+
+            def force_one_repair(path: Path, port: int):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    return [
+                        qualifier.CheckResult(
+                            "forced_repair", False, "fixture repair needed",
+                            ("frontend/src/app.js",), 0.0,
+                        )
+                    ]
+                return actual_checks(path, port)
+
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", RepairFixtureAgent),
+                patch.object(qualifier, "run_full_checks", force_one_repair),
+            ):
+                status = qualifier.main([str(requirement_dir), "--output-dir", str(output)])
+            self.assertEqual(status, 0)
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertTrue(report["browser_probe_batches"][0]["behavioral_probe_verified"])
+            self.assertEqual(report["browser_probe_repairs"][0]["calls"], 0)
+            self.assertFalse(report["browser_probe_repairs"][0]["behavioral_probe_verified"])
+            self.assertFalse(report["behavioral_probe_tested"])
+            rows = [
+                json.loads(line)
+                for line in (output / ".arc/production-trace.jsonl").read_text().splitlines()
+            ]
+            repair_event = next(row for row in rows if row["event"] == "repair_finished")
+            self.assertFalse(repair_event["payload"]["browser_probe"]["behavioral_probe_verified"])
+
     def test_run_failure_is_reported_even_when_requirement_failure_event_raises(self) -> None:
         class BrokenRuntime:
             def __init__(self) -> None:

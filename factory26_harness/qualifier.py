@@ -177,6 +177,21 @@ def _check_results(results: list[CheckResult]) -> list[dict[str, Any]]:
     return [result.as_dict() for result in results]
 
 
+def _behavioral_probe_tested(report: dict[str, Any]) -> bool:
+    """A later source repair invalidates an earlier browser-probe claim."""
+
+    batches = report["browser_probe_batches"]
+    repairs = report["browser_probe_repairs"]
+    return (
+        bool(batches)
+        and all(item["behavioral_probe_verified"] for item in batches)
+        and all(
+            not item["changed_files"] or item["behavioral_probe_verified"]
+            for item in repairs
+        )
+    )
+
+
 def _recent_handoff_paths(
     previous: list[str], changed: Iterable[str]
 ) -> list[str]:
@@ -267,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
         "failed_requirements": [],
         "checks": [],
         "browser_probe_batches": [],
+        "browser_probe_repairs": [],
     }
     model: OpenAIChatClient | None = None
     visual_client: VisualReferenceClient | None = None
@@ -428,18 +444,27 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             trace.record("repair_started", round=repair_round, failures=failure_text)
+            repair_tools = WorkspaceTools(output_dir, trace, smoke_port)
             repair = CodingAgent(
-                model,
-                WorkspaceTools(output_dir, trace, smoke_port),
-                trace,
-                max_turns=args.max_agent_turns,
+                model, repair_tools, trace, max_turns=args.max_agent_turns
             ).repair(failure_text, related)
+            repair_probe_evidence = {
+                "round": repair_round,
+                "changed_files": repair.changed_files,
+                "calls": repair_tools.browser_probe_calls,
+                "behavioral_probe_verified": (
+                    repair_tools.browser_probe_verified_revision
+                    == repair_tools.change_revision
+                ),
+            }
+            report["browser_probe_repairs"].append(repair_probe_evidence)
             trace.record(
                 "repair_finished",
                 round=repair_round,
                 completed=repair.completed,
                 changed_files=repair.changed_files,
                 turns=repair.turns,
+                browser_probe=repair_probe_evidence,
             )
             if not repair.completed:
                 break
@@ -454,10 +479,7 @@ def main(argv: list[str] | None = None) -> int:
         if model.request_count < 1:
             raise RuntimeError("no model request completed")
         report["status"] = "local-contract-passed"
-        report["behavioral_probe_tested"] = bool(report["browser_probe_batches"]) and all(
-            item["behavioral_probe_verified"]
-            for item in report["browser_probe_batches"]
-        )
+        report["behavioral_probe_tested"] = _behavioral_probe_tested(report)
         # Only the platform's separate GUI suite can set this distinction.
         report["behavioral_gui_tested"] = False
         if arc_runtime is not None:
