@@ -40,6 +40,8 @@ class Handler(BaseHTTPRequestHandler):
     truncate_first = False
     truncated_once = False
     recovery_verified = False
+    repair_first_audit = False
+    audit_repair_verified = False
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
@@ -158,6 +160,13 @@ class Handler(BaseHTTPRequestHandler):
                 ]
         elif last_tool == "replace_text":
             name_and_arguments = [("run_validation", {"scope": "quick"})]
+        elif (
+            last_tool == "write_file"
+            and type(self).repair_first_audit
+            and not second_batch
+            and "browser_probe" in previous_tools
+        ):
+            name_and_arguments = [("run_validation", {"scope": "quick"})]
         elif last_tool == "run_validation":
             name_and_arguments = [
                 (
@@ -174,6 +183,25 @@ class Handler(BaseHTTPRequestHandler):
                     },
                 )
             ]
+        elif last_tool == "browser_probe" and type(self).repair_first_audit and not second_batch:
+            if previous_tools.count("browser_probe") == 1:
+                name_and_arguments = [
+                    ("write_file", {
+                        "path": "frontend/src/audit-repair.js",
+                        "content": "export const audited = true;\n",
+                    })
+                ]
+            else:
+                audits = [
+                    str(message.get("content") or "") for message in messages
+                    if message.get("role") == "user"
+                    and "<untrusted_changed_sources>" in str(message.get("content") or "")
+                ]
+                if not audits or "frontend/src/audit-repair.js" not in audits[-1]:
+                    self.send_error(422, "latest repaired revision was not re-audited")
+                    return
+                type(self).audit_repair_verified = True
+                name_and_arguments = []
         else:
             name_and_arguments = []
         type(self).requests += 1
@@ -219,10 +247,12 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=19786)
     parser.add_argument("--fail-second", action="store_true")
     parser.add_argument("--truncate-first", action="store_true")
+    parser.add_argument("--repair-first-audit", action="store_true")
     args = parser.parse_args()
     port = args.port
     Handler.fail_second = args.fail_second
     Handler.truncate_first = args.truncate_first
+    Handler.repair_first_audit = args.repair_first_audit
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"two-batch protocol fixture listening on {port}", flush=True)
     server.serve_forever()

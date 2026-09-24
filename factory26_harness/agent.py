@@ -375,6 +375,7 @@ class CodingAgent:
         consecutive_truncated_outputs = 0
         acceptance_audit_requested = False
         acceptance_audit_message: dict[str, Any] | None = None
+        acceptance_audit_revision: int | None = None
         observed_files: set[str] = set()
         observed_sha256: dict[str, str] = {}
         tool_schemas = self.tools.schemas()
@@ -383,7 +384,7 @@ class CodingAgent:
         }
 
         def request_acceptance_audit(changed: tuple[str, ...], *, trigger: str) -> None:
-            nonlocal acceptance_audit_requested, acceptance_audit_message, messages
+            nonlocal acceptance_audit_requested, acceptance_audit_message, acceptance_audit_revision, messages
             snapshot, snapshot_manifest = _source_snapshot(self.tools.root, changed)
             audit_instruction = ACCEPTANCE_AUDIT_PROMPT
 
@@ -448,11 +449,13 @@ class CodingAgent:
                     source_snapshot=snapshot_manifest,
                 )
             acceptance_audit_requested = True
+            acceptance_audit_revision = self.tools.change_revision
             self.trace.record(
                 "agent_acceptance_audit_requested",
                 stage=stage,
                 requirement_ids=requirement_ids,
                 changed_files=changed,
+                change_revision=acceptance_audit_revision,
                 trigger=trigger,
                 snapshot=snapshot_manifest,
             )
@@ -520,7 +523,9 @@ class CodingAgent:
                     and self.tools.current_changes_validated
                     and not self.tools.browser_probe_requires_recheck
                 ):
-                    if stage == "implementation" and not acceptance_audit_requested:
+                    if stage == "implementation" and (
+                        acceptance_audit_revision != self.tools.change_revision
+                    ):
                         request_acceptance_audit(
                             changed,
                             trigger="validated_implementation_summary",
@@ -654,6 +659,25 @@ class CodingAgent:
                         "content": result,
                     }
                 )
+            if (
+                acceptance_audit_revision is not None
+                and self.tools.change_revision != acceptance_audit_revision
+            ):
+                if acceptance_audit_message is not None:
+                    messages = [
+                        message for message in messages
+                        if message is not acceptance_audit_message
+                    ]
+                self.trace.record(
+                    "agent_acceptance_audit_invalidated",
+                    stage=stage,
+                    requirement_ids=requirement_ids,
+                    audited_revision=acceptance_audit_revision,
+                    current_revision=self.tools.change_revision,
+                )
+                acceptance_audit_requested = False
+                acceptance_audit_message = None
+                acceptance_audit_revision = None
             context_before = _context_characters(messages)
             if context_before > self.maximum_context_characters:
                 checkpoint = {
@@ -772,7 +796,11 @@ class CodingAgent:
                     retained_current_turn=retained_current_turn,
                     source_snapshot=source_snapshot_manifest,
                 )
-            if implementation_validation_completed and not acceptance_audit_requested:
+            if (
+                implementation_validation_completed
+                and self.tools.current_changes_validated
+                and acceptance_audit_revision != self.tools.change_revision
+            ):
                 changed = tuple(sorted(self.tools.changed_files - changed_before))
                 request_acceptance_audit(
                     changed,

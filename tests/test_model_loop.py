@@ -135,6 +135,117 @@ class _StatusHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_validation_followed_by_edit_in_same_turn_waits_for_latest_revision_audit(self) -> None:
+        class ValidateThenEditModel:
+            def __init__(self) -> None:
+                self.turn = 0
+                self.audit_prompts_by_turn: dict[int, list[str]] = {}
+
+            def complete(self, messages, _tools):
+                self.turn += 1
+                self.audit_prompts_by_turn[self.turn] = [
+                    str(message.get("content") or "") for message in messages
+                    if message.get("role") == "user"
+                    and "<untrusted_changed_sources>" in str(message.get("content") or "")
+                ]
+                actions = {
+                    1: (("write_file", {"path": "frontend/src/first.js", "content": "first"}),),
+                    2: (
+                        ("run_validation", {"scope": "quick"}),
+                        ("write_file", {"path": "frontend/src/second.js", "content": "second"}),
+                    ),
+                    3: (("run_validation", {"scope": "quick"}),),
+                }.get(self.turn, ())
+                calls = tuple({
+                    "id": f"call-{self.turn}-{index}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(arguments)},
+                } for index, (name, arguments) in enumerate(actions))
+                content = "AUDIT PASS: latest revision checked" if not calls else ""
+                return SimpleNamespace(
+                    tool_calls=calls,
+                    raw_message={"role": "assistant", "content": content, **({"tool_calls": calls} if calls else {})},
+                    content=content,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for component, scripts in (
+                ("frontend", {"build": DUMMY_BUILD}),
+                ("backend", {"start": 'node -e ""'}),
+            ):
+                folder = root / component
+                folder.mkdir()
+                (folder / "package.json").write_text(
+                    json.dumps({"name": component, "private": True, "scripts": scripts}),
+                    encoding="utf-8",
+                )
+            trace = ProductionTrace(root / ".arc/trace.jsonl")
+            model = ValidateThenEditModel()
+            result = CodingAgent(model, WorkspaceTools(root, trace, 3928), trace, max_turns=4).implement(
+                [RequirementNode("R-AUDIT-REV", "Audit revision", "Edit two files", (), (), (), {})]
+            )
+            self.assertTrue(result.completed)
+            self.assertEqual(len(model.audit_prompts_by_turn[3]), 0)
+            self.assertEqual(len(model.audit_prompts_by_turn[4]), 1)
+            self.assertIn("frontend/src/second.js", model.audit_prompts_by_turn[4][0])
+
+    def test_repaired_code_receives_a_fresh_acceptance_audit(self) -> None:
+        class RepairDuringAuditModel:
+            def __init__(self) -> None:
+                self.turn = 0
+                self.audit_prompts_by_turn: dict[int, list[str]] = {}
+
+            def complete(self, messages, _tools):
+                self.turn += 1
+                self.audit_prompts_by_turn[self.turn] = [
+                    str(message.get("content") or "") for message in messages
+                    if message.get("role") == "user"
+                    and "<untrusted_changed_sources>" in str(message.get("content") or "")
+                ]
+                actions = {
+                    1: (("write_file", {"path": "frontend/src/first.js", "content": "first"}),),
+                    2: (("run_validation", {"scope": "quick"}),),
+                    3: (("write_file", {"path": "frontend/src/second.js", "content": "second"}),),
+                    4: (("run_validation", {"scope": "quick"}),),
+                }.get(self.turn, ())
+                calls = tuple({
+                    "id": f"call-{self.turn}-{index}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(arguments)},
+                } for index, (name, arguments) in enumerate(actions))
+                content = "AUDIT PASS: repaired revision checked" if not calls else ""
+                return SimpleNamespace(
+                    tool_calls=calls,
+                    raw_message={"role": "assistant", "content": content, **({"tool_calls": calls} if calls else {})},
+                    content=content,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for component, scripts in (
+                ("frontend", {"build": DUMMY_BUILD}),
+                ("backend", {"start": 'node -e ""'}),
+            ):
+                folder = root / component
+                folder.mkdir()
+                (folder / "package.json").write_text(
+                    json.dumps({"name": component, "private": True, "scripts": scripts}),
+                    encoding="utf-8",
+                )
+            trace = ProductionTrace(root / ".arc/trace.jsonl")
+            model = RepairDuringAuditModel()
+            result = CodingAgent(model, WorkspaceTools(root, trace, 3929), trace, max_turns=5).implement(
+                [RequirementNode("R-AUDIT-REPAIR", "Audit repair", "Edit two files", (), (), (), {})]
+            )
+            self.assertTrue(result.completed)
+            self.assertEqual(len(model.audit_prompts_by_turn[3]), 1)
+            self.assertEqual(len(model.audit_prompts_by_turn[5]), 1)
+            self.assertIn("frontend/src/second.js", model.audit_prompts_by_turn[5][-1])
+            rows = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(sum(row["event"] == "agent_acceptance_audit_requested" for row in rows), 2)
+            self.assertEqual(sum(row["event"] == "agent_acceptance_audit_invalidated" for row in rows), 1)
+
     def test_audit_snapshot_represents_all_changed_files_under_a_shared_budget(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
