@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from factory26_harness.browser_probe import probe_local_app, validate_steps
+from factory26_harness.browser_probe import _probe_passed, probe_local_app, validate_steps
 from factory26_harness.checks import frontend_build_check
 from factory26_harness.generic_scaffold import scaffold_workspace
 from factory26_harness.isolation import stage_app_project
@@ -16,6 +16,12 @@ from factory26_harness.workspace_tools import WorkspaceTools
 
 
 class BrowserProbeTests(unittest.TestCase):
+    def test_blocked_external_request_cannot_be_reported_as_a_pass(self) -> None:
+        self.assertTrue(_probe_passed([], [], set()))
+        self.assertFalse(_probe_passed([], [], {"example.com"}))
+        self.assertFalse(_probe_passed([{"step": 1}], [], set()))
+        self.assertFalse(_probe_passed([], ["uncaught exception"], set()))
+
     def test_probe_copy_is_private_and_rejects_links(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -160,7 +166,7 @@ fetch("https://example.com/blocked").catch(() => {});
                     {"action": "reload", "expect_absent": ["Saved: Alice"]},
                 ],
             )
-            self.assertTrue(result["ok"], result)
+            self.assertFalse(result["ok"], result)
             self.assertEqual(result["behavioral_assertions"], 2)
             self.assertIn("example.com", result["blocked_external_hosts"])
 

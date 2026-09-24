@@ -26,6 +26,16 @@ OBSERVATION_SETTLE_SECONDS = 2.0
 ALLOWED_ACTIONS = {"click", "fill", "press", "select", "check", "reload", "navigate"}
 
 
+def _probe_passed(
+    assertion_failures: list[dict[str, Any]],
+    page_errors: list[str],
+    blocked_hosts: set[str],
+) -> bool:
+    """A working local flow must not depend on a blocked external origin."""
+
+    return not (assertion_failures or page_errors or blocked_hosts)
+
+
 def _bounded_text(value: Any, *, maximum: int = 200) -> str:
     text = str(value or "")
     if not text or len(text) > maximum or any(ord(char) < 32 for char in text):
@@ -290,7 +300,7 @@ def _probe_isolated_app(root: Path, port: int, validated: list[dict[str, Any]]) 
         if not initial["visible_text"].strip():
             assertion_failures.append({"step": 0, "missing": ["visible application text"], "unexpected": []})
         return {
-            "ok": not assertion_failures and not page_errors,
+            "ok": _probe_passed(assertion_failures, page_errors, blocked_hosts),
             "observations": observations,
             "assertion_failures": assertion_failures,
             "page_errors": page_errors[:10],

@@ -24,6 +24,8 @@ control files, weaken validation, change the scoring harness, or write outside f
 Hard rules:
 - Use the tools to inspect and edit files. Do not merely describe code.
 - Keep frontend/ buildable with `npm run build` and backend/ startable with `npm start` using PORT.
+- Keep the generated app self-contained: no CDN assets, external APIs, telemetry, or other
+  browser network dependencies. The browser probe rejects external requests.
 - Never start a server yourself; use run_validation, which uses a safe smoke port.
 - Preserve `/api/health` and persistent backend state across refresh and process restart.
 - Generic helpers are available at `backend/storage.mjs` (loadState/saveState/updateState),

@@ -35,7 +35,7 @@
 
 ## 工具调用与安全
 
-`workspace_tools.py` 暴露：`list_files`、`read_file`、`read_files`、`search_text`、`write_file`、`replace_text`、`run_validation`、`browser_probe`；完整视觉配置时再按批次开放 `inspect_reference`。后者只接受需求正文明确引用且文件实际存在的 `reference/` 图片，默认最多 8 次视觉请求，缓存重复图片；只记录图片 SHA、模型响应与用量，不记录图片字节或密钥。浏览器探针默认每批最多 3 次，仅在当前源码已通过 quick/full 时开放；只允许语义定位及本地路径导航，阻断**浏览器**发起的外部 HTTP 请求，以不含模型密钥的环境启动后端。后端进程的网络边界仍由 Runner 容器负责，不能把浏览器路由限制说成后端网络隔离。写入只允许 `frontend/`、`backend/`，禁止访问 `.env`、密钥、控制目录和越界路径；覆写文件要求当前 SHA-256；有文件数、字节数及模型回合/Token 上限。模型生成的代码经 `checks.py` 在剥离密钥的环境中构建和启动。生产轨迹由 `trace.py` 脱敏并逐行哈希链接。
+`workspace_tools.py` 暴露：`list_files`、`read_file`、`read_files`、`search_text`、`write_file`、`replace_text`、`run_validation`、`browser_probe`；完整视觉配置时再按批次开放 `inspect_reference`。后者只接受需求正文明确引用且文件实际存在的 `reference/` 图片，默认最多 8 次视觉请求，缓存重复图片；只记录图片 SHA、模型响应与用量，不记录图片字节或密钥。浏览器探针默认每批最多 3 次，仅在当前源码已通过 quick/full 时开放；只允许语义定位及本地路径导航，阻断**浏览器**发起的外部 HTTP 请求；一旦观察到外网请求，即使页面断言通过，探针也报告失败和被阻断的主机名，要求模型去除该依赖后重新自检。后端以不含模型密钥的环境启动；其网络边界仍由 Runner 容器负责，不能把浏览器路由限制说成后端网络隔离。写入只允许 `frontend/`、`backend/`，禁止访问 `.env`、密钥、控制目录和越界路径；覆写文件要求当前 SHA-256；有文件数、字节数及模型回合/Token 上限。模型生成的代码经 `checks.py` 在剥离密钥的环境中构建和启动。生产轨迹由 `trace.py` 脱敏并逐行哈希链接。
 
 ## 人工干预点
 
