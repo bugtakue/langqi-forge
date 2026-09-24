@@ -47,6 +47,9 @@ from .workspace_tools import WorkspaceTools
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
 MAX_HANDOFF_PATHS = 60
 MAX_HANDOFF_PATH_CHARS = 4000
+MAX_HANDOFF_NOTES = 4
+MAX_HANDOFF_NOTE_CHARS = 700
+MAX_HANDOFF_NOTES_CHARS = 2400
 
 
 def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
@@ -231,6 +234,26 @@ def _recent_handoff_paths(
     return list(reversed(chosen))
 
 
+def _recent_handoff_notes(
+    previous: tuple[str, ...], requirement_ids: list[str], summary: str
+) -> tuple[str, ...]:
+    """Carry only short, successful model summaries; source remains authoritative."""
+
+    description = " ".join(str(summary).split())[:MAX_HANDOFF_NOTE_CHARS]
+    identifiers = ",".join(requirement_ids)[:200]
+    if not description or not identifiers:
+        return previous
+    recent = (*previous, f"{identifiers}: {description}")
+    chosen: list[str] = []
+    total_characters = 0
+    for note in reversed(recent):
+        if len(chosen) >= MAX_HANDOFF_NOTES or total_characters + len(note) > MAX_HANDOFF_NOTES_CHARS:
+            break
+        chosen.append(note)
+        total_characters += len(note)
+    return tuple(reversed(chosen))
+
+
 def _promote_staged_app(staged: Path, output: Path) -> None:
     """Replace only agent-owned app trees, restoring the last good trees on error."""
 
@@ -342,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
     arc_runtime: ArcRuntime | None = None
     active_batch_ids: list[str] = []
     handoff_paths: list[str] = []
+    handoff_notes: tuple[str, ...] = ()
     try:
         source = _source_identity()
         tree = load_requirement_tree(requirement_dir)
@@ -487,6 +511,7 @@ def main(argv: list[str] | None = None) -> int:
                     split_depth=split_depth,
                     requirement_ids=requirement_ids,
                     prior_source_paths=handoff_paths,
+                    prior_handoff_count=len(handoff_notes),
                     visual_references_available=reference_paths,
                     visual_references_unavailable=sorted(set(named_references) - set(reference_paths))
                     if visual_client is not None else [],
@@ -503,6 +528,7 @@ def main(argv: list[str] | None = None) -> int:
                         smoke_port,
                         visual_client=visual_client,
                         reference_paths=reference_paths,
+                        handoff_notes=handoff_notes,
                     )
                     model_exception = False
                     try:
@@ -577,6 +603,9 @@ def main(argv: list[str] | None = None) -> int:
                         arc_runtime.fail_batch(requirement_ids, result.summary)
                     continue
                 handoff_paths = _recent_handoff_paths(handoff_paths, result.changed_files)
+                handoff_notes = _recent_handoff_notes(
+                    handoff_notes, requirement_ids, result.summary
+                )
                 if arc_runtime is not None:
                     arc_runtime.finish_batch(index, requirement_ids)
                 report["implemented_requirements"].extend(requirement_ids)

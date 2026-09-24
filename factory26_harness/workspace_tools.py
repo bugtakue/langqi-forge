@@ -44,12 +44,14 @@ class WorkspaceTools:
         *,
         visual_client: VisualReferenceClient | None = None,
         reference_paths: tuple[str, ...] = (),
+        handoff_notes: tuple[str, ...] = (),
     ) -> None:
         self.root = root.resolve()
         self.trace = trace
         self.smoke_port = smoke_port
         self.visual_client = visual_client
         self.reference_paths = tuple(sorted(set(reference_paths)))
+        self.handoff_notes = handoff_notes
         self.changed_files: set[str] = set()
         self.change_revision = 0
         self.validated_revision = -1

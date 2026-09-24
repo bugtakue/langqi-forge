@@ -42,7 +42,9 @@ class TwoBatchGatewayTests(unittest.TestCase):
             handoff_prompt = (
                 'Whole-task index <untrusted_task_outline>{"requirements":[{"id":"REQ-1"},'
                 '{"id":"REQ-2"}]}</untrusted_task_outline> '
-                "Implement [REQ-2]; prior path: frontend/src/first-feature.js"
+                "Implement [REQ-2]; prior path: frontend/src/first-feature.js "
+                "<untrusted_prior_batch_handoffs>REQ-1: AUDIT PASS: two-batch fixture only"
+                "</untrusted_prior_batch_handoffs>"
             )
             first = complete(handoff_prompt)
             read_call = first["choices"][0]["message"]["tool_calls"][0]

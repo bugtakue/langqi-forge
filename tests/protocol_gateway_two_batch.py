@@ -68,6 +68,12 @@ class Handler(BaseHTTPRequestHandler):
         if second_batch and "frontend/src/first-feature.js" not in prompt:
             self.send_error(422, "prior batch source path was not handed off")
             return
+        if second_batch and (
+            "<untrusted_prior_batch_handoffs>" not in prompt
+            or "REQ-1: AUDIT PASS: two-batch fixture only" not in prompt
+        ):
+            self.send_error(422, "prior batch contract summary was not handed off")
+            return
         if type(self).truncate_first and not second_batch and not type(self).truncated_once:
             type(self).truncated_once = True
             type(self).requests += 1

@@ -101,6 +101,7 @@ class QualifierTests(unittest.TestCase):
     def test_failed_four_node_batch_salvages_validated_half(self) -> None:
         class SplitFixtureAgent:
             attempted: list[tuple[str, ...]] = []
+            observed_notes: list[tuple[str, ...]] = []
 
             def __init__(self, model, tools, _trace, max_turns=20) -> None:
                 self.model = model
@@ -109,6 +110,7 @@ class QualifierTests(unittest.TestCase):
             def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
                 ids = tuple(node.req_id for node in nodes)
                 type(self).attempted.append(ids)
+                type(self).observed_notes.append(self.tools.handoff_notes)
                 self.model.request_count += 1
                 if ids == ("REQ-1", "REQ-2", "REQ-3", "REQ-4"):
                     replacement = "<h1>Discard this failed whole-batch edit</h1>"
@@ -160,6 +162,7 @@ children:
             )
             output = root / "output"
             SplitFixtureAgent.attempted = []
+            SplitFixtureAgent.observed_notes = []
             with (
                 patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
                 patch.object(qualifier, "CodingAgent", SplitFixtureAgent),
@@ -171,6 +174,9 @@ children:
                 ("REQ-1", "REQ-2"),
                 ("REQ-3", "REQ-4"),
             ])
+            self.assertEqual(SplitFixtureAgent.observed_notes[:2], [(), ()])
+            self.assertIn("first half validated", SplitFixtureAgent.observed_notes[2][0])
+            self.assertNotIn("fixture stopped", SplitFixtureAgent.observed_notes[2][0])
             report = json.loads((output / ".arc/harness-report.json").read_text())
             self.assertEqual(report["status"], "local-contract-partial")
             self.assertEqual(report["salvage_attempts"], 2)
@@ -619,10 +625,24 @@ children:
         self.assertEqual(len(many), qualifier.MAX_HANDOFF_PATHS)
         self.assertEqual(many[0], "frontend/src/feature-40.js")
 
+    def test_successful_batch_handoffs_are_bounded_and_recent(self) -> None:
+        notes: tuple[str, ...] = ()
+        for index in range(10):
+            notes = qualifier._recent_handoff_notes(
+                notes,
+                [f"REQ-{index}"],
+                "AUDIT PASS: state contract " + "x" * 2000,
+            )
+        self.assertLessEqual(len(notes), qualifier.MAX_HANDOFF_NOTES)
+        self.assertLessEqual(sum(map(len, notes)), qualifier.MAX_HANDOFF_NOTES_CHARS)
+        self.assertTrue(notes[-1].startswith("REQ-9:"))
+        self.assertNotIn("REQ-0:", " ".join(notes))
+
     def test_second_batch_receives_first_batch_source_path(self) -> None:
         class WritingAgent:
             observed: list[tuple[str, ...]] = []
             outlines: list[dict] = []
+            notes: list[tuple[str, ...]] = []
 
             def __init__(self, model, tools, _trace, max_turns=20) -> None:
                 self.model = model
@@ -631,6 +651,7 @@ children:
             def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
                 type(self).observed.append(tuple(related_files))
                 type(self).outlines.append(json.loads(task_outline))
+                type(self).notes.append(self.tools.handoff_notes)
                 name = "first" if nodes[0].req_id == "REQ-1" else "second"
                 written = json.loads(
                     self.tools.execute(
@@ -647,7 +668,12 @@ children:
                 )
                 self.assert_write(validated)
                 self.model.request_count += 1
-                return AgentRun(True, "fixture batch", tuple(sorted(self.tools.changed_files)), 1)
+                return AgentRun(
+                    True,
+                    "AUDIT PASS: canonical state in backend/data/state.json; route POST /api/example",
+                    tuple(sorted(self.tools.changed_files)),
+                    1,
+                )
 
             @staticmethod
             def assert_write(result: dict) -> None:
@@ -677,6 +703,7 @@ children:
             )
             WritingAgent.observed = []
             WritingAgent.outlines = []
+            WritingAgent.notes = []
             with (
                 patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
                 patch.object(qualifier, "CodingAgent", WritingAgent),
@@ -693,6 +720,8 @@ children:
             self.assertEqual(status, 0)
             self.assertEqual(WritingAgent.observed[0], ())
             self.assertIn("frontend/src/first.js", WritingAgent.observed[1])
+            self.assertEqual(WritingAgent.notes[0], ())
+            self.assertIn("POST /api/example", WritingAgent.notes[1][0])
             self.assertEqual(
                 [item["listed_requirements"] for item in WritingAgent.outlines],
                 [2, 2],
