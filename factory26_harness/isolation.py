@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 from pathlib import Path
@@ -10,6 +11,41 @@ from pathlib import Path
 IGNORED_PARTS = {"node_modules", ".git", ".arc", ".cache", "coverage"}
 MAX_COPY_FILES = 5_000
 MAX_COPY_BYTES = 100_000_000
+
+
+def app_source_manifest(
+    root: Path, *, components: tuple[str, ...] = ("frontend", "backend")
+) -> dict[str, str]:
+    """Hash app inputs and seed data, excluding only build output and caches."""
+
+    manifest: dict[str, str] = {}
+    file_count = 0
+    total_bytes = 0
+    for component in components:
+        directory = root / component
+        if directory.is_symlink() or not directory.is_dir():
+            raise RuntimeError(f"source manifest requires a regular {component}/ directory")
+        for current, directories, files in os.walk(directory, followlinks=False):
+            ignored_directories = IGNORED_PARTS | (
+                {"dist"} if component == "frontend" and Path(current) == directory else set()
+            )
+            directories[:] = sorted(
+                name for name in directories if name not in ignored_directories
+            )
+            for name in sorted(files):
+                if name in IGNORED_PARTS:
+                    continue
+                path = Path(current) / name
+                if path.is_symlink() or not path.is_file():
+                    raise RuntimeError("source manifest cannot read a linked or special file")
+                file_count += 1
+                total_bytes += path.stat().st_size
+                if file_count > MAX_COPY_FILES or total_bytes > MAX_COPY_BYTES:
+                    raise RuntimeError("source manifest exceeds isolation limit")
+                manifest[path.relative_to(root).as_posix()] = hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+    return manifest
 
 
 def validate_app_project(

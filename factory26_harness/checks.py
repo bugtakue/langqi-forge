@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
-from .isolation import stage_app_project, validate_app_project
+from .isolation import app_source_manifest, stage_app_project, validate_app_project
 
 
 SAFE_ENVIRONMENT_KEYS = {
@@ -446,6 +446,17 @@ def frontend_build_check(root: Path) -> CheckResult:
                 related,
                 time.monotonic() - started,
             )
+        try:
+            validate_app_project(isolated_root, components=components)
+            source_before = app_source_manifest(isolated_root, components=components)
+        except (OSError, RuntimeError) as exc:
+            return CheckResult(
+                "frontend_build",
+                False,
+                f"frontend build inputs are unsafe: {exc}",
+                related,
+                time.monotonic() - started,
+            )
         rc, output, _ = _run(
             ["npm", "run", "build"],
             isolated_frontend,
@@ -477,6 +488,21 @@ def frontend_build_check(root: Path) -> CheckResult:
             )
         try:
             validate_app_project(isolated_root, components=components)
+            source_after = app_source_manifest(isolated_root, components=components)
+            modified_paths = sorted(
+                path
+                for path in source_before.keys() | source_after.keys()
+                if source_before.get(path) != source_after.get(path)
+            )
+            if modified_paths:
+                return CheckResult(
+                    "frontend_build",
+                    False,
+                    "frontend build modified files outside dist/: "
+                    + ", ".join(modified_paths[:8]),
+                    related + tuple(modified_paths[:8]),
+                    time.monotonic() - started,
+                )
             with tempfile.TemporaryDirectory(
                 prefix=".dist-stage-", dir=frontend
             ) as temporary:

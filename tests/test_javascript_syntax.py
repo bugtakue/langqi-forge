@@ -114,7 +114,7 @@ await writeFile(statePath, JSON.stringify({ ...state, count: state.count + 1 }))
                 json.loads(state_path.read_text(encoding="utf-8")), {"count": 0}
             )
 
-    def test_frontend_build_check_does_not_modify_original_seed(self) -> None:
+    def test_frontend_build_check_rejects_seed_mutating_script(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             scaffold_workspace(root)
@@ -131,8 +131,9 @@ await writeFile(statePath, JSON.stringify({ ...state, count: state.count + 1 }))
                 encoding="utf-8",
             )
             result = frontend_build_check(root)
-            self.assertTrue(result.passed, result.summary)
-            self.assertTrue((root / "frontend/dist/index.html").is_file())
+            self.assertFalse(result.passed)
+            self.assertIn("outside dist", result.summary)
+            self.assertFalse((root / "frontend/dist/index.html").exists())
             self.assertEqual(
                 json.loads(state_path.read_text(encoding="utf-8")), {"count": 0}
             )
@@ -153,6 +154,44 @@ await symlink("../src/app.js", path.resolve("dist/linked.js"));
             self.assertFalse(result.passed)
             self.assertIn("unsafe", result.summary)
             self.assertFalse((root / "frontend/dist/index.html").exists())
+
+    def test_frontend_build_rejects_source_rewrite_outside_dist(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold_workspace(root)
+            app_path = root / "frontend/src/app.js"
+            original_app = app_path.read_text(encoding="utf-8")
+            build_path = root / "frontend/build.mjs"
+            build_path.write_text(
+                build_path.read_text(encoding="utf-8")
+                + '''\nimport { writeFile } from "node:fs/promises";
+await writeFile(path.resolve("src/app.js"), "// rewritten by build\\n");
+''',
+                encoding="utf-8",
+            )
+            result = frontend_build_check(root)
+            self.assertFalse(result.passed)
+            self.assertIn("frontend/src/app.js", result.summary)
+            self.assertFalse((root / "frontend/dist/index.html").exists())
+            self.assertEqual(app_path.read_text(encoding="utf-8"), original_app)
+
+    def test_frontend_build_rejects_new_file_outside_dist(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold_workspace(root)
+            build_path = root / "frontend/build.mjs"
+            build_path.write_text(
+                build_path.read_text(encoding="utf-8")
+                + '''\nimport { writeFile } from "node:fs/promises";
+await writeFile(path.resolve("../backend/generated.json"), "{}\\n");
+''',
+                encoding="utf-8",
+            )
+            result = frontend_build_check(root)
+            self.assertFalse(result.passed)
+            self.assertIn("backend/generated.json", result.summary)
+            self.assertFalse((root / "frontend/dist/index.html").exists())
+            self.assertFalse((root / "backend/generated.json").exists())
 
 
 if __name__ == "__main__":
