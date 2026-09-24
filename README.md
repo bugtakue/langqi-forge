@@ -12,6 +12,7 @@
 - 正常生成路径必须调用平台注入的 OpenAI-compatible 模型网关。模型缺失、实现批次未完成或构建/启动失败均返回非零；不会把空 scaffold 冒充完成品。
 - 通过官方 `arcbench-runtime` SDK 上报运行状态、需求实现状态、需求树追溯表及每批 Git 提交；不手写平台事件。独立哈希链仍保留 Prompt、工具调用与模型迭代。通用构建通过不等于需求的 GUI 测试通过，因此不会虚报逐需求 `test_passed`。
 - 旧成绩不是本版性能证据。任何真实通过率以主办方独立 GUI 评测为准。
+- 截至 2026-09-25，[ARC-Bench 正式赛公开列表](https://arc-bench.com/competition)显示两项任务、200 个测试；未登录时正式赛详情要求先确认队伍。BookStack/Keep 的 66 条公开基准用例是练习材料，不能等同正式赛题或 200 个测试。赛事官网列出的自动评分维度为 GUI 通过率、Token 效率、完成时间，具体权重仍待公布。
 - 若运行环境另外提供 `VISUAL_API_KEY`、`VISUAL_BASE_URL`、`VISUAL_MODEL`，智能体会按需读取需求明确引用的 `reference/` 截图，通过视觉模型提取布局线索。图片只发往所配置的视觉网关，不写入生产轨迹或生成应用；没有完整视觉配置时不启用此工具。
 
 主办方本地模拟器：[hackathon-local-simulation](https://github.com/code-philia/hackathon-local-simulation)。报名与项目提交由队长操作；此处的打包命令**不会上传**。
@@ -86,6 +87,6 @@ unzip -l dist/langqi-forge-qualifier.zip
 
 1. 使用真实模型在官方 BookStack/Keep 公开练习上运行，记录通过率和真实开销；协议夹具测试不等于该结果。
 2. 正式比赛平台账号的队长登录、队伍确认与上传；报名网站登录不等于 ARC-Bench 登录。
-3. 3–5 分钟 Demo 视频与可访问链接。视频制作在功能和本地评测稳定后进行。
+3. 3–5 分钟 Demo 视频与可访问链接暂缓。此前提交页截图出现该字段，而[赛事官网 FAQ](https://create.gosim.org/factory26/)称只需提交智能体；正式材料要求应以队长登录后当前提交页核对，不能据旧截图或 FAQ 单独认定。
 
 本仓库旧版能力内核及其历史证据不进入新的比赛包；任何对外演示必须如实区分旧版、当前候选、模拟器结果和官方成绩。

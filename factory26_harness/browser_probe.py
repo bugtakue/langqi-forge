@@ -10,6 +10,7 @@ import os
 import signal
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -20,6 +21,7 @@ from .checks import _npm_install, _port_available, _safe_environment, _wait_for_
 MAX_STEPS = 8
 MAX_ASSERTIONS = 4
 MAX_TEXT_CHARS = 2800
+OBSERVATION_SETTLE_SECONDS = 2.0
 ALLOWED_ACTIONS = {"click", "fill", "press", "select", "check", "reload", "navigate"}
 
 
@@ -127,6 +129,29 @@ def _page_observation(page: Any, *, expected: list[str], absent: list[str]) -> d
     }
 
 
+def _settled_observation(
+    page: Any,
+    *,
+    expected: list[str],
+    absent: list[str],
+    require_visible_text: bool = False,
+) -> dict[str, Any]:
+    """Wait briefly for async DOM updates before judging a local user action."""
+
+    deadline = time.monotonic() + OBSERVATION_SETTLE_SECONDS
+    while True:
+        observed = _page_observation(page, expected=expected, absent=absent)
+        if (
+            not observed["missing_text"]
+            and not observed["unexpected_text"]
+            and (not require_visible_text or observed["visible_text"].strip())
+        ):
+            return observed
+        if time.monotonic() >= deadline:
+            return observed
+        page.wait_for_timeout(100)
+
+
 def _perform(page: Any, step: dict[str, Any], base_url: str) -> None:
     action = step["action"]
     if action == "navigate":
@@ -230,14 +255,16 @@ def probe_local_app(root: Path, port: int, steps: list[dict[str, Any]]) -> dict[
                 page.on("pageerror", lambda error: page_errors.append(str(error)[:500]))
                 page.goto(base_url + "/", wait_until="domcontentloaded", timeout=10000)
                 page.wait_for_timeout(150)
-                initial = _page_observation(page, expected=[], absent=[])
+                initial = _settled_observation(
+                    page, expected=[], absent=[], require_visible_text=True
+                )
                 observations.append({"action": "open", **initial})
                 for step in validated:
                     _perform(page, step, base_url)
                     current = urlsplit(page.url)
                     if current.hostname != "127.0.0.1" or current.port != port:
                         raise RuntimeError("browser left the local generated application")
-                    observed = _page_observation(
+                    observed = _settled_observation(
                         page,
                         expected=step["expect_text"],
                         absent=step["expect_absent"],

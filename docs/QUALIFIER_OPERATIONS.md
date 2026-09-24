@@ -12,6 +12,8 @@
 
 报告里的 `behavioral_probe_tested` 仅表示每批至少完成一次带可见文本断言的本地浏览器探针；`behavioral_gui_tested=false` 继续表示尚未取得平台独立 GUI 评测。两者不能相互替代。Runner 自带与其 Chromium 匹配的 Python Playwright，参赛包的 `requirements.txt` 不安装或覆盖该版本。
 
+浏览器探针在读取首页和每步断言时最多等待 2 秒，让异步渲染与操作反馈有机会稳定；超过上限仍按失败报告，不把短时间空白页或尚未出现的反馈当作成功。此等待只影响本地自检，不读取或运行平台隐藏测试。
+
 ## Prompts 与 Agent 迭代
 
 1. `agent.py:SYSTEM_PROMPT` 规定实现职责、不可信需求边界、前后端可运行、持久化、交互与后端状态校验；模型必须实际编辑文件并执行校验。

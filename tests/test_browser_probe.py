@@ -135,6 +135,45 @@ fetch("https://example.com/blocked").catch(() => {});
             self.assertEqual(result["behavioral_assertions"], 2)
             self.assertIn("example.com", result["blocked_external_hosts"])
 
+    @unittest.skipUnless(
+        os.environ.get("FACTORY26_RUN_BROWSER_INTEGRATION") == "1",
+        "requires a Runner image with Python Playwright and Chromium",
+    )
+    def test_async_homepage_and_action_feedback_are_observed_after_settling(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold_workspace(root)
+            (root / "frontend" / "src" / "app.js").write_text(
+                '''setTimeout(() => {
+  document.querySelector("#app").innerHTML =
+    '<button type="button">Try</button><p id="status"></p>';
+  document.querySelector("button").addEventListener("click", () => {
+    setTimeout(() => {
+      document.querySelector("#status").textContent = "Saved";
+    }, 400);
+  });
+}, 400);
+''',
+                encoding="utf-8",
+            )
+            built = frontend_build_check(root)
+            self.assertTrue(built.passed, built.summary)
+            result = probe_local_app(
+                root,
+                19119,
+                [
+                    {
+                        "action": "click",
+                        "role": "button",
+                        "name": "Try",
+                        "expect_text": ["Saved"],
+                    }
+                ],
+            )
+            self.assertTrue(result["ok"], result)
+            self.assertIn("Try", result["observations"][0]["visible_text"])
+            self.assertIn("Saved", result["observations"][1]["visible_text"])
+
 
 if __name__ == "__main__":
     unittest.main()
