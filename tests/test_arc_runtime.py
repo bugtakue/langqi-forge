@@ -81,6 +81,14 @@ class ArcRuntimeTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(commits.stdout.strip(), "2")
+            status = subprocess.run(
+                ["git", "status", "--short"],
+                cwd=output,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(status.stdout.strip(), "")
 
 
 if __name__ == "__main__":

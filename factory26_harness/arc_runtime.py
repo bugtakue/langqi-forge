@@ -55,10 +55,10 @@ class ArcRuntime:
             self.sdk.events.mark_implementation_started(req_id, "Model implementation started")
 
     def finish_batch(self, index: int, requirement_ids: list[str]) -> None:
+        for req_id in requirement_ids:
+            self.sdk.events.mark_implementation_done(req_id, "Model implementation complete; GUI unverified")
         if not self.sdk.git.commit(f"batch {index}: implement {len(requirement_ids)} requirements"):
             raise RuntimeError("ARC-Bench Git commit found no implementation changes")
-        for req_id in requirement_ids:
-            self.sdk.events.mark_implementation_done(req_id, "Generated code committed; GUI unverified")
 
     def fail_batch(self, requirement_ids: list[str], message: str) -> None:
         for req_id in requirement_ids:
