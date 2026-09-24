@@ -41,6 +41,8 @@ requirements.yaml
 
 具体 Prompt、工具、循环及证据位置见 [参赛运行说明](docs/QUALIFIER_OPERATIONS.md) 和 [本地验证记录](docs/QUALIFIER_EVIDENCE_2026-09-24.md)。
 
+队长准备填写表单前先看[提交交接卡](docs/SUBMISSION_HANDOFF_2026-09-25.md)：它区分当前本地候选与仍在旧提交的公开 GitHub `main`，并列出真实模型成绩、账号和 Demo 等尚缺项；该卡本身不执行上传或提交。
+
 ## 本地运行
 
 需要 Python 3.10+、Node.js/npm、Chromium 与可用的 OpenAI-compatible 模型服务；主办方 Runner 自带与浏览器二进制匹配的 Playwright，参赛包不覆盖其版本。本机独立运行时才单独安装 Playwright 与对应浏览器。**不要把密钥写入仓库或 ZIP。**

@@ -375,3 +375,10 @@
 - 从上述干净源码提交生成精确候选 ZIP `dist/langqi-forge-qualifier.zip`，SHA-256 `421d56210348a600ce97e95177cc4d49c3d0c41792468a8c33eee00080a0e398`；17 个白名单文件，`unzip -t` 通过，包内来源修订与上述提交相同。上一节 `10c8f89...` 包已被同路径新包替换。
 - 用这份精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装运行自建固定响应协议夹具，工作区 `../factory26-local-simulation/runs/qualifier-starter-eight-protocol-20260925/`：容器退出码 0、官方 SDK 接入、模型协议请求 4 次、本地检查 6/6、独立 Playwright 1/1。首个模型请求的 Prompt 确实列出上述 8 条路径；固定响应夹具**实际只请求读取旧的 5 条路径**，因此完整 8 文件读取由主机回归验证，不冒充协议运行已覆盖。生产轨迹 28/28 行哈希封印有效且无测试假 Key 明文。Meter 不可用，`score=null`、真实成本未知；1/1 只是合成协议，不是 BookStack/Keep 或正式赛成绩，也不是当前 amd64 Runner 的完整 GUI 验证。
 - 百炼控制台的本次只读查看显示**未登录**；未创建或读取 API Key。用户未再次提供可用 Key 前，不能真实调用百炼跑公开练习。ARC-Bench 账号恢复、上传与正式提交仍未执行。
+
+## 2026-09-25 当前 amd64 基础镜像直启与公开源码版差
+
+- `git ls-remote public` 的只读结果显示公开 GitHub `main` 仍为 `d0474d789c583b3c0d0dfbd133c4af8df270cfed`；当前 ZIP 绑定的候选源码为其后代 `4aa256c87fa6c0196ae8c851fd8c2acebeac0d89`。故公开 `main` **不能**作为这份 ZIP 的源码链接填写。未推送分支，也未改动远端。
+- 用上述 SHA-256 `421d562...` 的精确 ZIP，经本地模拟器 `--prepare-only` 组装全新工作区 `../factory26-local-simulation/runs/qualifier-starter-eight-current-direct-20260925/`。包内清单逐文件验证通过，来源修订 `4aa256c...`。在本机缓存的当前 `arcbench-local-current:20260924`、`linux/amd64` 基础镜像里安装声明依赖，然后直接调用参赛入口及主办方参数：固定响应假模型 4 次请求、官方 SDK、`local-contract-passed`、结构/包策略/交互策略/JavaScript 语法/前端构建/后端启动 **6/6** 通过；生产轨迹 **28/28** 行哈希封印有效且无测试假 Key 明文。
+- 再在同一 amd64 镜像中对生成项目调用镜像自身 `run_submission.py::run_web_template`，其前端构建和后端启动成功；首页 HTTP 200，`/api/health` HTTP 200 且 `ready=true`。这是对**同一精确 ZIP**的生成和部署兼容性证据，但绕过了本机 Apple Silicon→amd64 QEMU 下会崩溃的 Chromium 预检，**不是**当前完整 Runner GUI、真实模型 BookStack/Keep、人民币成本或正式比赛成绩。
+- 当前提交交接和未完成字段逐项列在 `docs/SUBMISSION_HANDOFF_2026-09-25.md`；仍未登录 ARC-Bench、上传或正式提交。
