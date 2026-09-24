@@ -1,0 +1,17 @@
+id: ROOT
+name: Stateful protocol fixture
+type: FOLDER
+description: Local browser-probe isolation test only.
+children:
+  - id: REQ-1
+    name: Persistent counter
+    type: ATOMIC
+    description: Show a counter starting at zero. Clicking Increment updates and persists the count.
+    dependencies: []
+    scenarios:
+      - name: Initial state and increment
+        steps:
+          - keyword: GIVEN
+            content: The application has its original seed state.
+          - keyword: THEN
+            content: The count starts at zero, and clicking Increment changes it to one.
