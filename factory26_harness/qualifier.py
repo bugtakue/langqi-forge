@@ -370,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
         "implemented_requirements": [],
         "failed_requirements": [],
         "checks": [],
+        "candidate_validations": [],
         "browser_probe_batches": [],
         "browser_probe_repairs": [],
         "salvage_splits": args.salvage_splits,
@@ -444,7 +445,10 @@ def main(argv: list[str] | None = None) -> int:
         model = OpenAIChatClient(
             trace,
             planned_turns=(
-                len(groups) * (1 + 2 * args.salvage_splits) + args.repair_rounds
+                # Every implementation attempt may need one isolated startup
+                # repair before it is safe to promote to the next batch.
+                len(groups) * (1 + 2 * args.salvage_splits) * 2
+                + args.repair_rounds
             ) * args.max_agent_turns,
         )
         trace.record(
@@ -577,7 +581,98 @@ def main(argv: list[str] | None = None) -> int:
                             False, str(exc), tuple(sorted(tools.changed_files)), 0
                         )
                     if result.completed:
-                        _promote_staged_app(staged, output_dir)
+                        # Quick validation proves a fresh frontend build, but it
+                        # cannot catch a syntactically valid backend that crashes
+                        # on startup. Check the isolated candidate before it can
+                        # become the base for later requirement batches.
+                        candidate_checks = run_full_checks(staged, smoke_port)
+                        candidate_passed = all(check.passed for check in candidate_checks)
+                        candidate_validation: dict[str, Any] = {
+                            "batch": index,
+                            "attempt": attempt,
+                            "requirement_ids": requirement_ids,
+                            "passed_before_repair": candidate_passed,
+                            "repair_attempted": False,
+                            "passed_after_repair": None,
+                        }
+                        report["candidate_validations"].append(candidate_validation)
+                        trace.record(
+                            "implementation_candidate_validation",
+                            batch=index,
+                            attempt=attempt,
+                            phase="before_repair",
+                            checks=_check_results(candidate_checks),
+                        )
+                        if not candidate_passed:
+                            candidate_validation["repair_attempted"] = True
+                            failure_text = "\n".join(
+                                check.summary for check in candidate_checks if not check.passed
+                            )
+                            related = sorted({
+                                path
+                                for check in candidate_checks
+                                if not check.passed
+                                for path in check.related_files
+                            })
+                            trace.record(
+                                "implementation_candidate_repair_started",
+                                batch=index,
+                                attempt=attempt,
+                                failures=failure_text,
+                                related_files=related,
+                            )
+                            try:
+                                correction = CodingAgent(
+                                    model, tools, trace, max_turns=args.max_agent_turns
+                                ).repair(failure_text, related)
+                            except RuntimeError as exc:
+                                model_exception = True
+                                if isinstance(exc, (ModelGatewayUnavailable, ModelBudgetExceeded)):
+                                    terminal_model_error = str(exc)
+                                trace.record(
+                                    "implementation_candidate_repair_exception",
+                                    batch=index,
+                                    attempt=attempt,
+                                    error=str(exc),
+                                )
+                                correction = AgentRun(False, str(exc), (), 0)
+                            if correction.completed:
+                                candidate_checks = run_full_checks(staged, smoke_port)
+                                candidate_passed = all(
+                                    check.passed for check in candidate_checks
+                                )
+                                trace.record(
+                                    "implementation_candidate_validation",
+                                    batch=index,
+                                    attempt=attempt,
+                                    phase="after_repair",
+                                    checks=_check_results(candidate_checks),
+                                )
+                            else:
+                                candidate_passed = False
+                            candidate_validation["passed_after_repair"] = candidate_passed
+                            if correction.completed and not candidate_passed:
+                                failure_detail = "\n".join(
+                                    check.summary
+                                    for check in candidate_checks
+                                    if not check.passed
+                                )
+                            else:
+                                failure_detail = correction.summary or failure_text
+                            result = AgentRun(
+                                candidate_passed,
+                                (
+                                    result.summary + "\n\nPost-audit startup repair: "
+                                    + correction.summary
+                                    if candidate_passed
+                                    else "Post-audit startup validation failed: "
+                                    + failure_detail
+                                ),
+                                tuple(sorted(tools.changed_files)),
+                                result.turns + correction.turns,
+                            )
+                        if result.completed:
+                            _promote_staged_app(staged, output_dir)
                 probe_evidence = {
                     "batch": index,
                     "attempt": attempt,

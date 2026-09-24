@@ -98,6 +98,154 @@ class ScriptedModel:
 
 
 class QualifierTests(unittest.TestCase):
+    def test_rejected_startup_candidate_cannot_poison_later_independent_batch(self) -> None:
+        class IndependentFixtureAgent:
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+                self.model.request_count += 1
+                if nodes[0].req_id == "REQ-1":
+                    path = "backend/server.mjs"
+                    old = "const here = path.dirname(fileURLToPath(import.meta.url));"
+                    new = 'throw new Error("uncommitted startup crash");\n' + old
+                else:
+                    if "uncommitted startup crash" in (
+                        self.tools.root / "backend/server.mjs"
+                    ).read_text():
+                        raise AssertionError("later batch inherited rejected candidate")
+                    path = "frontend/src/app.js"
+                    old = "// The coding agent implements the requested application here."
+                    new = 'document.querySelector("#app").innerHTML = "<h1>Independent</h1>";'
+                edited = json.loads(self.tools.execute("replace_text", {
+                    "path": path, "old": old, "new": new,
+                }))
+                if not edited["ok"]:
+                    raise AssertionError(edited)
+                quick = json.loads(self.tools.execute("run_validation", {"scope": "quick"}))
+                if not quick["ok"]:
+                    raise AssertionError(quick)
+                return AgentRun(True, "quick-only fixture", tuple(self.tools.changed_files), 1)
+
+            def repair(self, _failure_text, _related_files) -> AgentRun:
+                return AgentRun(False, "startup repair declined", (), 1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirements = root / "requirements"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                "id: ROOT\nname: Two independent features\ntype: FOLDER\nchildren:\n"
+                "  - {id: REQ-1, name: First, type: ATOMIC, description: First feature.}\n"
+                "  - {id: REQ-2, name: Second, type: ATOMIC, description: Second feature.}\n",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", IndependentFixtureAgent),
+            ):
+                status = qualifier.main(
+                    [str(requirements), "--output-dir", str(output), "--batch-size", "1"]
+                )
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertEqual(status, 0)
+            self.assertEqual(report["status"], "local-contract-partial")
+            self.assertEqual(report["failed_requirements"], ["REQ-1"])
+            self.assertEqual(report["implemented_requirements"], ["REQ-2"])
+            self.assertEqual(
+                [item["passed_before_repair"] for item in report["candidate_validations"]],
+                [False, True],
+            )
+            self.assertNotIn(
+                "uncommitted startup crash", (output / "backend/server.mjs").read_text()
+            )
+            self.assertIn("<h1>Independent</h1>", (output / "frontend/src/app.js").read_text())
+
+    def test_completed_batch_startup_is_checked_before_promotion_and_repaired_in_isolation(self) -> None:
+        class StartupFixtureAgent:
+            repair_succeeds = False
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+                self.model.request_count += 1
+                edited = json.loads(self.tools.execute("replace_text", {
+                    "path": "backend/server.mjs",
+                    "old": "const here = path.dirname(fileURLToPath(import.meta.url));",
+                    "new": (
+                        'throw new Error("injected startup failure");\n'
+                        "const here = path.dirname(fileURLToPath(import.meta.url));"
+                    ),
+                }))
+                if not edited["ok"]:
+                    raise AssertionError(edited)
+                quick = json.loads(self.tools.execute("run_validation", {"scope": "quick"}))
+                if not quick["ok"]:
+                    raise AssertionError(quick)
+                return AgentRun(True, "quick-only fixture", tuple(self.tools.changed_files), 1)
+
+            def repair(self, failure_text, related_files) -> AgentRun:
+                if "backend exited" not in failure_text:
+                    raise AssertionError(failure_text)
+                if not type(self).repair_succeeds:
+                    return AgentRun(False, "fixture repair refused", (), 1)
+                edited = json.loads(self.tools.execute("replace_text", {
+                    "path": "backend/server.mjs",
+                    "old": 'throw new Error("injected startup failure");\n',
+                    "new": "",
+                }))
+                if not edited["ok"]:
+                    raise AssertionError(edited)
+                quick = json.loads(self.tools.execute("run_validation", {"scope": "quick"}))
+                if not quick["ok"]:
+                    raise AssertionError(quick)
+                return AgentRun(True, "fixture repaired startup", (), 1)
+
+        for repair_succeeds in (False, True):
+            with self.subTest(repair_succeeds=repair_succeeds), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                requirements = root / "requirements"
+                requirements.mkdir()
+                (requirements / "requirements.yaml").write_text(
+                    "id: ROOT\nname: Startup fixture\ntype: FOLDER\nchildren:\n"
+                    "  - {id: REQ-1, name: First, type: ATOMIC, description: First feature.}\n",
+                    encoding="utf-8",
+                )
+                output = root / "output"
+                StartupFixtureAgent.repair_succeeds = repair_succeeds
+                with (
+                    patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                    patch.object(qualifier, "CodingAgent", StartupFixtureAgent),
+                ):
+                    status = qualifier.main(
+                        [str(requirements), "--output-dir", str(output), "--batch-size", "1"]
+                    )
+                report = json.loads((output / ".arc/harness-report.json").read_text())
+                self.assertEqual(status, 0 if repair_succeeds else 1)
+                self.assertEqual(report["candidate_validations"], [{
+                    "batch": 1,
+                    "attempt": 1,
+                    "requirement_ids": ["REQ-1"],
+                    "passed_before_repair": False,
+                    "repair_attempted": True,
+                    "passed_after_repair": repair_succeeds,
+                }])
+                self.assertNotIn(
+                    "injected startup failure",
+                    (output / "backend/server.mjs").read_text(),
+                )
+                self.assertEqual(report["implemented_requirements"], ["REQ-1"] if repair_succeeds else [])
+                rows = [json.loads(line) for line in
+                        (output / ".arc/production-trace.jsonl").read_text().splitlines()]
+                self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
+                phases = [row["payload"]["phase"] for row in rows
+                          if row["event"] == "implementation_candidate_validation"]
+                self.assertEqual(phases, ["before_repair", "after_repair"] if repair_succeeds else ["before_repair"])
+
     def test_first_batch_gateway_failure_stops_without_claiming_a_scaffold(self) -> None:
         class UnavailableAgent:
             attempted = 0
@@ -667,7 +815,7 @@ children:
             def force_one_repair(path: Path, port: int):
                 nonlocal calls
                 calls += 1
-                if calls == 2:
+                if calls == 3:
                     return [
                         qualifier.CheckResult(
                             "forced_repair", False, "fixture repair needed",
@@ -748,7 +896,7 @@ children:
                     def fail_final_and_candidate(path: Path, port: int):
                         nonlocal calls
                         calls += 1
-                        if calls >= 2:
+                        if calls >= 3:
                             return [qualifier.CheckResult(
                                 "forced_repair", False, "fixture repair still fails",
                                 ("frontend/src/app.js",), 0.0,
@@ -775,7 +923,7 @@ children:
                     )
                     report = json.loads((output / ".arc/harness-report.json").read_text())
                     self.assertFalse(report["browser_probe_repairs"][0]["committed"])
-                    self.assertEqual(calls, 3 if complete_repair else 2)
+                    self.assertEqual(calls, 4 if complete_repair else 3)
 
     def test_run_failure_is_reported_even_when_requirement_failure_event_raises(self) -> None:
         class BrokenRuntime:
@@ -979,7 +1127,8 @@ children:
             self.assertFalse(report["behavioral_gui_tested"])
             self.assertEqual(report["browser_probe_batches"][0]["calls"], 0)
             self.assertGreaterEqual(report["model_requests"], 4)
-            self.assertEqual(report["model_budget"]["planned_turns"], 100)
+            self.assertEqual(report["model_budget"]["planned_turns"], 160)
+            self.assertTrue(report["candidate_validations"][0]["passed_before_repair"])
             self.assertIn("<h1>Example</h1>", (output / "frontend/src/app.js").read_text())
             rows = [
                 json.loads(line)
