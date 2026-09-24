@@ -367,3 +367,11 @@
 - 从干净源码提交构建的新精确候选包为 `dist/langqi-forge-qualifier.zip`，SHA-256 `10c8f89d7dcbe8cc54274a4978d09de8d16f274280b3338998d465216bbc8482`，17 个白名单文件，`unzip -t` 全部通过，包内来源清单绑定上述 `589dc00...`。上一节 `bb9d7d...` 包已被同路径新包替代。
 - **旧版 arm64 Runner + 当前本地模拟器包装**：使用这份精确 ZIP、自建固定响应协议模型和单条合成要求，在 `../factory26-local-simulation/runs/qualifier-repair-staged-protocol-20260925/` 完成官方 SDK 接入、4 次协议模型请求、6/6 本地结构/策略/构建/启动检查、独立 Playwright **1/1**，容器退出码 0。生产轨迹 **28/28** 条哈希封印有效，未发现测试假 Key 明文；Meter 本地端口拒绝连接，`score=null`、Token 与费用未知。此正常协议夹具未触发最终修复轮；修复分支只由上述故障注入回归覆盖。该 1/1 **不是** BookStack/Keep 的真实模型通过率、正式赛得分，也不是当前 amd64 Runner 的完整 GUI 验证。
 - 按官方 [Codex 非交互模式文档](https://developers.openai.com/codex/non-interactive-mode)检查了本机命令行作为隔离诊断的可行性：本机旧版 Codex CLI `v0.137.0` 不能解析当前模型配置中的 `max` 档，运行时大量报模型元数据解析错误；即便使用忽略用户配置的临时只读运行得到一次 `OK`，它也不是参赛包的 OpenAI-compatible 模型网关，更不构成项目生成能力证据。没有将 Codex 登录态转成赛事 API Key，也没有借它冒充公开练习。当前没有可用的百炼/赛事模型 Key；ARC-Bench 未登录、未上传、未正式提交。
+
+## 2026-09-25 首轮辅助函数读取与候选包复测
+
+- 静态审计本地公开练习的当前需求文件：BookStack 34 条/9 批、Keep 32 条/8 批；全部原子需求在默认阈值下不需缩写，最长单批正文分别为 5,081 / 4,261 字符。BookStack 提及的截图均存在；Keep 的 `label_filtered_list.png` 与 `search_keyword.png` 仍缺失。此项只核对输入完整性，不是智能体实现能力测试。
+- 源码提交 `4aa256c87fa6c0196ae8c851fd8c2acebeac0d89` 把 `frontend/src/api.js`、`backend/storage.mjs`、`backend/http.mjs` 并入每批首轮 `read_files` 的已知路径。共 8 个文件，未超过工具每批 8 文件/9,000 字符内容额度；回归用真实脚手架确认全部返回、均无截断。这样减少模型在使用通用辅助函数前的额外读取回合；**不证明真实模型一定会正确使用它们**。主机全套 132 项：129 通过、3 项因本机没有对应 Chromium 环境跳过，`git diff --check` 通过。
+- 从上述干净源码提交生成精确候选 ZIP `dist/langqi-forge-qualifier.zip`，SHA-256 `421d56210348a600ce97e95177cc4d49c3d0c41792468a8c33eee00080a0e398`；17 个白名单文件，`unzip -t` 通过，包内来源修订与上述提交相同。上一节 `10c8f89...` 包已被同路径新包替换。
+- 用这份精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装运行自建固定响应协议夹具，工作区 `../factory26-local-simulation/runs/qualifier-starter-eight-protocol-20260925/`：容器退出码 0、官方 SDK 接入、模型协议请求 4 次、本地检查 6/6、独立 Playwright 1/1。首个模型请求的 Prompt 确实列出上述 8 条路径；固定响应夹具**实际只请求读取旧的 5 条路径**，因此完整 8 文件读取由主机回归验证，不冒充协议运行已覆盖。生产轨迹 28/28 行哈希封印有效且无测试假 Key 明文。Meter 不可用，`score=null`、真实成本未知；1/1 只是合成协议，不是 BookStack/Keep 或正式赛成绩，也不是当前 amd64 Runner 的完整 GUI 验证。
+- 百炼控制台的本次只读查看显示**未登录**；未创建或读取 API Key。用户未再次提供可用 Key 前，不能真实调用百炼跑公开练习。ARC-Bench 账号恢复、上传与正式提交仍未执行。
