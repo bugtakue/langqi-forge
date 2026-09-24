@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from .agent import CodingAgent
+from .arc_runtime import ArcRuntime
 from .checks import CheckResult, run_full_checks
 from .generic_scaffold import scaffold_workspace
 from .model import OpenAIChatClient
@@ -181,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     model: OpenAIChatClient | None = None
     visual_client: VisualReferenceClient | None = None
+    arc_runtime: ArcRuntime | None = None
+    active_batch_ids: list[str] = []
     try:
         source = _source_identity()
         tree = load_requirement_tree(requirement_dir)
@@ -191,6 +194,13 @@ def main(argv: list[str] | None = None) -> int:
             requirement_sha256=requirement_sha,
             requirement_count=len(nodes),
         )
+        arc_runtime = ArcRuntime.connect(output_dir)
+        report["arcbench_runtime"] = (
+            "official-sdk" if arc_runtime is not None else "unavailable-outside-runner"
+        )
+        trace.record("arcbench_runtime_selected", status=report["arcbench_runtime"])
+        if arc_runtime is not None:
+            arc_runtime.start(tree)
         trace.record(
             "run_started",
             run_id=run_id,
@@ -214,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         created = scaffold_workspace(output_dir)
         trace.record("generic_scaffold_created", files=created)
+        if arc_runtime is not None:
+            arc_runtime.commit_scaffold()
         smoke_port = _smoke_port(args.web_port)
         initial_checks = run_full_checks(output_dir, smoke_port)
         trace.record("generic_scaffold_checked", checks=_check_results(initial_checks))
@@ -250,6 +262,9 @@ def main(argv: list[str] | None = None) -> int:
             )
         for index, group in enumerate(batches(nodes, args.batch_size), 1):
             requirement_ids = [node.req_id for node in group]
+            active_batch_ids = requirement_ids
+            if arc_runtime is not None:
+                arc_runtime.begin_batch(requirement_ids)
             named_references = referenced_images([node.description for node in group])
             reference_paths = tuple(
                 path
@@ -286,7 +301,10 @@ def main(argv: list[str] | None = None) -> int:
             if not result.completed:
                 report["failed_requirements"] = requirement_ids
                 raise RuntimeError(f"implementation batch {index} did not validate")
+            if arc_runtime is not None:
+                arc_runtime.finish_batch(index, requirement_ids)
             report["implemented_requirements"].extend(requirement_ids)
+            active_batch_ids = []
 
         checks = run_full_checks(output_dir, smoke_port)
         trace.record("final_validation", checks=_check_results(checks))
@@ -322,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
                 break
             checks = run_full_checks(output_dir, smoke_port)
             trace.record("final_validation", repair_round=repair_round, checks=_check_results(checks))
+            if arc_runtime is not None:
+                arc_runtime.commit_repairs()
 
         report["checks"] = _check_results(checks)
         if not all(check.passed for check in checks):
@@ -330,6 +350,8 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError("no model request completed")
         report["status"] = "local-contract-passed"
         report["behavioral_gui_tested"] = False
+        if arc_runtime is not None:
+            arc_runtime.complete()
         trace.record(
             "run_completed",
             status=report["status"],
@@ -340,6 +362,13 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         report["status"] = "failed"
         report["error"] = str(exc)
+        if arc_runtime is not None:
+            try:
+                if active_batch_ids:
+                    arc_runtime.fail_batch(active_batch_ids, str(exc))
+                arc_runtime.fail(str(exc))
+            except Exception as sdk_exc:
+                report["arcbench_runtime_error"] = str(sdk_exc)
         trace.record("run_failed", error=str(exc))
         print(f"[factory26] failed: {exc}", flush=True)
         return 1

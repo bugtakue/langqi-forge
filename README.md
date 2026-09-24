@@ -10,6 +10,7 @@
 - 运行后必须生成 `frontend/`、`backend/`，分别支持 `npm run build`、`npm start`；后端按 `PORT` 监听并提供 `/api/health`。不依赖只在本地模拟器支持的 `deploy.sh`。
 - 打包采用明确文件白名单。提交包不含 GitHub、Spreadsheet、BookStack、Keep 的页面、API、种子或业务实现；`generic_scaffold.py` 仅提供空前端、静态资源服务、健康检查及通用 HTTP/原子 JSON 存储辅助函数。
 - 正常生成路径必须调用平台注入的 OpenAI-compatible 模型网关。模型缺失、实现批次未完成或构建/启动失败均返回非零；不会把空 scaffold 冒充完成品。
+- 通过官方 `arcbench-runtime` SDK 上报运行状态、需求实现状态、需求树追溯表及每批 Git 提交；不手写平台事件。独立哈希链仍保留 Prompt、工具调用与模型迭代。通用构建通过不等于需求的 GUI 测试通过，因此不会虚报逐需求 `test_passed`。
 - 旧成绩不是本版性能证据。任何真实通过率以主办方独立 GUI 评测为准。
 - 若运行环境另外提供 `VISUAL_API_KEY`、`VISUAL_BASE_URL`、`VISUAL_MODEL`，智能体会按需读取需求明确引用的 `reference/` 截图，通过视觉模型提取布局线索。图片只发往所配置的视觉网关，不写入生产轨迹或生成应用；没有完整视觉配置时不启用此工具。
 
@@ -24,6 +25,7 @@ requirements.yaml
   → 按小批次交给 CodingAgent，通过模型工具调用读取、改写、校验源码
   → 每批通过 quick 交互策略、JavaScript 语法和新鲜构建产物校验，并作一次模型验收审计
   → 全量构建、启动、健康检查；失败可限轮修复
+  → 官方 SDK 记录节点状态、追溯表和 Git 提交历史
   → .arc/production-trace.jsonl + harness-report.json
   → 外部独立 GUI 评测（本智能体不自称已通过）
 ```
@@ -62,6 +64,7 @@ export VISUAL_MODEL='your-vision-model'
 - `.arc/compiled-plan.json`：需求批次与来源哈希；
 - `.arc/production-trace.jsonl`：Prompt、模型、工具和迭代的脱敏哈希链；
 - `.arc/harness-report.json`：本地构建/启动结果、模型调用次数和失败原因。
+- `.arc/runner-events.jsonl`、`.arc/traceability/`：由官方 SDK 写入的状态及追溯数据；工作区 Git 历史记录通用 scaffold 和生成批次。
 
 ## 打包（不上传）
 

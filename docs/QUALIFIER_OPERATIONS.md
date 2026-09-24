@@ -8,6 +8,8 @@
 
 `requirements.py` 校验树、按依赖排序原子需求；`qualifier.py` 把父级模块描述并入各原子需求 Prompt，避免遗漏父级背景。空页面、空样式、健康端点及通用 HTTP/原子 JSON 存储辅助函数由 `generic_scaffold.py` 创建，业务代码只能由模型工具调用写入。
 
+`arc_runtime.py` 只调用主办方公开 `arcbench-runtime==0.1.0` SDK 的高层方法：`AgentRuntime.from_env(project_dir=...)`、运行状态、`traceability.store_requirement_tree`、需求实现状态及 `git.ensure_repo/commit`。平台事件格式和 `.arc/traceability/` 表由 SDK 生成，本参赛包不构造事件载荷。在 Runner 环境中 SDK 缺失会失败关闭。每批代码提交后才标记实现完成；通用构建/启动检查不宣称逐需求 GUI 测试通过，也不会发送 `mark_test_passed`。本地 `.arc/production-trace.jsonl` 是额外的独立审计链，不代替平台事件。
+
 ## Prompts 与 Agent 迭代
 
 1. `agent.py:SYSTEM_PROMPT` 规定实现职责、不可信需求边界、前后端可运行、持久化、交互与后端状态校验；模型必须实际编辑文件并执行校验。
@@ -26,7 +28,7 @@
 
 - 运行前：队长决定参赛包版本、模型环境与公开练习任务；账号登录、正式上传仍由队长确认。
 - 运行中：默认**零人工干预**；失败会停并写明原因，不由人工在评分容器内补改业务代码。
-- 运行后：队长可以审看 `.arc/harness-report.json`、`.arc/production-trace.jsonl` 和主办方 GUI 报告，再决定是否继续改版或提交。任何改版都必须重新打包和评测。
+- 运行后：队长可以审看 `.arc/harness-report.json`、`.arc/production-trace.jsonl`、SDK 写入的 `.arc/runner-events.jsonl`、`.arc/traceability/`、Git 历史和主办方 GUI 报告，再决定是否继续改版或提交。任何改版都必须重新打包和评测。
 
 报告中的 `manual_interventions: 0` 仅描述一次自动运行；不意味着本仓库开发过程没有人工决策。
 

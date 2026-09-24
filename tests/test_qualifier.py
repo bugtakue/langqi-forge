@@ -133,6 +133,23 @@ children:
             ]
             self.assertTrue(verify_trace_rows(rows)["valid"])
             self.assertTrue(any(row["event"] == "tool_call" for row in rows))
+            if report["arcbench_runtime"] == "official-sdk":
+                runner_events = [
+                    json.loads(line)
+                    for line in (output / ".arc" / "runner-events.jsonl").read_text().splitlines()
+                ]
+                self.assertTrue(
+                    any(
+                        event.get("type") == "runner_state"
+                        and event.get("state") == "completed"
+                        for event in runner_events
+                    )
+                )
+                states = json.loads(
+                    (output / ".arc/traceability/node_states.json").read_text()
+                )
+                self.assertEqual(states["REQ-1"]["state"], "IMPLEMENTED")
+                self.assertFalse(report["behavioral_gui_tested"])
 
     def test_model_gateway_is_required_after_neutral_scaffold(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
