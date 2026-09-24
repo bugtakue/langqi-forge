@@ -194,6 +194,12 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertEqual(result["file_count"], len(STARTER_SOURCE_PATHS))
             self.assertTrue(all(not row["content_truncated"] for row in result["files"]))
+            self.assertEqual(len(STARTER_SOURCE_PATHS), 8)
+            self.assertEqual(
+                {"frontend/src/api.js", "backend/storage.mjs", "backend/http.mjs"}
+                & set(STARTER_SOURCE_PATHS),
+                {"frontend/src/api.js", "backend/storage.mjs", "backend/http.mjs"},
+            )
             server = next(row for row in result["files"] if row["path"] == "backend/server.mjs")
             self.assertEqual(
                 server["last_line"],

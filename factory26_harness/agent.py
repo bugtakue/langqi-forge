@@ -116,7 +116,10 @@ STARTER_SOURCE_PATHS = (
     "frontend/src/app.js",
     "frontend/src/index.html",
     "frontend/src/styles.css",
+    "frontend/src/api.js",
     "backend/server.mjs",
+    "backend/storage.mjs",
+    "backend/http.mjs",
     "backend/data/state.json",
 )
 
