@@ -37,6 +37,29 @@ LONG_FIRST_MODULE = (
     + "//\n" * 500
     + "// SOURCE_TAIL_VISIBLE_TO_NEXT_BATCH\n"
 )
+VERBOSE_FIRST_MODULE = (
+    'export const message = "Example";\n'
+    + "".join(f"// SOURCE_CONTEXT_PADDING_{index:03d} " + "x" * 80 + "\n" for index in range(500))
+    + "// SOURCE_TAIL_VISIBLE_TO_NEXT_BATCH\n"
+)
+
+
+def _last_tool_from_checkpoint(messages: list[dict[str, object]]) -> str:
+    for message in reversed(messages):
+        if message.get("role") != "user":
+            continue
+        content = str(message.get("content") or "")
+        marker = "Deterministic context checkpoint; prior turns are in trace. "
+        if marker not in content or "State:\n" not in content:
+            continue
+        try:
+            state, _ = json.JSONDecoder().raw_decode(content.split("State:\n", 1)[1])
+        except json.JSONDecodeError:
+            continue
+        results = state.get("latest_tool_results") if isinstance(state, dict) else None
+        if isinstance(results, list) and results and isinstance(results[-1], dict):
+            return str(results[-1].get("tool") or "")
+    return ""
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -54,6 +77,7 @@ class Handler(BaseHTTPRequestHandler):
     full_spec_revisited = False
     require_source_page_second = False
     source_tail_seen = False
+    stress_context_first = False
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
@@ -149,6 +173,8 @@ class Handler(BaseHTTPRequestHandler):
             if isinstance(call, dict)
         ]
         last_tool = previous_tools[-1] if previous_tools else ""
+        if not last_tool and type(self).stress_context_first:
+            last_tool = _last_tool_from_checkpoint(messages)
         spec_page_action = None
         if type(self).require_full_spec_first and not second_batch:
             available_tools = {
@@ -287,7 +313,8 @@ class Handler(BaseHTTPRequestHandler):
                         {
                             "path": "frontend/src/first-feature.js",
                             "content": (
-                                LONG_FIRST_MODULE if type(self).require_source_page_second
+                                VERBOSE_FIRST_MODULE if type(self).stress_context_first
+                                else LONG_FIRST_MODULE if type(self).require_source_page_second
                                 else 'export const message = "Example";\n'
                             ),
                         },
@@ -395,9 +422,12 @@ def main() -> None:
     parser.add_argument("--require-full-spec-first", action="store_true")
     parser.add_argument("--review-full-spec-first", action="store_true")
     parser.add_argument("--require-source-page-second", action="store_true")
+    parser.add_argument("--stress-context-first", action="store_true")
     args = parser.parse_args()
     if args.review_full_spec_first and not args.require_full_spec_first:
         parser.error("--review-full-spec-first requires --require-full-spec-first")
+    if args.stress_context_first and not args.require_source_page_second:
+        parser.error("--stress-context-first requires --require-source-page-second")
     port = args.port
     Handler.fail_second = args.fail_second
     Handler.auth_fail_second = args.auth_fail_second
@@ -407,6 +437,7 @@ def main() -> None:
     Handler.review_full_spec_first = args.review_full_spec_first
     Handler.require_source_page_second = args.require_source_page_second
     Handler.source_tail_seen = False
+    Handler.stress_context_first = args.stress_context_first
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"two-batch protocol fixture listening on {port}", flush=True)
     server.serve_forever()

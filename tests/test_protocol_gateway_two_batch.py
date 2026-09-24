@@ -7,10 +7,26 @@ from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from tests.protocol_gateway_two_batch import Handler
+from tests.protocol_gateway_two_batch import Handler, _last_tool_from_checkpoint
 
 
 class TwoBatchGatewayTests(unittest.TestCase):
+    def test_fixture_resumes_from_agent_context_checkpoint(self) -> None:
+        state = {"latest_tool_results": [
+            {"tool": "write_file", "ok": True},
+            {"tool": "replace_text", "ok": True},
+        ]}
+        messages = [
+            {"role": "system", "content": "fixture"},
+            {"role": "user", "content": "Implement [REQ-1]"},
+            {"role": "user", "content": (
+                "Deterministic context checkpoint; prior turns are in trace. "
+                "State:\n" + json.dumps(state) + "\n\n<untrusted_current_sources>"
+            )},
+        ]
+        self.assertEqual(_last_tool_from_checkpoint(messages), "replace_text")
+        self.assertEqual(_last_tool_from_checkpoint(messages[:2]), "")
+
     def test_long_prior_source_requires_real_continuation_before_second_edit(self) -> None:
         Handler.require_source_page_second = True
         Handler.source_tail_seen = False
