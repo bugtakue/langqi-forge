@@ -311,6 +311,7 @@ class CodingAgent:
         final_summary = ""
         invalid_tool_turns = 0
         failed_tool_turns = 0
+        empty_turns = 0
         total_tool_calls = 0
         acceptance_audit_requested = False
         acceptance_audit_message: dict[str, Any] | None = None
@@ -351,6 +352,17 @@ class CodingAgent:
             if not reply.tool_calls:
                 final_summary = reply.content.strip()
                 changed = tuple(sorted(self.tools.changed_files - changed_before))
+                if stage == "implementation" and re.match(
+                    r"^AUDIT BLOCKED(?:\s|:|$)", final_summary
+                ):
+                    self.trace.record(
+                        "agent_session_stalled",
+                        stage=stage,
+                        requirement_ids=requirement_ids,
+                        reason="model explicitly reported an incomplete requirement",
+                        changed_files=changed,
+                    )
+                    return AgentRun(False, final_summary, changed, turn)
                 has_required_change = bool(changed) or stage == "repair"
                 if (
                     has_required_change
@@ -388,6 +400,16 @@ class CodingAgent:
                         acceptance_audit_self_reported=(stage == "implementation"),
                     )
                     return AgentRun(True, final_summary, changed, turn)
+                empty_turns += 1
+                if empty_turns >= 3:
+                    self.trace.record(
+                        "agent_session_stalled",
+                        stage=stage,
+                        requirement_ids=requirement_ids,
+                        reason="three consecutive no-tool summaries made no accepted progress",
+                        changed_files=changed,
+                    )
+                    return AgentRun(False, final_summary or "no source progress", changed, turn)
                 if not has_required_change:
                     reminder = "You have not edited any file. Use the available tools and implement the requirement now."
                 elif self.tools.browser_probe_requires_recheck:
@@ -403,6 +425,7 @@ class CodingAgent:
                     )
                 messages.append({"role": "user", "content": reminder})
                 continue
+            empty_turns = 0
             call_count = len(reply.tool_calls)
             if (
                 call_count > self.maximum_tool_calls_per_turn

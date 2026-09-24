@@ -135,6 +135,41 @@ class _StatusHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_repeated_no_tool_summaries_stop_before_spending_full_budget(self) -> None:
+        class EmptyModel:
+            calls = 0
+
+            def complete(self, _messages, _tools):
+                self.calls += 1
+                return SimpleNamespace(
+                    raw_message={"role": "assistant", "content": "I cannot proceed yet."},
+                    tool_calls=(),
+                    content="I cannot proceed yet.",
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = ProductionTrace(root / ".arc/trace.jsonl")
+            model = EmptyModel()
+            node = RequirementNode(
+                req_id="R-EMPTY",
+                name="No-op fixture",
+                description="Implement a real change.",
+                dependencies=(),
+                scenarios=(),
+                visual_reference=(),
+                raw={},
+            )
+            result = CodingAgent(
+                model, WorkspaceTools(root, trace, 3926), trace, max_turns=20
+            ).implement([node])
+            self.assertFalse(result.completed)
+            self.assertEqual(model.calls, 3)
+            self.assertEqual(result.turns, 3)
+            rows = [json.loads(line) for line in trace.path.read_text().splitlines()]
+            self.assertEqual(rows[-1]["event"], "agent_session_stalled")
+            self.assertIn("no-tool", rows[-1]["payload"]["reason"])
+
     def test_next_batch_prompt_names_prior_generated_modules_without_trusting_them(self) -> None:
         class CaptureModel:
             def __init__(self) -> None:
@@ -603,13 +638,16 @@ class ModelLoopTests(unittest.TestCase):
                         )
                         result = CodingAgent(model, tools, trace, max_turns=4).implement([node])
                     self.assertFalse(result.completed)
-                    self.assertEqual(result.turns, 4)
+                    self.assertEqual(result.turns, 3 if mode == "blocked" else 4)
                     self.assertTrue(tools.current_changes_validated)
                     events = [
                         json.loads(line)["event"]
                         for line in trace.path.read_text(encoding="utf-8").splitlines()
                     ]
-                    self.assertIn("agent_session_exhausted", events)
+                    self.assertIn(
+                        "agent_session_stalled" if mode == "blocked" else "agent_session_exhausted",
+                        events,
+                    )
                     self.assertNotIn("agent_session_completed", events)
         finally:
             _ModelHandler.audit_mode = "pass"
