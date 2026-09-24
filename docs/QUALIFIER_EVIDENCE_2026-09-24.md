@@ -248,3 +248,9 @@
 - 源码提交 `4f62b58f25ae3982b7bb13e6368584f4fb1fe263` 要求模型在最后审计摘要里简要说明状态键、API 路由和导航合同；只有**成功且晋升**的批次摘要才保留，至多四条、合计 2,400 字符。下一批在单独的“不可信先前交接”标签中看到摘要，同时被要求先按实际源码核对；摘要不能变成新的需求指令或通过证明。失败批次与丢弃的临时编辑不会交接。新增测试覆盖跨批传递、失败拆批隔离、长度上限及标签注入转义；全套主机 **99 项测试：96 通过，3 项因本机浏览器环境跳过**。
 - 从上述干净源码提交打包的精确候选 `dist/langqi-forge-qualifier.zip`，SHA-256 `64b451fa6f71275795aafedea617aa88becfb7127e704db02deded915d3b7035`，17 个白名单文件，来源清单绑定 `4f62b58...`，`unzip -t` 全部通过。该 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的固定响应双批夹具运行于 `../factory26-local-simulation/runs/qualifier-bounded-handoff-protocol-20260925/`：第二批提示缺少第一批摘要时假服务会返回 HTTP 422；实际轨迹中的交接数从 0→1，第二批提示包含第一批摘要和已改源码路径。容器退出码 0、SDK 两项 `IMPLEMENTED`、模型协议请求 10 次、本地 6/6 检查、独立 Playwright **2/2**，59/59 行生产轨迹封印有效。
 - 本轮依然没有真实百炼模型 Key（本机剪贴板为空），故上述固定响应协议夹具不能证明公开 BookStack/Keep 的通过率、费用或相对竞品能力；Meter 不可用，`score=null`。没有登录 ARC-Bench，也没有上传或正式提交。
+
+## 2026-09-25 当前 amd64 Runner 的隔离启动复验
+
+- 用同一精确 ZIP `64b451fa...` 在 Apple Silicon Mac 上调用缓存的当前公开 amd64 Runner `arcbench-local-current:20260924`，工作区 `../factory26-local-simulation/runs/qualifier-bounded-handoff-current-runner-20260925/`。即使不指定测试目录，Runner 仍在启动前的 Chromium 预检处因 ARM→amd64 QEMU `SIGTRAP` 退出：`container_exit_code=1`、`agent_duration_seconds=null`，智能体未启动，不能据此判定参赛包失败，也不能声称完成当前完整 Runner 的 GUI 验证。
+- 为隔离这项本机架构故障，在相同当前 amd64 镜像内从精确 ZIP 组装全新工作区 `../factory26-local-simulation/runs/qualifier-bounded-handoff-current-direct-20260925/`，按公开 Runner 的依赖安装与生成入口直接运行，再单独调用其 `run_submission.py::run_web_template` 部署函数。固定响应假模型请求 4 次，官方 SDK 接入为 `official-sdk`，报告 `local-contract-passed`、本地 6/6 检查通过，28/28 行生产轨迹封印有效；前端构建、后端安装、应用启动后 `/api/health` 返回 `{"ready":true}`。这验证当前镜像的生成与部署接口相容，**不是完整 Runner、真实模型或独立 GUI 成绩**。
+- 练习 Key 仍未提供；未登录、未上传、未正式提交。当前 amd64 镜像的真实 x86 主机 GUI 路径、BookStack/Keep 真模型通过率和计费仍是未验证项。
