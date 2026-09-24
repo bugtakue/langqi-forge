@@ -70,6 +70,20 @@ class JavaScriptSyntaxTests(unittest.TestCase):
             repaired = javascript_syntax_check(root)
             self.assertTrue(repaired.passed, repaired.summary)
 
+    def test_noop_build_cannot_pass_with_stale_dist(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold_workspace(root)
+            self.assertTrue(frontend_build_check(root).passed)
+            package_path = root / "frontend/package.json"
+            package = json.loads(package_path.read_text(encoding="utf-8"))
+            package["scripts"]["build"] = 'node -e ""'
+            package_path.write_text(json.dumps(package), encoding="utf-8")
+            result = frontend_build_check(root)
+            self.assertFalse(result.passed)
+            self.assertIn("dist/index.html", result.summary)
+            self.assertFalse((root / "frontend/dist/index.html").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,6 +25,12 @@ from factory26_harness.trace import (
 from factory26_harness.workspace_tools import WorkspaceTools
 
 
+DUMMY_BUILD = (
+    'node -e "require(\'fs\').mkdirSync(\'dist\',{recursive:true});'
+    'require(\'fs\').writeFileSync(\'dist/index.html\',\'<html></html>\')"'
+)
+
+
 class ToolAndTraceTests(unittest.TestCase):
     def test_safe_validation_environment_has_private_home_without_model_key(self) -> None:
         with patch.dict(
@@ -360,8 +366,10 @@ class ToolAndTraceTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (frontend / "build.mjs").write_text(
-                "import { writeFileSync } from 'node:fs';\n"
-                "writeFileSync('observed.txt', process.env.OPENAI_API_KEY || 'missing');\n",
+                "import { mkdirSync, writeFileSync } from 'node:fs';\n"
+                "writeFileSync('observed.txt', process.env.OPENAI_API_KEY || 'missing');\n"
+                "mkdirSync('dist', { recursive: true });\n"
+                "writeFileSync('dist/index.html', '<html></html>');\n",
                 encoding="utf-8",
             )
             with patch.dict(os.environ, {"OPENAI_API_KEY": "must-not-reach-build"}):
@@ -496,7 +504,7 @@ class ToolAndTraceTests(unittest.TestCase):
                     {
                         "name": "frontend",
                         "private": True,
-                        "scripts": {"build": 'node -e ""'},
+                        "scripts": {"build": DUMMY_BUILD},
                     }
                 ),
                 encoding="utf-8",

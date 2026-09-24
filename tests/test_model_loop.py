@@ -18,6 +18,12 @@ from factory26_harness.trace import ProductionTrace
 from factory26_harness.workspace_tools import WorkspaceTools
 
 
+DUMMY_BUILD = (
+    'node -e "require(\'fs\').mkdirSync(\'dist\',{recursive:true});'
+    'require(\'fs\').writeFileSync(\'dist/index.html\',\'<html></html>\')"'
+)
+
+
 class _ModelHandler(BaseHTTPRequestHandler):
     calls = 0
     payloads: list[dict] = []
@@ -210,7 +216,7 @@ class ModelLoopTests(unittest.TestCase):
                         {
                             "name": "test-frontend",
                             "private": True,
-                            "scripts": {"build": 'node -e ""'},
+                            "scripts": {"build": DUMMY_BUILD},
                         }
                     ),
                     encoding="utf-8",
@@ -415,7 +421,7 @@ class ModelLoopTests(unittest.TestCase):
                     {
                         "name": "frontend",
                         "private": True,
-                        "scripts": {"build": 'node -e ""'},
+                        "scripts": {"build": DUMMY_BUILD},
                     }
                 )
             )
@@ -524,7 +530,7 @@ class ModelLoopTests(unittest.TestCase):
                     {
                         "name": "frontend",
                         "private": True,
-                        "scripts": {"build": 'node -e ""'},
+                        "scripts": {"build": DUMMY_BUILD},
                     }
                 )
             )
@@ -634,7 +640,7 @@ class ModelLoopTests(unittest.TestCase):
                     {
                         "name": "frontend",
                         "private": True,
-                        "scripts": {"build": 'node -e ""'},
+                        "scripts": {"build": DUMMY_BUILD},
                     }
                 )
             )

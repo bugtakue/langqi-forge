@@ -22,7 +22,7 @@ requirements.yaml
   → 校验并按依赖排序原子需求，继承必要的父级产品上下文
   → 创建与题目无关的可运行前后端
   → 按小批次交给 CodingAgent，通过模型工具调用读取、改写、校验源码
-  → 每批通过 quick 交互策略、JavaScript 语法和构建校验，并作一次模型验收审计
+  → 每批通过 quick 交互策略、JavaScript 语法和新鲜构建产物校验，并作一次模型验收审计
   → 全量构建、启动、健康检查；失败可限轮修复
   → .arc/production-trace.jsonl + harness-report.json
   → 外部独立 GUI 评测（本智能体不自称已通过）

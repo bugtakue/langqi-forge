@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -388,9 +389,9 @@ def _npm_install(directory: Path) -> tuple[int, str, float]:
 def frontend_build_check(root: Path) -> CheckResult:
     frontend = root / "frontend"
     related = ("frontend/package.json", "frontend/src", "frontend/build.mjs")
-    if not (frontend / "package.json").is_file():
+    if frontend.is_symlink() or not (frontend / "package.json").is_file():
         return CheckResult(
-            "frontend_build", False, "frontend/package.json missing", related, 0.0
+            "frontend_build", False, "frontend directory is unsafe or package.json missing", related, 0.0
         )
     install_rc, install_output, install_seconds = _npm_install(frontend)
     if install_rc != 0:
@@ -401,16 +402,39 @@ def frontend_build_check(root: Path) -> CheckResult:
             related,
             install_seconds,
         )
+    output_dir = frontend / "dist"
+    if output_dir.is_symlink() or (output_dir.exists() and not output_dir.is_dir()):
+        return CheckResult(
+            "frontend_build", False, "frontend/dist is not a safe build directory", related, install_seconds
+        )
+    try:
+        if output_dir.is_dir():
+            shutil.rmtree(output_dir)
+    except OSError as exc:
+        return CheckResult(
+            "frontend_build", False, f"could not clear frontend/dist before build: {exc}", related, install_seconds
+        )
     rc, output, seconds = _run(
         ["npm", "run", "build"],
         frontend,
         600,
         environment=_safe_environment(),
     )
+    entry = output_dir / "index.html"
+    fresh_entry = (
+        rc == 0
+        and output_dir.is_dir()
+        and not output_dir.is_symlink()
+        and entry.is_file()
+        and not entry.is_symlink()
+        and entry.stat().st_size > 0
+    )
     return CheckResult(
         "frontend_build",
-        rc == 0,
-        "frontend build passed" if rc == 0 else f"frontend build failed\n{output}",
+        fresh_entry,
+        "frontend build produced a fresh index.html"
+        if fresh_entry
+        else (f"frontend build failed\n{output}" if rc != 0 else "frontend build did not produce a nonempty dist/index.html"),
         related,
         install_seconds + seconds,
     )
