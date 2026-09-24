@@ -34,3 +34,12 @@
 - arm64 本地旧基础镜像 + 当前模拟器包装：`../factory26-local-simulation/runs/qualifier-visual-capable-gui-20260924/`，协议夹具 `container_exit_code=0`，Playwright `1/1`，26 条生产轨迹哈希链有效，来源 revision 与上述 ZIP 匹配。
 - amd64 旧基础镜像在本机 ARM 主机经 QEMU 仿真：`../factory26-local-simulation/runs/qualifier-visual-capable-amd64-protocol-20260924/` 的生成、构建、启动、健康检查通过，`container_exit_code=0`，GUI 评测跳过。另一次带 GUI 的 `../factory26-local-simulation/runs/qualifier-visual-capable-amd64-gui-20260924/` 中，同一生成应用的 agent 报告为 `local-contract-passed`，但 Playwright 在创建页面前报 `browserContext.newPage: Target page, context or browser has been closed`；这是本机跨架构浏览器仿真失败，不能算应用的功能测试失败，也不能用来证明正式 x86 环境表现。
 - 上述所有运行仍只使用自建协议网关，不是实际编码模型；视觉描述链路只有模拟响应单元测试，未用真实视觉模型；`score=null` 或本机 GUI 仿真的 `score=0` 都不是官方成绩。
+
+## ARC-Bench 官方运行时 SDK 接入验证
+
+- 官方 [Runtime API 文档](https://arc-bench.com/api-doc) 要求通过 SDK 高层方法写运行状态、可追溯表和 Git 历史，不手工构造平台事件。本版使用主办方开源的 [`arcbench-runtime`](https://github.com/octos-org/arcbench-runtime) `0.1.0`，并保留独立哈希链作为补充审计；版本代码提交为 `d0f209a88a2500ee504f72a1fb9fc3b5a11c2d03`。
+- 本版协议 ZIP：`dist/langqi-forge-qualifier.zip`，SHA-256 `b980d91ec3baf3b87d8fc1a9db1da8b2ce5d2e1c53aed9a8ec007a2af55e13ca`，15 个文件（含哈希清单）；`unzip -t` 全部通过。
+- 在含该 SDK 的本地虚拟环境中，Python 单元测试 54/54 通过。新增测试直接验证 SDK 高层调用生成运行事件、`requirements`/`node_states` 追溯表和两次 Git 提交；Runner 内缺 SDK 时失败关闭。
+- 使用上述精确 ZIP，在本机旧版 Runner 基础镜像 + 当前 `local_runner.py` 包装上执行自建协议夹具，运行目录为 `../factory26-local-simulation/runs/qualifier-sdk-gui-20260924/`。Runner 从 PyPI 镜像安装 `arcbench-runtime==0.1.0` 成功，随后 Agent 完成 4 次夹具模型接口请求，`container_exit_code=0`，Playwright `1/1`，`score=null`、Token 成本为 `null`。
+- 该运行产生 `.arc/runner-events.jsonl` 共 42 行（含 Runner 自身事件），其中 SDK 明确记录 `running → REQ-1 implementing → REQ-1 implemented → completed`；`.arc/traceability/requirements.json` 包含 `ROOT` 和 `REQ-1`，`node_states.json` 的 `REQ-1` 为 `IMPLEMENTED`；生成项目 Git 历史有通用基线和第 1 批实现两个提交。独立 `.arc/production-trace.jsonl` 为 27 行，哈希链校验有效。
+- SDK 的 `completed` 仅指智能体本地构建/启动合同完成；它没有给 `REQ-1` 发送 `test_passed`，真实 GUI 判断交给平台。夹具 1/1 不是 BookStack/Keep 或正式赛成绩；当前镜像也不是已核实的最新主办方基础镜像。正式账号登录、项目上传与提交均未做。
