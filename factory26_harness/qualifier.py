@@ -40,7 +40,7 @@ from .submission_bundle import (
     verify_source_manifest,
 )
 from .trace import ProductionTrace
-from .visual_reference import VisualReferenceClient, referenced_images
+from .visual_reference import VisualReferenceClient, referenced_images, resolve_visual_gateway
 from .workspace_tools import WorkspaceTools
 
 
@@ -460,21 +460,28 @@ def main(argv: list[str] | None = None) -> int:
                 "failed while independent batches may continue"
             ),
         )
-        visual_settings = tuple(
-            bool(os.environ.get(name, "").strip())
-            for name in ("VISUAL_API_KEY", "VISUAL_BASE_URL", "VISUAL_MODEL")
-        )
-        if all(visual_settings):
-            visual_client = VisualReferenceClient(requirement_dir, trace)
-            trace.record(
-                "visual_gateway_selected",
-                model=visual_client.model,
-                maximum_calls=visual_client.max_calls,
-            )
-        elif any(visual_settings):
+        visual_configuration, visual_status = resolve_visual_gateway()
+        if visual_configuration is not None:
+            try:
+                visual_client = VisualReferenceClient(
+                    requirement_dir, trace, visual_configuration
+                )
+            except ValueError:
+                trace.record(
+                    "visual_gateway_unavailable",
+                    reason="visual gateway endpoint or call budget is invalid",
+                )
+            else:
+                trace.record(
+                    "visual_gateway_selected",
+                    model=visual_client.model,
+                    source=visual_client.gateway_source,
+                    maximum_calls=visual_client.max_calls,
+                )
+        elif visual_status != "disabled":
             trace.record(
                 "visual_gateway_unavailable",
-                reason="incomplete VISUAL_API_KEY/VISUAL_BASE_URL/VISUAL_MODEL configuration",
+                reason=visual_status,
             )
         failed_ids: set[str] = set()
         for index, group in enumerate(groups, 1):

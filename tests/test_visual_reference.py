@@ -9,7 +9,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from factory26_harness.trace import ProductionTrace, verify_trace_rows
-from factory26_harness.visual_reference import VisualReferenceClient, referenced_images
+from factory26_harness.visual_reference import (
+    VisualReferenceClient,
+    referenced_images,
+    resolve_visual_gateway,
+)
 from factory26_harness.workspace_tools import WorkspaceTools
 
 
@@ -36,6 +40,71 @@ class FakeResponse:
 
 
 class VisualReferenceTests(unittest.TestCase):
+    def test_named_visual_model_can_reuse_the_coding_gateway(self) -> None:
+        environment = {
+            "OPENAI_API_KEY": "shared-fixture-secret",
+            "OPENAI_BASE_URL": "https://gateway.example.test/v1",
+            "VISUAL_MODEL": "fixture-vision",
+        }
+        configuration, status = resolve_visual_gateway(environment)
+        self.assertEqual(status, "available")
+        self.assertIsNotNone(configuration)
+        self.assertEqual(configuration.source, "shared-model-gateway")
+        self.assertEqual(configuration.model, "fixture-vision")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "task/reference").mkdir(parents=True)
+            (root / "task/reference/home.png").write_bytes(TINY_PNG)
+            trace = ProductionTrace(root / "trace.jsonl")
+            with patch(
+                "factory26_harness.visual_reference.urllib.request.urlopen",
+                return_value=FakeResponse(),
+            ) as opener:
+                client = VisualReferenceClient(root / "task", trace, configuration)
+                self.assertEqual(client.describe("reference/home.png")["description"],
+                                 "Two-column layout with a blue Save button.")
+            self.assertEqual(opener.call_args.args[0].get_header("Authorization"),
+                             "Bearer shared-fixture-secret")
+            self.assertNotIn("shared-fixture-secret", trace.path.read_text(encoding="utf-8"))
+
+    def test_partial_explicit_visual_configuration_never_falls_back(self) -> None:
+        shared = {
+            "OPENAI_API_KEY": "shared-fixture-secret",
+            "OPENAI_BASE_URL": "https://gateway.example.test/v1",
+            "VISUAL_MODEL": "fixture-vision",
+        }
+        for extra in ({"VISUAL_API_KEY": "explicit-secret"},
+                      {"VISUAL_BASE_URL": "https://vision.example.test/v1"}):
+            with self.subTest(extra=extra):
+                configuration, status = resolve_visual_gateway({**shared, **extra})
+                self.assertIsNone(configuration)
+                self.assertIn("incomplete", status)
+        explicit, status = resolve_visual_gateway({
+            **shared,
+            "VISUAL_API_KEY": "explicit-secret",
+            "VISUAL_BASE_URL": "https://vision.example.test/v1",
+        })
+        self.assertEqual(status, "available")
+        self.assertEqual(explicit.source, "explicit-vision-gateway")
+        self.assertEqual(explicit.api_key, "explicit-secret")
+        self.assertEqual(resolve_visual_gateway({**shared, "VISUAL_MODEL": ""}),
+                         (None, "disabled"))
+
+    def test_symlinked_reference_directory_cannot_leave_the_task(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "task").mkdir()
+            (root / "outside").mkdir()
+            (root / "task/reference").symlink_to(root / "outside", target_is_directory=True)
+            trace = ProductionTrace(root / "trace.jsonl")
+            configuration, _ = resolve_visual_gateway({
+                "VISUAL_API_KEY": "fixture-secret",
+                "VISUAL_BASE_URL": "https://vision.example.test/v1",
+                "VISUAL_MODEL": "fixture-vision",
+            })
+            with self.assertRaisesRegex(ValueError, "cannot be a symlink"):
+                VisualReferenceClient(root / "task", trace, configuration)
+
     def test_only_explicit_reference_paths_are_extracted(self) -> None:
         self.assertEqual(
             referenced_images([

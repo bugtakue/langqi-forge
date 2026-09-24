@@ -15,7 +15,7 @@
 - 通过官方 `arcbench-runtime` SDK 上报运行状态、需求实现状态、需求树追溯表及每批 Git 提交；不手写平台事件。独立哈希链仍保留 Prompt、工具调用与模型迭代。通用构建通过不等于需求的 GUI 测试通过，因此不会虚报逐需求 `test_passed`。
 - 旧成绩不是本版性能证据。任何真实通过率以主办方独立 GUI 评测为准。
 - 截至 2026-09-25，[ARC-Bench 正式赛公开列表](https://arc-bench.com/competition)显示两项任务、200 个测试；未登录时正式赛详情要求先确认队伍。BookStack/Keep 的 66 条公开基准用例是练习材料，不能等同正式赛题或 200 个测试。当前平台「排行榜计分方式」以**同一份提交**完成两个任务后的综合 GUI 通过率和人民币模型开销计算：合理开销为 `0.4 × 测试总数 × 通过率百分数 ÷ 100`，最低开销按 ¥0.10、开销比率限制在 0.01–100；低于或等于合理开销时奖励指数为 0.1，高于时惩罚指数为 0.2。若正式赛仍为 200 项测试，合理开销相当于每 1 个百分点 ¥0.8，**不同于**队长收到的 2026-09-20《参赛须知》所列 ¥1.2。平台当前按得分、通过率、较低开销、较早提交时间排序；旧 PDF 的单任务最长 48 小时与比赛券额度仍待队长登录后复核。规则版本与差异见[参赛运行说明](docs/QUALIFIER_OPERATIONS.md)及[本地验证记录](docs/QUALIFIER_EVIDENCE_2026-09-24.md)，正式运行前须再次核对。
-- 若运行环境另外提供 `VISUAL_API_KEY`、`VISUAL_BASE_URL`、`VISUAL_MODEL`，智能体会按需读取需求明确引用的 `reference/` 截图，通过视觉模型提取布局线索。图片只发往所配置的视觉网关，不写入生产轨迹或生成应用；没有完整视觉配置时不启用此工具。
+- 设置 `VISUAL_MODEL` 后，智能体可按需读取需求明确引用的 `reference/` 截图，通过视觉模型提取布局线索；默认复用已配置的 `OPENAI_API_KEY` / `OPENAI_BASE_URL`，若同时提供完整的 `VISUAL_API_KEY` / `VISUAL_BASE_URL` 则优先走独立视觉网关。图片只发往选定的模型网关，不写入生产轨迹或生成应用；未指定视觉模型、显式视觉凭证只填一半或共享网关不完整时不启用此工具。视觉模型是否可调用及其费用仍须以真实网关验证。
 
 主办方本地模拟器：[hackathon-local-simulation](https://github.com/code-philia/hackathon-local-simulation)。报名与项目提交由队长操作；此处的打包命令**不会上传**。
 
@@ -53,10 +53,11 @@ python3 -m venv .venv
 export OPENAI_API_KEY='...'
 export OPENAI_BASE_URL='https://your-gateway.example/v1'
 export MODEL='your-model'
-# 可选：三项必须同时提供，才启用按需视觉参考
+# 可选：指定视觉模型后复用上面的 Key 与网关
+export VISUAL_MODEL='your-vision-model'
+# 如需不同视觉网关，以下两项必须同时提供
 export VISUAL_API_KEY='...'
 export VISUAL_BASE_URL='https://your-vision-gateway.example/v1'
-export VISUAL_MODEL='your-vision-model'
 .venv/bin/python main.py /absolute/path/to/requirements \
   --output-dir /absolute/path/to/generated-project
 ```

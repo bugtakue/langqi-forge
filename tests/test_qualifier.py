@@ -959,6 +959,83 @@ children:
             )
             self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
 
+    def test_shared_model_gateway_exposes_visual_reference_to_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = root / "requirements"
+            reference_dir = requirement_dir / "reference"
+            reference_dir.mkdir(parents=True)
+            (requirement_dir / "requirements.yaml").write_text(
+                """id: ROOT
+name: Visual fixture
+type: FOLDER
+children:
+  - id: REQ-1
+    name: Example heading
+    type: ATOMIC
+    description: Display one visible heading named Example.
+    visual_reference: [./reference/only-listed.png]
+""",
+                encoding="utf-8",
+            )
+            (reference_dir / "only-listed.png").write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9XPdUAAAAASUVORK5CYII="
+                )
+            )
+            output = root / "output"
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.dict(os.environ, {
+                    "OPENAI_API_KEY": "shared-fixture-secret",
+                    "OPENAI_BASE_URL": "https://gateway.example.test/v1",
+                    "VISUAL_MODEL": "fixture-vision",
+                }),
+            ):
+                status = qualifier.main([str(requirement_dir), "--output-dir", str(output)])
+            self.assertEqual(status, 0)
+            rows = [json.loads(line) for line in
+                    (output / ".arc/production-trace.jsonl").read_text(encoding="utf-8").splitlines()]
+            selected = next(row for row in rows if row["event"] == "visual_gateway_selected")
+            self.assertEqual(selected["payload"]["source"], "shared-model-gateway")
+            started = next(row for row in rows if row["event"] == "implementation_batch_started")
+            self.assertEqual(started["payload"]["visual_references_available"],
+                             ["reference/only-listed.png"])
+            self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
+
+    def test_non_https_shared_visual_endpoint_does_not_abort_coding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = root / "requirements"
+            requirement_dir.mkdir()
+            (requirement_dir / "requirements.yaml").write_text(
+                """id: ROOT
+name: Visual fixture
+type: FOLDER
+children:
+  - id: REQ-1
+    name: Example heading
+    type: ATOMIC
+    description: Display one visible heading named Example.
+""",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.dict(os.environ, {
+                    "OPENAI_API_KEY": "shared-fixture-secret",
+                    "OPENAI_BASE_URL": "http://host.docker.internal:19786/v1",
+                    "VISUAL_MODEL": "fixture-vision",
+                }),
+            ):
+                status = qualifier.main([str(requirement_dir), "--output-dir", str(output)])
+            self.assertEqual(status, 0)
+            rows = [json.loads(line) for line in
+                    (output / ".arc/production-trace.jsonl").read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(any(row["event"] == "visual_gateway_unavailable" for row in rows))
+            self.assertFalse(any(row["event"] == "visual_gateway_selected" for row in rows))
+
 
 if __name__ == "__main__":
     unittest.main()

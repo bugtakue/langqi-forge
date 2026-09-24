@@ -13,8 +13,9 @@ import os
 import re
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import urlsplit
 
 from .trace import ProductionTrace
@@ -32,21 +33,68 @@ MAX_VISUAL_RESPONSE_BYTES = 100_000
 MAX_CAPTION_CHARS = 1_500
 
 
+@dataclass(frozen=True)
+class VisualGatewayConfiguration:
+    api_key: str
+    base_url: str
+    model: str
+    source: str
+
+
+def resolve_visual_gateway(
+    environment: Mapping[str, str] | None = None,
+) -> tuple[VisualGatewayConfiguration | None, str]:
+    """Use an explicit vision gateway, or a named vision model on the coding gateway."""
+
+    values = os.environ if environment is None else environment
+    visual_key = values.get("VISUAL_API_KEY", "").strip()
+    visual_base = values.get("VISUAL_BASE_URL", "").strip()
+    visual_model = values.get("VISUAL_MODEL", "").strip()
+    if not any((visual_key, visual_base, visual_model)):
+        return None, "disabled"
+    if not visual_model or bool(visual_key) != bool(visual_base):
+        return None, "incomplete VISUAL_MODEL or explicit VISUAL_API_KEY/VISUAL_BASE_URL configuration"
+    if visual_key and visual_base:
+        return (
+            VisualGatewayConfiguration(visual_key, visual_base, visual_model, "explicit-vision-gateway"),
+            "available",
+        )
+    shared_key = values.get("OPENAI_API_KEY", "").strip()
+    shared_base = values.get("OPENAI_BASE_URL", "").strip()
+    if not shared_key or not shared_base:
+        return None, "VISUAL_MODEL requires a complete shared OPENAI_API_KEY/OPENAI_BASE_URL gateway"
+    return (
+        VisualGatewayConfiguration(shared_key, shared_base, visual_model, "shared-model-gateway"),
+        "available",
+    )
+
+
 def referenced_images(descriptions: list[str]) -> tuple[str, ...]:
     """List only image names explicitly referenced by current requirements."""
     return tuple(sorted({match.group(1) for description in descriptions for match in REFERENCE_PATTERN.finditer(description)}))
 
 
 class VisualReferenceClient:
-    def __init__(self, requirement_dir: Path, trace: ProductionTrace) -> None:
+    def __init__(
+        self,
+        requirement_dir: Path,
+        trace: ProductionTrace,
+        configuration: VisualGatewayConfiguration | None = None,
+    ) -> None:
         self.requirement_dir = (requirement_dir.parent if requirement_dir.is_file() else requirement_dir).resolve()
-        self.reference_root = (self.requirement_dir / "reference").resolve()
+        reference_path = self.requirement_dir / "reference"
+        if reference_path.is_symlink():
+            raise ValueError("reference directory cannot be a symlink")
+        self.reference_root = reference_path.resolve()
         self.trace = trace
-        self.api_key = os.environ.get("VISUAL_API_KEY", "").strip()
-        self.base_url = os.environ.get("VISUAL_BASE_URL", "").strip()
-        self.model = os.environ.get("VISUAL_MODEL", "").strip()
-        if not all((self.api_key, self.base_url, self.model)):
-            raise ValueError("VISUAL_API_KEY, VISUAL_BASE_URL and VISUAL_MODEL are required together")
+        if configuration is None:
+            configuration, status = resolve_visual_gateway()
+            if configuration is None:
+                raise ValueError(status)
+        self.api_key = configuration.api_key
+        self.base_url = configuration.base_url
+        self.model = configuration.model
+        self.gateway_source = configuration.source
         self.endpoint = self.base_url.rstrip("/")
         if not self.endpoint.endswith("/chat/completions"):
             self.endpoint += "/chat/completions"
