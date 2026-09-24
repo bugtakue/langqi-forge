@@ -147,3 +147,11 @@
 - 从干净源码树打包的精确候选为 `dist/langqi-forge-qualifier.zip`，SHA-256 `63e6c602adbbbfbe9efc4274f03b555f465fbff90ffdfb1af7ebeb72efc7845f`，16 个文件，清单绑定上述源码提交，`unzip -t` 通过。测试、文档、诊断脚本和公开任务材料均不在 ZIP 中。
 - 该精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的协议运行目录 `../factory26-local-simulation/runs/qualifier-visual-field-protocol-20260925/` 中，容器退出码 0，独立协议夹具 Playwright 1/1，模型固定响应请求/尝试各 5 次，浏览器探针通过，SDK 需求状态 `IMPLEMENTED`、运行状态完成，生产轨迹 31/31 行哈希链有效。Meter 返回 HTTP 401，费用和分数均为 `null`；1/1 不是公开练习或正式赛通过率。
 - 同一 ZIP 在本机缓存的当前 amd64 基础镜像中直启生成，目录 `../factory26-local-simulation/runs/qualifier-visual-field-current-direct-20260925/`：本地 6/6 检查通过，固定响应请求/尝试各 4 次，SDK 运行完成、轨迹 27/27 行有效。再用旧 arm64 浏览器镜像的隔离诊断跑该生成物，公开协议夹具断言 1/1。直启绕开了当前 Runner 在 ARM→amd64 QEMU 的 Chromium 预检，因此**不是当前完整 Runner**；仍没有真实编码模型、BookStack/Keep GUI 通过率或正式成绩。
+
+## 2026-09-25 浏览器自测不再污染独立评测的种子状态
+
+- 源码提交 `f187596de994af6b66f81b3eb50e46690f1a9df9` 修复一个会直接伤害 GUI 通过率的缺陷：此前 `browser_probe` 在原生成项目上启动后端，点击新增/删除会持久化到原 `backend/data/state.json`，随后 SDK 提交与独立评测会继承被自测改过的种子。现在探针先把 `frontend/`、`backend/` 复制到临时目录，再只在副本里安装依赖、启动后端和执行语义操作；不复制 `node_modules`/控制目录，拒绝软链、特殊文件与超过文件数/体积上限的复制。相对路径的应用状态写入随临时副本销毁，不改原项目。此措施不是后端进程网络沙箱。
+- 新增普通复制/软链拒绝测试和真实 Chromium 状态变更测试：探针点击后临时后端显示 `count=1`，原项目仍为 `count=0`，原项目也未被探针安装依赖。主机全套 79 项：76 项通过、3 项因缺浏览器跳过；在旧 arm64 浏览器容器内临时安装与参赛包相同的 `arcbench-runtime==0.1.0` 后，79/79 全通过。首次未装 SDK 的完整容器测试有 1 项环境依赖报错，补齐后重跑通过，保留该过程而不把首次报错当成代码回归。
+- 从干净源码树生成的**新精确 ZIP**为 `dist/langqi-forge-qualifier.zip`，SHA-256 `6911807b0a1c93c61aefd57372f9670bbcf9d3d0f67e00fbbad58e6d1c45bfc8`，16 个文件，包内清单绑定上述源码提交，`unzip -t` 通过；新夹具、测试与文档不在 ZIP 内。
+- 同一 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的**会写持久状态**协议夹具运行于 `../factory26-local-simulation/runs/qualifier-probe-isolation-protocol-20260925/`：容器退出码 0、固定响应模型请求/尝试各 5 次、SDK 需求 `IMPLEMENTED`、运行完成，探针轨迹明确记录 `workspace_isolated=true`，37/37 行哈希链有效。探针断言 `count=1` 后，独立 Playwright 在自身动作前从 `/api/state` 仍读到种子 `count=0`，之后点击并读到 `count=1`，独立测试 1/1。SDK 的 Git 提交快照中 `backend/data/state.json` 是 `{"count":0}`；本地工作树在独立测试后是 `{"count":1}`，二者顺序与隔离合同一致。Meter 指向本地拒绝连接地址，费用和分数均为 `null`，不能把 1/1 当成真实模型成绩。
+- 同一新 ZIP 在缓存的当前 amd64 基础镜像直启普通单批协议夹具，目录 `../factory26-local-simulation/runs/qualifier-probe-isolation-current-direct-20260925/`：固定响应请求/尝试各 4 次，本地 6/6 检查通过，SDK 运行完成，生产轨迹 27/27 行有效；随后旧 arm64 浏览器隔离诊断 1/1。此路径不运行当前完整 Runner 的 Chromium 预检，也不测量真实模型对 BookStack/Keep 的能力。
