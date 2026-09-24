@@ -233,3 +233,11 @@
 - 本机全套 **95 项单元测试：92 通过、3 项因本机缺匹配浏览器环境跳过**。精确参赛包 `dist/langqi-forge-qualifier.zip`：SHA-256 `1b7063da372b13a8df5b2a0df515e800890c6514fefdd87cdeffc6d501fba27e`，17 个白名单文件，清单绑定上述源码提交且记录干净树，`unzip -t` 通过；协议服务、公开练习材料及测试不在 ZIP。
 - 该**精确 ZIP** 在旧版 arm64 Runner + 当前本地模拟器包装中运行自建固定响应两批夹具，工作区 `../factory26-local-simulation/runs/qualifier-whole-task-outline-protocol-20260925/`。夹具要求首批提示包含未来 `REQ-2` 的目录条目，但不得把 `[REQ-2]` 当作首批活动规格；第二批还须拿到前批新增的源码路径并实际读文件，否则服务返回 HTTP 422。生产轨迹显示首批目录有 `REQ-2`、活动项只有 `REQ-1`；第二批活动项才是 `REQ-2`。模型协议请求/HTTP 尝试各 10 次，SDK 两节点 `IMPLEMENTED`，本地 6/6 检查和行为探针通过，Runner 完成部署与独立 Playwright **2/2**；59/59 行轨迹哈希封印有效，测试密钥不在轨迹明文中。Meter 不可用，`score=null`、模型费用未知。
 - 上述 2/2 只说明新目录没有破坏跨批提示、工具编辑、构建、SDK 提交和独立 GUI **协议夹具**。它不是当前完整 amd64 Runner 的真实 x86 运行，也不是实际编码模型的 BookStack/Keep 通过率、正式赛成绩或优于 Claude Code 的证据。本机仍无可用真实模型 API Key；正式账号登录、上传与提交继续由队长后续决定。
+
+## 2026-09-25 截断模型输出的安全恢复
+
+- 审计发现模型请求虽限制每次最大输出 8,192 token，但原客户端没有把 `choices[0].finish_reason` 交给编码循环。如果提供方返回 `length` 且同一响应含不完整工具调用，旧循环可能直接尝试执行半截写入；若没有工具调用，也可能把截断文字当作审计结论。先新增两项失败回归，分别证明旧实现会执行不安全写入、直到第三次才停止空转。
+- 源码提交 `8f4c00a927b425893f6021305c2fdc5cfd4b6a1a` 将 `finish_reason` 纳入模型响应与生产轨迹：遇到 `length` 时整条响应的工具调用一律不执行，聊天上下文只保留中性占位而不留下未配对的 tool call，并要求模型改为小块完整编辑；连续两次截断即结束本批，交给既有拆批/失败保全路径。它不改变模型供应商的输出上限，也不保证所有提供方都正确标注截断。新增 HTTP 协议解析测试；全套主机单元测试 **98 项：95 通过、3 项因本机浏览器环境跳过**。
+- 从上述干净源码提交打包的精确候选为 `dist/langqi-forge-qualifier.zip`，SHA-256 `e133018789b08f71637285252740d03a33689c2d16fda08fccffe56caa73c7e5`，17 个白名单文件，`unzip -t` 通过。之后的协议夹具改动位于 `tests/` 且不进入 ZIP；当前 ZIP 仍绑定源码提交 `8f4c00a...`。
+- 该**精确 ZIP** 在旧版 arm64 Runner + 当前本地模拟器包装、固定响应两批服务下做两次隔离本地运行。基线目录 `../factory26-local-simulation/runs/qualifier-truncation-safe-protocol-20260925/`：模型协议请求 10 次，SDK 两项 `IMPLEMENTED`，本地 6/6 检查、Runner 独立 Playwright **2/2**，生产轨迹 59/59 行封印有效。截断注入目录 `../factory26-local-simulation/runs/qualifier-length-recovery-protocol-20260925/`：假服务首批先返回 `finish_reason=length` 和一个伪 `write_file`，下一次请求必须包含恢复提示且不能携带未配对的工具调用，否则返回 HTTP 422；最终模型协议请求 11 次、SDK 两项 `IMPLEMENTED`、本地 6/6 检查、Runner 独立 Playwright **2/2**、轨迹 62/62 行封印有效，生成项目里**不存在** `frontend/src/TRUNCATED_UNSAFE.js`。截断注入夹具提交为 `d9d21cd`，没有被打入参赛包。
+- 两次运行均使用自建固定响应假模型、公开协议自测题、旧版 arm64 Runner；不是百炼真实编码模型、BookStack/Keep 公开练习、当前完整 amd64/x86 Runner 或正式赛。Meter 不可用，两次 `score=null`、费用未知。正式 ARC-Bench 账号未登录，本轮没有上传或提交；要衡量实际竞争力仍需真实模型及独立 GUI 练习。
