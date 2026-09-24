@@ -254,3 +254,10 @@
 - 用同一精确 ZIP `64b451fa...` 在 Apple Silicon Mac 上调用缓存的当前公开 amd64 Runner `arcbench-local-current:20260924`，工作区 `../factory26-local-simulation/runs/qualifier-bounded-handoff-current-runner-20260925/`。即使不指定测试目录，Runner 仍在启动前的 Chromium 预检处因 ARM→amd64 QEMU `SIGTRAP` 退出：`container_exit_code=1`、`agent_duration_seconds=null`，智能体未启动，不能据此判定参赛包失败，也不能声称完成当前完整 Runner 的 GUI 验证。
 - 为隔离这项本机架构故障，在相同当前 amd64 镜像内从精确 ZIP 组装全新工作区 `../factory26-local-simulation/runs/qualifier-bounded-handoff-current-direct-20260925/`，按公开 Runner 的依赖安装与生成入口直接运行，再单独调用其 `run_submission.py::run_web_template` 部署函数。固定响应假模型请求 4 次，官方 SDK 接入为 `official-sdk`，报告 `local-contract-passed`、本地 6/6 检查通过，28/28 行生产轨迹封印有效；前端构建、后端安装、应用启动后 `/api/health` 返回 `{"ready":true}`。这验证当前镜像的生成与部署接口相容，**不是完整 Runner、真实模型或独立 GUI 成绩**。
 - 练习 Key 仍未提供；未登录、未上传、未正式提交。当前 amd64 镜像的真实 x86 主机 GUI 路径、BookStack/Keep 真模型通过率和计费仍是未验证项。
+
+## 2026-09-25 多文件源码审计与上下文预算
+
+- 源码提交 `2a9baf016d4b275ba537c9210fd7c8a7aeca26d0` 修复最终验收的两个有确定复现的缺口：旧快照按文件顺序取前 12 KB，一个长文件可遮住全部后续文件；验收提示与快照在长任务中也可把配置的 8,000 字符模型上下文顶到 18,590 字符。现在对最多 24 个已改文件公平分配源码字节预算，截断文件提供首尾摘录及继续 `read_file` 的提示；超过 24 个时明确列出未纳入快照的文件。上下文超限时保留确定性状态检查点，缩小验收提示及源码快照，并在轨迹中记录压缩原因与清单。这仍是模型自审，不能代替独立 GUI 评测；首尾摘录也不能证明中间代码正确，必须按需要继续读文件。
+- 新增回归覆盖三层改动文件同时可见、极小快照预算、超出文件数上限和验收上下文限制。本机全套 **103 项测试：100 通过、3 项因本机浏览器环境跳过**；`git diff --check` 与 `unzip -t` 通过。由干净源码树生成的精确候选 ZIP `dist/langqi-forge-qualifier.zip`：SHA-256 `58c054f3f509f19a1c4011d8250dbd64b820277214f2ee1f47e127f114ec3988`，17 个白名单文件，包内清单绑定上述源码提交；测试夹具与证据文档不在 ZIP。
+- 该精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的固定响应两批协议回归中，工作区为 `../factory26-local-simulation/runs/qualifier-audit-snapshot-protocol-20260925/`：容器退出码 0，SDK 两项 `IMPLEMENTED`，本地协议生成/部署完成，独立 Playwright **2/2**；生产轨迹 **59/59** 行哈希封印有效、未发现未脱敏测试密钥。该夹具两批均发生验收请求，但没有触发长上下文压缩；压缩路径由单元测试覆盖。Meter 不可用，`score=null`、Token 与费用未知。
+- 此 2/2 仅证明精确包没有破坏假模型协议、跨批交接与独立浏览器夹具；不是百炼真实模型的 BookStack/Keep 成绩、当前完整 amd64 Runner 成绩或正式赛分数。本轮没有账号登录、上传或提交；真实模型练习仍需可用 Key，正式提交仍留待队长明确指示。
