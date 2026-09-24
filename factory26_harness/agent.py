@@ -328,6 +328,7 @@ class CodingAgent:
         failed_tool_turns = 0
         empty_turns = 0
         total_tool_calls = 0
+        consecutive_truncated_outputs = 0
         acceptance_audit_requested = False
         acceptance_audit_message: dict[str, Any] | None = None
         observed_files: set[str] = set()
@@ -363,6 +364,44 @@ class CodingAgent:
         for turn in range(1, self.max_turns + 1):
             turn_message_start = len(messages)
             reply = self.model.complete(messages, tool_schemas)
+            if getattr(reply, "finish_reason", "") == "length":
+                consecutive_truncated_outputs += 1
+                self.trace.record(
+                    "model_output_truncated",
+                    stage=stage,
+                    requirement_ids=requirement_ids,
+                    turn=turn,
+                    discarded_tool_calls=len(reply.tool_calls),
+                    consecutive=consecutive_truncated_outputs,
+                )
+                if consecutive_truncated_outputs >= 2:
+                    changed = tuple(sorted(self.tools.changed_files - changed_before))
+                    self.trace.record(
+                        "agent_session_stalled",
+                        stage=stage,
+                        requirement_ids=requirement_ids,
+                        reason="model output hit length limit twice; no partial tool calls executed",
+                        changed_files=changed,
+                    )
+                    return AgentRun(
+                        False, "model output hit length limit twice", changed, turn
+                    )
+                # A length-truncated tool call may have incomplete JSON or source.
+                # Keep the next request's chat transcript valid without executing it.
+                messages.append({
+                    "role": "assistant",
+                    "content": "Previous output was truncated before any tool call was accepted.",
+                })
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Your last response hit the output limit. None of its tool calls "
+                        "were executed. Continue with smaller, complete edits: use one "
+                        "file or a short replace_text per response, then validate."
+                    ),
+                })
+                continue
+            consecutive_truncated_outputs = 0
             messages.append(_assistant_message(reply.raw_message))
             if not reply.tool_calls:
                 final_summary = reply.content.strip()

@@ -27,6 +27,7 @@ class ModelReply:
     prompt_tokens: int
     completion_tokens: int
     response_id: str
+    finish_reason: str = ""
 
 
 def _retry_after_seconds(headers: Any) -> int | None:
@@ -241,6 +242,7 @@ class OpenAIChatClient:
                 if prompt_tokens < 0 or completion_tokens < 0:
                     raise ValueError("model token usage cannot be negative")
                 response_id = str(body.get("id") or "")
+                finish_reason = str(choices[0].get("finish_reason") or "")
                 self.total_prompt_tokens += prompt_tokens
                 self.total_completion_tokens += completion_tokens
                 self.request_count += 1
@@ -249,6 +251,7 @@ class OpenAIChatClient:
                     model=self.model,
                     gateway=self.gateway_evidence(),
                     response_id=response_id,
+                    finish_reason=finish_reason,
                     message=message,
                     usage={
                         "prompt_tokens": prompt_tokens,
@@ -276,6 +279,7 @@ class OpenAIChatClient:
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                     response_id=response_id,
+                    finish_reason=finish_reason,
                 )
                 return reply
             except urllib.error.HTTPError as exc:

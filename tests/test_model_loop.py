@@ -135,6 +135,81 @@ class _StatusHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_truncated_tool_call_is_discarded_before_any_workspace_edit(self) -> None:
+        class TruncatedModel:
+            def __init__(self) -> None:
+                self.calls = 0
+                self.recovery_prompt_seen = False
+                self.orphaned_tool_call_seen = False
+
+            def complete(self, messages, _tools):
+                self.calls += 1
+                if self.calls == 2:
+                    self.recovery_prompt_seen = any(
+                        message.get("role") == "user"
+                        and "output limit" in message.get("content", "")
+                        for message in messages
+                    )
+                    self.orphaned_tool_call_seen = any(
+                        message.get("role") == "assistant" and message.get("tool_calls")
+                        for message in messages
+                    )
+                content = "partial and unsafe" if self.calls == 1 else "safe edit"
+                call = {
+                    "id": f"write-{self.calls}",
+                    "type": "function",
+                    "function": {
+                        "name": "write_file",
+                        "arguments": json.dumps({
+                            "path": "frontend/src/generated.txt",
+                            "content": content,
+                        }),
+                    },
+                }
+                return SimpleNamespace(
+                    raw_message={"role": "assistant", "content": "", "tool_calls": [call]},
+                    tool_calls=(call,),
+                    content="",
+                    finish_reason="length" if self.calls == 1 else "tool_calls",
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = ProductionTrace(root / ".arc" / "trace.jsonl")
+            model = TruncatedModel()
+            CodingAgent(model, WorkspaceTools(root, trace, 3926), trace, max_turns=2).implement(
+                [RequirementNode("R-TRUNC", "Truncation fixture", "Edit safely", (), (), (), {})]
+            )
+            self.assertEqual((root / "frontend/src/generated.txt").read_text(), "safe edit")
+            self.assertTrue(model.recovery_prompt_seen)
+            self.assertFalse(model.orphaned_tool_call_seen)
+            events = [json.loads(line)["event"] for line in trace.path.read_text().splitlines()]
+            self.assertIn("model_output_truncated", events)
+
+    def test_repeated_truncated_model_output_stops_without_editing(self) -> None:
+        class AlwaysTruncatedModel:
+            calls = 0
+
+            def complete(self, _messages, _tools):
+                self.calls += 1
+                return SimpleNamespace(
+                    raw_message={"role": "assistant", "content": "incomplete"},
+                    tool_calls=(),
+                    content="incomplete",
+                    finish_reason="length",
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = ProductionTrace(root / ".arc" / "trace.jsonl")
+            model = AlwaysTruncatedModel()
+            result = CodingAgent(model, WorkspaceTools(root, trace, 3926), trace, max_turns=20).implement(
+                [RequirementNode("R-TRUNC", "Truncation fixture", "Edit safely", (), (), (), {})]
+            )
+            self.assertFalse(result.completed)
+            self.assertEqual(model.calls, 2)
+            self.assertFalse((root / "frontend").exists())
+
     def test_repeated_no_tool_summaries_stop_before_spending_full_budget(self) -> None:
         class EmptyModel:
             calls = 0
@@ -313,6 +388,44 @@ class ModelLoopTests(unittest.TestCase):
         self.assertEqual(sleeps, [])
         failure = next(row["payload"] for row in rows if row["event"] == "model_error")
         self.assertFalse(failure["will_retry"])
+
+    def test_gateway_preserves_finish_reason_for_truncated_responses(self) -> None:
+        _StatusHandler.calls = 0
+        _StatusHandler.responses = [
+            (
+                200,
+                None,
+                json.dumps({
+                    "choices": [{
+                        "finish_reason": "length",
+                        "message": {"role": "assistant", "content": "partial output"},
+                    }],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 3},
+                }).encode("utf-8"),
+            )
+        ]
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _StatusHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                trace = ProductionTrace(Path(directory) / "trace.jsonl")
+                with patch.dict(os.environ, {
+                    "OPENAI_API_KEY": "test-secret",
+                    "OPENAI_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1",
+                    "MODEL": "mock-model",
+                }, clear=True):
+                    reply = OpenAIChatClient(trace).complete(
+                        [{"role": "user", "content": "test"}], []
+                    )
+                self.assertEqual(reply.finish_reason, "length")
+                rows = [json.loads(line) for line in trace.path.read_text().splitlines()]
+                response = next(row["payload"] for row in rows if row["event"] == "model_response")
+                self.assertEqual(response["finish_reason"], "length")
+        finally:
+            server.shutdown()
+            thread.join(timeout=2)
+            server.server_close()
 
     def test_browser_probe_tool_summary_keeps_bounded_behavioral_evidence(self) -> None:
         summary = _compact_tool_result(
