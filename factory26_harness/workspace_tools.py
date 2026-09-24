@@ -27,6 +27,27 @@ MAX_REQUIREMENT_PAGE_CHARS = 4_000
 MAX_DIRECT_READ_RESULT_CHARS = MAX_TOOL_RESULT_CHARS - 500
 
 
+def _batch_content_budgets(lengths: list[int], total_budget: int) -> list[int]:
+    """Give unused small-file capacity to larger files without exceeding the batch cap."""
+
+    budgets = [0] * len(lengths)
+    remaining = total_budget
+    pending = list(range(len(lengths)))
+    while pending:
+        share = remaining // len(pending)
+        complete = [index for index in pending if lengths[index] <= share]
+        if not complete:
+            extra = remaining % len(pending)
+            for position, index in enumerate(pending):
+                budgets[index] = share + (position < extra)
+            break
+        for index in complete:
+            budgets[index] = lengths[index]
+            remaining -= lengths[index]
+            pending.remove(index)
+    return budgets
+
+
 def _contains_sensitive_part(parts: tuple[str, ...]) -> bool:
     return any(
         part.lower() in SENSITIVE_NAMES
@@ -662,10 +683,11 @@ class WorkspaceTools:
             )
 
         files = [self._tool_read_file({"path": path}) for path in normalized]
-        per_file_characters = max(
-            500, MAX_BATCH_RESULT_CONTENT_CHARS // len(files)
+        content_budgets = _batch_content_budgets(
+            [len(str(file_result.get("content") or "")) for file_result in files],
+            MAX_BATCH_RESULT_CONTENT_CHARS,
         )
-        for file_result in files:
+        for file_result, per_file_characters in zip(files, content_budgets):
             content = str(file_result.get("content") or "")
             if len(content) > per_file_characters:
                 kept: list[str] = []

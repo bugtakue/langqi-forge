@@ -15,6 +15,8 @@ from factory26_harness.checks import (
     interaction_policy_check,
     package_policy_check,
 )
+from factory26_harness.agent import STARTER_SOURCE_PATHS
+from factory26_harness.generic_scaffold import scaffold_workspace
 from factory26_harness.qualifier import _smoke_port
 from factory26_harness.trace import (
     ProductionTrace,
@@ -149,6 +151,55 @@ class ToolAndTraceTests(unittest.TestCase):
                 )
             )
             self.assertFalse(duplicate["ok"])
+
+    def test_batch_read_reuses_small_file_budget_for_larger_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frontend = root / "frontend"
+            frontend.mkdir()
+            long_source = "".join(
+                f"line-{index}: " + "x" * 48 + "\n" for index in range(1, 101)
+            )
+            (frontend / "large.js").write_text(long_source, encoding="utf-8")
+            paths = ["frontend/large.js"]
+            for index in range(4):
+                relative = f"frontend/small-{index}.js"
+                (root / relative).write_text("ok\n", encoding="utf-8")
+                paths.append(relative)
+            tools = WorkspaceTools(
+                root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
+            )
+
+            result = json.loads(tools.execute("read_files", {"paths": paths}))
+
+            self.assertTrue(result["ok"])
+            self.assertNotIn("truncated", result)
+            self.assertEqual(result["file_count"], 5)
+            self.assertTrue(all(not row["content_truncated"] for row in result["files"]))
+            self.assertEqual(result["files"][0]["last_line"], 100)
+            self.assertIn("line-100:", result["files"][0]["content"])
+
+    def test_actual_starter_batch_is_complete_in_one_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold_workspace(root)
+            tools = WorkspaceTools(
+                root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
+            )
+
+            result = json.loads(tools.execute("read_files", {
+                "paths": list(STARTER_SOURCE_PATHS),
+            }))
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["file_count"], len(STARTER_SOURCE_PATHS))
+            self.assertTrue(all(not row["content_truncated"] for row in result["files"]))
+            server = next(row for row in result["files"] if row["path"] == "backend/server.mjs")
+            self.assertEqual(
+                server["last_line"],
+                len((root / "backend/server.mjs").read_text(encoding="utf-8").splitlines()),
+            )
+
 
     def test_large_batch_read_keeps_all_file_hashes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
