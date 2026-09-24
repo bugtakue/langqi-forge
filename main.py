@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Factory26 low-token ARC-Bench agent entry point."""
+"""Factory26 compliant model-driven ARC-Bench agent entry point."""
 
-from factory26_harness.cli import main
+from factory26_harness.qualifier import main
 
 
 if __name__ == "__main__":

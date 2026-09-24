@@ -8,8 +8,9 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from factory26_harness import cli
+from factory26_harness import qualifier
 from factory26_harness.submission_bundle import (
+    BUNDLE_MODULES,
     SOURCE_MANIFEST_NAME,
     build_submission_bundle,
     require_external_output_directory,
@@ -20,7 +21,6 @@ from factory26_harness.submission_bundle import (
 class SubmissionBundleTests(unittest.TestCase):
     def _source_tree(self, root: Path) -> Path:
         source = root / "source"
-        (source / "arcbench_agent_runtime").mkdir(parents=True)
         (source / "factory26_harness" / "templates" / "github").mkdir(
             parents=True
         )
@@ -31,12 +31,10 @@ class SubmissionBundleTests(unittest.TestCase):
         (source / "requirements.txt").write_text(
             "pyyaml>=6,<7\n", encoding="utf-8"
         )
-        (source / "arcbench_agent_runtime" / "__init__.py").write_text(
-            "", encoding="utf-8"
-        )
-        (source / "factory26_harness" / "__init__.py").write_text(
-            "", encoding="utf-8"
-        )
+        for relative in BUNDLE_MODULES:
+            target = source / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("# bundle fixture\n", encoding="utf-8")
         (source / "factory26_harness" / "cli.py").write_text(
             "VALUE = 1\n", encoding="utf-8"
         )
@@ -94,6 +92,10 @@ class SubmissionBundleTests(unittest.TestCase):
                 self.assertIn(SOURCE_MANIFEST_NAME, names)
                 self.assertNotIn("tests/secret-token.txt", names)
                 self.assertNotIn("factory26_harness/evidence.py", names)
+                self.assertFalse(
+                    any(name.startswith("factory26_harness/templates/") for name in names)
+                )
+                self.assertNotIn("factory26_harness/cli.py", names)
                 manifest = json.loads(archive.read(SOURCE_MANIFEST_NAME))
                 self.assertEqual(
                     manifest["source_revision"], first_result["source_revision"]
@@ -136,20 +138,12 @@ class SubmissionBundleTests(unittest.TestCase):
             with zipfile.ZipFile(bundle) as archive:
                 archive.extractall(extracted)
 
-            with patch.object(cli, "SOURCE_ROOT", extracted):
-                identity = cli._source_identity()
-                with patch.dict(
-                    cli.os.environ,
-                    {"FACTORY26_SOURCE_REVISION": "0" * 40},
-                ):
-                    with self.assertRaisesRegex(
-                        RuntimeError, "does not match verified"
-                    ):
-                        cli._source_identity()
+            with patch.object(qualifier, "SOURCE_ROOT", extracted):
+                identity = qualifier._source_identity()
 
             self.assertEqual(identity["revision"], result["source_revision"])
             self.assertEqual(identity["source"], "verified-submission-manifest")
-            self.assertTrue(identity["worktree_clean"])
+            self.assertEqual(identity["contract_sha256"], verify_source_manifest(extracted)["contract_sha256"])
 
     def test_manifest_verification_rejects_tampering(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

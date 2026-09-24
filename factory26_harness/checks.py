@@ -444,6 +444,8 @@ def startup_check(root: Path, smoke_port: int) -> CheckResult:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
+        if process.stdout is not None:
+            process.stdout.close()
 
 
 def run_full_checks(root: Path, smoke_port: int) -> list[CheckResult]:

@@ -14,8 +14,7 @@ from factory26_harness.checks import (
     interaction_policy_check,
     package_policy_check,
 )
-from factory26_harness.cli import _safe_smoke_port
-from factory26_harness.impact import ChangeImpactGraph
+from factory26_harness.qualifier import _smoke_port
 from factory26_harness.trace import (
     ProductionTrace,
     find_unredacted_secrets,
@@ -68,11 +67,32 @@ class ToolAndTraceTests(unittest.TestCase):
             )
             self.assertFalse(duplicate["ok"])
 
+    def test_large_batch_read_keeps_all_file_hashes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frontend = root / "frontend"
+            frontend.mkdir()
+            for name in ("a.js", "b.js", "c.js"):
+                (frontend / name).write_text("const item = 1;\n" * 1500, encoding="utf-8")
+            tools = WorkspaceTools(
+                root, ProductionTrace(root / ".arc" / "trace.jsonl"), 3910
+            )
+            result = json.loads(
+                tools.execute(
+                    "read_files",
+                    {"paths": [f"frontend/{name}" for name in ("a.js", "b.js", "c.js")]},
+                )
+            )
+            self.assertTrue(result["ok"])
+            self.assertEqual(len(result["files"]), 3)
+            self.assertTrue(all(len(row["sha256"]) == 64 for row in result["files"]))
+            self.assertTrue(all(row["content_truncated"] for row in result["files"]))
+
     def test_smoke_port_selection_skips_occupied_and_grading_ports(self) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
             occupied.bind(("127.0.0.1", 0))
             start = occupied.getsockname()[1]
-            selected = _safe_smoke_port(start, start + 1)
+            selected = _smoke_port(start + 1)
         self.assertNotIn(selected, {start, start + 1})
 
     def test_writes_are_scoped_and_recorded(self) -> None:
@@ -496,16 +516,6 @@ class ToolAndTraceTests(unittest.TestCase):
                 },
             )
             self.assertFalse(tools.current_changes_validated)
-
-    def test_impact_graph_uses_observed_links(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            graph = ChangeImpactGraph(Path(directory) / "impact.json")
-            graph.record_requirement_files(["R1"], ["frontend/src/app.js"])
-            graph.record_requirement_files(["R2"], ["backend/server.mjs"])
-            self.assertEqual(
-                graph.files_for_requirements(["R2", "R1"]),
-                ["backend/server.mjs", "frontend/src/app.js"],
-            )
 
 
 if __name__ == "__main__":

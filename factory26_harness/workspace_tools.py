@@ -25,7 +25,8 @@ VALIDATING_SCOPES = {"quick", "full"}
 MAX_TOOL_RESULT_CHARS = 12_000
 MAX_READ_FILE_BYTES = 2_000_000
 MAX_BATCH_READ_FILES = 8
-MAX_BATCH_READ_BYTES = 16_000
+MAX_BATCH_READ_BYTES = 4_000_000
+MAX_BATCH_RESULT_CONTENT_CHARS = 9_000
 
 
 def _contains_sensitive_part(parts: tuple[str, ...]) -> bool:
@@ -274,6 +275,20 @@ class WorkspaceTools:
             "original_chars": len(encoded),
             "preview": encoded[: MAX_TOOL_RESULT_CHARS - 500],
         }
+        if isinstance(result, dict):
+            for key in ("path", "sha256", "total_lines"):
+                if key in result:
+                    summary[key] = result[key]
+            if isinstance(result.get("files"), list):
+                summary["files"] = [
+                    {
+                        key: entry[key]
+                        for key in ("path", "sha256", "total_lines")
+                        if key in entry
+                    }
+                    for entry in result["files"]
+                    if isinstance(entry, dict)
+                ]
         return json.dumps(summary, ensure_ascii=False, sort_keys=True)
 
     def _tool_list_files(self, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -347,9 +362,18 @@ class WorkspaceTools:
                 f"{total_bytes} > {MAX_BATCH_READ_BYTES} bytes"
             )
 
+        files = [self._tool_read_file({"path": path}) for path in normalized]
+        per_file_characters = max(
+            500, MAX_BATCH_RESULT_CONTENT_CHARS // len(files)
+        )
+        for file_result in files:
+            content = str(file_result.get("content") or "")
+            if len(content) > per_file_characters:
+                file_result["content"] = content[:per_file_characters]
+                file_result["content_truncated"] = True
         return {
             "ok": True,
-            "files": [self._tool_read_file({"path": path}) for path in normalized],
+            "files": files,
             "file_count": len(normalized),
             "total_bytes": total_bytes,
         }

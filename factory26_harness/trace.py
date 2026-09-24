@@ -31,7 +31,7 @@ _SENSITIVE_PARTS = (
 _SECRET_TEXT_PATTERNS = (
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/=]{12,}"),
     # A bare ``Basic <word>`` pattern corrupts ordinary prose such as
-    # "basic spreadsheet capability".  Structured Authorization fields are
+    # "basic application capability". Structured Authorization fields are
     # already redacted by key; this text rule is intentionally limited to an
     # actual HTTP header rendering.
     re.compile(r"(?i)\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/=]{8,}"),

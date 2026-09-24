@@ -16,21 +16,19 @@ SOURCE_MANIFEST_NAME = "factory26-source.json"
 SOURCE_MANIFEST_SCHEMA = "langqi-forge-submission-v1"
 FIXED_ZIP_TIMESTAMP = (2026, 1, 1, 0, 0, 0)
 ROOT_FILES = ("main.py", "requirements.txt")
-PACKAGE_PREFIXES = ("arcbench_agent_runtime/", "factory26_harness/")
-EXCLUDED_PARTS = frozenset({"__pycache__", ".git", ".venv", "dist"})
-EXCLUDED_PACKAGE_FILES = frozenset(
-    {
-        "factory26_harness/evidence.py",
-        "factory26_harness/feedback.py",
-        "factory26_harness/judge_report.py",
-        "factory26_harness/public_eval.py",
-        "factory26_harness/public_fixtures.py",
-        "factory26_harness/public_contract.py",
-        "factory26_harness/public_tasks.py",
-        "factory26_harness/qualification.py",
-        "factory26_harness/verify_evidence.py",
-    }
+BUNDLE_MODULES = (
+    "factory26_harness/__init__.py",
+    "factory26_harness/agent.py",
+    "factory26_harness/checks.py",
+    "factory26_harness/generic_scaffold.py",
+    "factory26_harness/model.py",
+    "factory26_harness/qualifier.py",
+    "factory26_harness/requirements.py",
+    "factory26_harness/submission_bundle.py",
+    "factory26_harness/trace.py",
+    "factory26_harness/workspace_tools.py",
 )
+EXCLUDED_PARTS = frozenset({"__pycache__", ".git", ".venv", "dist"})
 SECRET_NAME_MARKERS = (
     ".env",
     "account.txt",
@@ -99,34 +97,12 @@ def _safe_relative_path(value: str) -> str:
 
 def runtime_source_files(source_root: Path) -> tuple[str, ...]:
     selected: list[str] = []
-    for relative in ROOT_FILES:
+    for relative in (*ROOT_FILES, *BUNDLE_MODULES):
         if not (source_root / relative).is_file():
             raise FileNotFoundError(
                 f"required submission file is missing: {relative}"
             )
-        selected.append(relative)
-    for prefix in PACKAGE_PREFIXES:
-        package_root = source_root / prefix
-        if not package_root.is_dir():
-            raise FileNotFoundError(
-                f"required submission package is missing: {prefix}"
-            )
-        for path in sorted(package_root.rglob("*")):
-            if not path.is_file():
-                continue
-            relative = path.relative_to(source_root).as_posix()
-            if any(
-                part in EXCLUDED_PARTS for part in PurePosixPath(relative).parts
-            ):
-                continue
-            if relative in EXCLUDED_PACKAGE_FILES:
-                continue
-            if not (
-                relative.endswith(".py")
-                or relative.startswith("factory26_harness/templates/")
-            ):
-                continue
-            selected.append(_safe_relative_path(relative))
+        selected.append(_safe_relative_path(relative))
     return tuple(sorted(set(selected)))
 
 
