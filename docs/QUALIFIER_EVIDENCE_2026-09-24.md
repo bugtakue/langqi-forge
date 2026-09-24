@@ -170,3 +170,11 @@
 - [官网公开榜单快照](https://create.gosim.org/factory26/arcbench-leaderboard.json)的 `competition.id=arc-bench-lite`，`updatedAt=2026-09-24T16:32:14.704Z`，读取时有 53 条记录；网站明确标注“公开赛榜单，非正式初赛排名”。其 66 项测试和可见成本/分数均不能当作正式两任务、200 项测试的排名，也不能当作本参赛包的成绩。部分快照行显示零模型成本与满分；原因未经核实，不据此优化或推断对手实力。
 - [官方 Runtime API](https://arc-bench.com/api-doc)仍要求 Python 根入口 `main.py`、`requirements.txt` 和 `arcbench_agent_runtime` 高层 SDK，不允许手写事件载荷；与当前 ZIP 合同一致。本地主办方模拟器 `HEAD` 与远端 `origin/HEAD` 同为 `4e62690ef0af48601150f248e1f993a300533357`，未发现因模拟器上游更新而必须重打包的变化。
 - 本轮 shell 环境没有练习用模型 Key，剪贴板为空；因此没有运行真实编码模型的 BookStack/Keep，不能补出真实 GUI 通过率或成本。当前 ZIP 未改动，SHA-256 仍为 `e35dedaf38d12ca813546f331092d24347b865719c4d1237d49d89cab15dbc5b`。**未能登录**，也没有上传或提交。
+
+## 2026-09-25 前端构建自检也必须隔离
+
+- 审计发现 `frontend_build_check` 之前在原生成项目里执行 `npm run build`。新增通用回归夹具：构建脚本先正常生成 `dist/index.html`，再把相对路径 `backend/data/state.json` 的 `count` 从 0 加到 1。修改前，构建检查返回通过而原种子实际变成 1，测试以 `1 != 0` 失败；这会让之后的独立 GUI 评测从错误种子开始。源码提交 `d181509207163976c89f5a8e68154064d535cc70` 改为在有界临时应用副本中安装依赖和构建，验证构建结果无软链、特殊文件或超限内容后，仅把新鲜 `frontend/dist/` 晋升回原项目；原种子保持 0。另有回归用例确认带软链的构建输出会失败关闭、不晋升；原有无操作构建不能靠陈旧 `dist` 通过、模型密钥不进入构建子进程的测试继续通过。
+- 主机完整单测为 **82 项：79 通过、3 项因本机缺匹配浏览器环境跳过**。从干净源码树打包的精确 `dist/langqi-forge-qualifier.zip` SHA-256 为 `258655fde48d37b15c32f996b9e3c9294c756ab6df921285639d0c4c2891c281`，17 个文件，清单绑定上述源码提交，`unzip -t` 通过。旧 ZIP 哈希不再代表当前候选。
+- 该精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的有状态固定响应协议夹具运行于 `../factory26-local-simulation/runs/qualifier-build-isolation-protocol-20260925/`：容器退出码 0、模型协议请求/尝试各 5 次、官方 SDK 接入正常、本地 6/6 检查通过、独立 Playwright **1/1**。37/37 条生产轨迹通过完整哈希封印校验且未发现未脱敏夹具密钥；SDK Git 提交里的 `backend/data/state.json` 仍为 `{"count":0}`，独立浏览器测试操作后的工作树为 `{"count":1}`。成本与分数因 Meter 不可用为 `null`；这里的 1/1 只证明协议与种子隔离，不是实际编码模型的公开练习成绩。
+- 同一精确 ZIP 在本机缓存的当前 amd64 基础镜像 `arcbench-local-current:20260924` 中绕过 ARM→amd64 QEMU Chromium 预检，按主办方 `run_submission.py` 的依赖安装、环境和生成入口直启，目录为 `../factory26-local-simulation/runs/qualifier-build-isolation-current-direct-20260925/`：固定响应夹具请求/尝试各 4 次，SDK 状态 `IMPLEMENTED`，本地 6/6 检查通过，27/27 条轨迹有效。该生成物再借旧 arm64 浏览器镜像以无网络、无模型密钥方式执行一条公开协议断言，报告 `hybrid-playwright-build-isolation-20260925-report.json` 为 expected=1、unexpected=0、skipped=0。**当前基础镜像直启 + 旧镜像浏览器**不是当前完整 Runner，不能替代正式赛、BookStack/Keep 真模型成绩或隐藏测试。
+- 本次修复只隔离本智能体自行执行的相对路径构建副作用，并不构成对构建脚本的进程网络沙箱或对平台以后独立构建的控制。正式账号登录仍失败，未上传或提交；下一项能改变竞争力判断的证据仍是真实模型在两道公开练习上的独立 GUI 通过率与费用。
