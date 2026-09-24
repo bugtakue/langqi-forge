@@ -83,7 +83,9 @@ class TwoBatchGatewayTests(unittest.TestCase):
             "Implement [REQ-1]"
         )
 
-        def complete(expose_reader: bool, prior_tool: str = "") -> dict:
+        def complete(
+            expose_reader: bool, prior_tool: str = "", tool_result: dict | None = None
+        ) -> dict:
             messages = [
                 {"role": "system", "content": "fixture"},
                 {"role": "user", "content": prompt},
@@ -94,6 +96,8 @@ class TwoBatchGatewayTests(unittest.TestCase):
                     "content": "",
                     "tool_calls": [{"function": {"name": prior_tool}}],
                 })
+            if tool_result is not None:
+                messages.append({"role": "tool", "content": json.dumps(tool_result)})
             payload = {"messages": messages}
             if expose_reader:
                 payload["tools"] = [
@@ -121,8 +125,35 @@ class TwoBatchGatewayTests(unittest.TestCase):
                 complete(True, "read_files")
             self.assertEqual(premature.exception.code, 422)
             self.assertFalse(Handler.full_spec_verified)
+            Handler.full_spec_verified = True
+            after_complete = complete(True, "read_files")
+            names = [
+                call["function"]["name"]
+                for call in after_complete["choices"][0]["message"]["tool_calls"]
+            ]
+            self.assertEqual(names, ["write_file", "replace_text"])
+            Handler.review_full_spec_first = True
+            Handler.full_spec_revisited = False
+            with self.assertRaises(HTTPError) as missing_review:
+                complete(True, "read_files")
+            self.assertEqual(missing_review.exception.code, 422)
+            reviewed = complete(True, "read_requirement_spec", {
+                "ok": True,
+                "requirement_id": "REQ-1",
+                "start_char": 0,
+                "review": True,
+                "complete": False,
+            })
+            self.assertEqual(
+                reviewed["choices"][0]["message"]["tool_calls"][0]["function"]["name"],
+                "read_files",
+            )
+            self.assertTrue(Handler.full_spec_revisited)
         finally:
             Handler.require_full_spec_first = False
+            Handler.full_spec_verified = False
+            Handler.review_full_spec_first = False
+            Handler.full_spec_revisited = False
             server.shutdown()
             thread.join(timeout=2)
             server.server_close()

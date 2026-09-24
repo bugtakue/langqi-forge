@@ -44,6 +44,8 @@ class Handler(BaseHTTPRequestHandler):
     audit_repair_verified = False
     require_full_spec_first = False
     full_spec_verified = False
+    review_full_spec_first = False
+    full_spec_revisited = False
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
@@ -153,7 +155,17 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_error(422, "long requirement reader returned no page")
                     return
                 last_page = pages[-1]
-                if not last_page.get("complete"):
+                if last_page.get("review"):
+                    if (
+                        not type(self).full_spec_verified
+                        or not type(self).review_full_spec_first
+                        or last_page.get("start_char") != 0
+                    ):
+                        self.send_error(422, "unexpected long specification review")
+                        return
+                    type(self).full_spec_revisited = True
+                    last_tool = ""
+                elif not last_page.get("complete"):
                     spec_page_action = (
                         "read_requirement_spec", {
                             "requirement_id": "REQ-1",
@@ -169,10 +181,19 @@ class Handler(BaseHTTPRequestHandler):
                         self.send_error(422, "original long specification was not read completely")
                         return
                     type(self).full_spec_verified = True
-                    last_tool = ""
+                    if type(self).review_full_spec_first:
+                        spec_page_action = (
+                            "read_requirement_spec", {"requirement_id": "REQ-1", "start_char": 0}
+                        )
+                    else:
+                        last_tool = ""
             else:
-                self.send_error(422, "attempted implementation before reading full specification")
-                return
+                if not type(self).full_spec_verified or (
+                    type(self).review_full_spec_first
+                    and not type(self).full_spec_revisited
+                ):
+                    self.send_error(422, "attempted implementation before reading full specification")
+                    return
         if spec_page_action is not None:
             name_and_arguments = [spec_page_action]
         elif second_batch and type(self).fail_second:
@@ -296,12 +317,16 @@ def main() -> None:
     parser.add_argument("--truncate-first", action="store_true")
     parser.add_argument("--repair-first-audit", action="store_true")
     parser.add_argument("--require-full-spec-first", action="store_true")
+    parser.add_argument("--review-full-spec-first", action="store_true")
     args = parser.parse_args()
+    if args.review_full_spec_first and not args.require_full_spec_first:
+        parser.error("--review-full-spec-first requires --require-full-spec-first")
     port = args.port
     Handler.fail_second = args.fail_second
     Handler.truncate_first = args.truncate_first
     Handler.repair_first_audit = args.repair_first_audit
     Handler.require_full_spec_first = args.require_full_spec_first
+    Handler.review_full_spec_first = args.review_full_spec_first
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"two-batch protocol fixture listening on {port}", flush=True)
     server.serve_forever()
