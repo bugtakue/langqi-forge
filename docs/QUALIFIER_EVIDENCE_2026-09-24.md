@@ -327,3 +327,11 @@
 - 在同一当前 amd64 镜像中，对该生成物独立调用公开 Runner 的 `run_submission.py::run_web_template`：前端及后端 `npm install`、前端构建、应用启动均成功，根路径 HTTP 200；再独立请求 `/api/health` 得 HTTP 200 和 `{"ready":true}`。生成报告仍如实标记 `behavioral_probe_tested=false`，因为这个固定响应夹具没有调用浏览器探针。
 - 只为本地诊断给该工作区加入一条公开协议断言，使用旧版 arm64 浏览器镜像按 `docs/HYBRID_PUBLIC_GUI.md` 运行，`hybrid-playwright-current-direct-latest-report.json` 为 expected **1**、unexpected **0**、skipped **0**。该断言只检查假模型写出的 `Example` 标题，不代表 BookStack/Keep 或正式任务。
 - 当前 amd64 镜像的 Chromium headless-shell 在此 Apple Silicon 主机的 QEMU 下仍于预检崩溃；改试同镜像完整 Chrome 虽能启动浏览器进程，创建页面仍因 QEMU 崩溃，放宽容器 seccomp 和单进程参数均未消除。Docker Desktop 的 Rosetta 模拟当前关闭且另有 7 个容器运行；本轮**没有**修改 Docker 设置、重启服务或中断这些容器。因此“当前镜像直启生成/部署 + 旧镜像浏览器”仍**不是当前完整 Runner**。没有真实模型公开练习成绩、费用、正式赛分数；未登录、未上传、未提交。
+
+## 2026-09-25 源码读取无声截断修复与精确包复测
+
+- 审计发现 `read_files` 默认只给每个文件的前 400 行；短行文件即使还有第 401 行，也可能没有 `content_truncated` 提示。较长的单文件结果还会被通用工具返回上限截成任意字符预览，却仍带着原结果的“未截断”元数据，令后续批次误以为源码已看全。先新增失败回归，再由源码提交 `b2cb572c80dca5f5a050fa309f1ae2eed388ab04` 改成完整行分页、准确的 `next_start_line`，超长单行以 `next_start_char` 精确续读；过大的批量返回只保留哈希和逐文件读取指示。上下文检查点携带未读源码游标，低优先级回合提醒在紧张的上下文预算下不再挤掉验收/源码。它提供可回读能力，不保证真实模型会主动审完每一页。
+- 主机全套 **127 项：124 通过、3 项因主机未启浏览器集成而跳过**；旧 arm64 镜像启用真实 Chromium 集成后，`tests.test_browser_probe` **7/7**。`git diff --check` 与 ZIP 解压测试通过。干净源码树构建的精确 `dist/langqi-forge-qualifier.zip` SHA-256 为 `c65070b1cc155b87649f85747c170b8268f094463aa0d578ecdd384e45d3c777`，17 个白名单文件，包内清单绑定上述源码提交。
+- **双批正常链路**：同一精确 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的工作区 `../factory26-local-simulation/runs/qualifier-source-paging-protocol-20260925/` 中，固定响应假模型请求/HTTP 尝试各 **10** 次，SDK 两项需求均 `IMPLEMENTED`、`local-contract-passed`、独立 Playwright **2/2**、容器退出码 0；生产轨迹 **59/59** 行哈希封印有效，未发现未脱敏测试密钥。Meter 使用本地假服务返回 HTTP 404，`score=null`、真实成本未知。
+- **当前基础镜像直启链路**：同一 ZIP 在缓存的 `arcbench-local-current:20260924` amd64 镜像的全新工作区 `../factory26-local-simulation/runs/qualifier-paged-current-direct-20260925/` 直接生成，固定响应假模型请求 4 次、官方 SDK 正常、本地检查 **6/6**、生产轨迹 **28/28** 行有效。再独立调用当前镜像的 `run_submission.py::run_web_template`，依赖安装、前端构建和后端启动均成功，`/api/health` 返回 HTTP 200、`{"ready":true}`。借旧 arm64 浏览器镜像的无网络混合诊断对该生成物跑一条公开协议断言 **1/1**，不是当前完整 amd64 Runner 的 GUI 运行。
+- 上述 2/2 和 1/1 均来自自建合成题与固定响应假模型，只证明新包的协议链路没有回归。仍没有真实百炼模型在 BookStack/Keep 的公开练习通过率或人民币成本，也没有当前完整 Runner 在真实 x86 环境的 GUI 成绩；ARC-Bench 未登录，未上传或正式提交。
