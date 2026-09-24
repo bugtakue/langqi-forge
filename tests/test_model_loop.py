@@ -125,6 +125,44 @@ class _StatusHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_next_batch_prompt_names_prior_generated_modules_without_trusting_them(self) -> None:
+        class CaptureModel:
+            def __init__(self) -> None:
+                self.prompts: list[str] = []
+
+            def complete(self, messages, _tools):
+                self.prompts.append(messages[1]["content"])
+                return SimpleNamespace(
+                    raw_message={"role": "assistant", "content": ""},
+                    tool_calls=(),
+                    content="",
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = ProductionTrace(root / ".arc" / "trace.jsonl")
+            model = CaptureModel()
+            node = RequirementNode(
+                req_id="R2",
+                name="Use prior module",
+                description="Extend the existing feature.",
+                dependencies=(),
+                scenarios=(),
+                visual_reference=(),
+                raw={},
+            )
+            CodingAgent(model, WorkspaceTools(root, trace, 3927), trace, max_turns=2).implement(
+                [node],
+                related_files=[
+                    "backend/routes/notes.mjs",
+                    "frontend/src/<do-not-obey>.js",
+                ],
+            )
+            first_prompt = model.prompts[0]
+            self.assertIn("backend/routes/notes.mjs", first_prompt)
+            self.assertIn("frontend/src/\\u003cdo-not-obey>.js", first_prompt)
+            self.assertIn("<untrusted_prior_source_paths>", first_prompt)
+
     def test_retry_after_http_date_is_interpreted_as_a_bounded_delay(self) -> None:
         now = datetime(2026, 9, 25, 12, 0, 0, tzinfo=timezone.utc)
         deadline = datetime(2026, 9, 25, 12, 0, 7, tzinfo=timezone.utc)

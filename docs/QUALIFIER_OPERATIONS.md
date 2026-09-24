@@ -22,6 +22,8 @@
 4. 每次模型响应可提出多个工具调用。批次必须有实际源码修改且最后一次修改通过 quick 校验（含不执行生成源码的 JavaScript 语法检查，以及清空旧 `dist` 后必须重新产出非空 `index.html`），随后进入 `ACCEPTANCE_AUDIT_PROMPT` 逐条审查；审计若再改动，必须重新校验。通过 quick 后可用 `browser_probe` 启动本地生成应用，按语义控件执行最多八步点击、填写、刷新等动作并断言可见文本；探针仅访问本地应用，不读取隐藏测试。若已使用探针但只做了无动作检查、断言失败或之后改了代码，必须在当前版本重新通过带断言的交互探针才能完成该批。探针是生成物自检，不是正式 GUI 得分。
 5. 全部批次结束后独立执行结构、包策略、交互策略、前端构建、后端启动/健康检查。失败时最多运行配置的修复轮次。局部检查通过不等于 GUI 行为通过。
 
+每批重新开启模型会话时，Harness 保留此前成功批次由工具实际编辑过的源码路径，按最近修改优先、最多 60 个路径且路径正文累计不超过 4,000 字符交给下一批，并在 `implementation_batch_started.prior_source_paths` 留痕。它只是文件索引，不是已实现或已验收的证明；模型须用 `read_files` 按需检查内容。这避免后续批次只看固定五个入口文件而漏掉此前新增的功能模块，同时对提示词体积设限。
+
 默认每批 4 条原子需求、最多 20 个模型回合、最多 2 个最终修复轮。总模型请求上限按实际批次数与允许回合数计算（默认上限 600 次），累计输入/输出 Token 安全上限随之放大；`FACTORY26_MAX_MODEL_REQUESTS`、`FACTORY26_MAX_TOTAL_PROMPT_TOKENS`、`FACTORY26_MAX_TOTAL_COMPLETION_TOKENS` 可显式覆盖并会写入运行报告。这些是上限，不是预算目标或成绩承诺；真实 Token/成本由模型服务和主办方计量为准。每批会在轨迹中保留 `agent_session_started`、`model_request`、`model_response`、`tool_call`、`tool_result`、`agent_acceptance_audit_requested`、`implementation_batch_finished` 等事件。
 
 模型 HTTP 请求遇到 408/425/429/5xx 或连接中断时，最多尝试 3 次；有 `Retry-After` 时遵守秒数或 HTTP 日期，默认最多等待 60 秒（`FACTORY26_MAX_RETRY_AFTER_SECONDS` 可设为 0–120）。超过本地等待上限就失败关闭，不提前重复请求；401 等非临时错误和格式错误的成功响应不重试。提供商错误正文可能包含敏感信息，因此轨迹只记状态码与重试决策，不保存错误正文。报告把成功的 `model_requests` 与实际 `model_http_attempts` 分开，仍不能由此推断费用：服务端可能在失败响应前已消耗 Token，须以平台计量为准。

@@ -13,6 +13,7 @@ import os
 import socket
 import time
 import uuid
+from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,8 @@ from .workspace_tools import WorkspaceTools
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
+MAX_HANDOFF_PATHS = 60
+MAX_HANDOFF_PATH_CHARS = 4000
 
 
 def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
@@ -135,6 +138,31 @@ def _check_results(results: list[CheckResult]) -> list[dict[str, Any]]:
     return [result.as_dict() for result in results]
 
 
+def _recent_handoff_paths(
+    previous: list[str], changed: Iterable[str]
+) -> list[str]:
+    """Retain a bounded, recency-ordered index of files edited by earlier batches."""
+
+    recent = list(previous)
+    for value in changed:
+        path = str(value)
+        if not path or len(path) > 240 or any(ord(char) < 32 for char in path):
+            continue
+        if path in recent:
+            recent.remove(path)
+        recent.append(path)
+    chosen: list[str] = []
+    characters = 0
+    for path in reversed(recent):
+        if len(chosen) >= MAX_HANDOFF_PATHS:
+            break
+        if characters + len(path) > MAX_HANDOFF_PATH_CHARS:
+            break
+        chosen.append(path)
+        characters += len(path)
+    return list(reversed(chosen))
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _arguments(argv)
     if args.app_type != "web":
@@ -185,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     visual_client: VisualReferenceClient | None = None
     arc_runtime: ArcRuntime | None = None
     active_batch_ids: list[str] = []
+    handoff_paths: list[str] = []
     try:
         source = _source_identity()
         tree = load_requirement_tree(requirement_dir)
@@ -281,6 +310,7 @@ def main(argv: list[str] | None = None) -> int:
                 "implementation_batch_started",
                 batch=index,
                 requirement_ids=requirement_ids,
+                prior_source_paths=handoff_paths,
                 visual_references_available=reference_paths,
                 visual_references_unavailable=sorted(set(named_references) - set(reference_paths))
                 if visual_client is not None else [],
@@ -294,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             result = CodingAgent(
                 model, tools, trace, max_turns=args.max_agent_turns
-            ).implement(group)
+            ).implement(group, related_files=handoff_paths)
             probe_evidence = {
                 "batch": index,
                 "calls": tools.browser_probe_calls,
@@ -316,6 +346,7 @@ def main(argv: list[str] | None = None) -> int:
             if not result.completed:
                 report["failed_requirements"] = requirement_ids
                 raise RuntimeError(f"implementation batch {index} did not validate")
+            handoff_paths = _recent_handoff_paths(handoff_paths, result.changed_files)
             if arc_runtime is not None:
                 arc_runtime.finish_batch(index, requirement_ids)
             report["implemented_requirements"].extend(requirement_ids)

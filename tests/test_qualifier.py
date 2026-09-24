@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from factory26_harness import qualifier
+from factory26_harness.agent import AgentRun
 from factory26_harness.model import ModelReply
 from factory26_harness.requirements import flatten_atomic
 from factory26_harness.trace import verify_trace_rows
@@ -94,6 +95,105 @@ class ScriptedModel:
 
 
 class QualifierTests(unittest.TestCase):
+    def test_cross_batch_handoff_tracks_recent_generated_files(self) -> None:
+        paths = qualifier._recent_handoff_paths(
+            ["frontend/src/older.js", "frontend/src/app.js"],
+            ["frontend/src/older.js", "backend/routes/notes.mjs"],
+        )
+        self.assertEqual(
+            paths,
+            [
+                "frontend/src/app.js",
+                "frontend/src/older.js",
+                "backend/routes/notes.mjs",
+            ],
+        )
+        many = qualifier._recent_handoff_paths(
+            [], (f"frontend/src/feature-{index}.js" for index in range(100))
+        )
+        self.assertEqual(len(many), qualifier.MAX_HANDOFF_PATHS)
+        self.assertEqual(many[0], "frontend/src/feature-40.js")
+
+    def test_second_batch_receives_first_batch_source_path(self) -> None:
+        class WritingAgent:
+            observed: list[tuple[str, ...]] = []
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def implement(self, nodes, related_files=()) -> AgentRun:
+                type(self).observed.append(tuple(related_files))
+                name = "first" if nodes[0].req_id == "REQ-1" else "second"
+                written = json.loads(
+                    self.tools.execute(
+                        "write_file",
+                        {
+                            "path": f"frontend/src/{name}.js",
+                            "content": f"export const {name} = true;\n",
+                        },
+                    )
+                )
+                self.assert_write(written)
+                validated = json.loads(
+                    self.tools.execute("run_validation", {"scope": "quick"})
+                )
+                self.assert_write(validated)
+                self.model.request_count += 1
+                return AgentRun(True, "fixture batch", tuple(sorted(self.tools.changed_files)), 1)
+
+            @staticmethod
+            def assert_write(result: dict) -> None:
+                if not result["ok"]:
+                    raise AssertionError(result)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirements = root / "requirements"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: ROOT
+name: Two batches
+type: FOLDER
+children:
+  - id: REQ-1
+    name: First
+    type: ATOMIC
+    description: Create a feature.
+  - id: REQ-2
+    name: Second
+    type: ATOMIC
+    description: Extend the feature.
+    dependencies: [REQ-1]
+""",
+                encoding="utf-8",
+            )
+            WritingAgent.observed = []
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", WritingAgent),
+            ):
+                status = qualifier.main(
+                    [
+                        str(requirements),
+                        "--output-dir",
+                        str(root / "output"),
+                        "--batch-size",
+                        "1",
+                    ]
+                )
+            self.assertEqual(status, 0)
+            self.assertEqual(WritingAgent.observed[0], ())
+            self.assertIn("frontend/src/first.js", WritingAgent.observed[1])
+            rows = [
+                json.loads(line)
+                for line in (root / "output" / ".arc" / "production-trace.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            started = [row for row in rows if row["event"] == "implementation_batch_started"]
+            self.assertIn("frontend/src/first.js", started[1]["payload"]["prior_source_paths"])
+
     def _requirement_dir(self, root: Path) -> Path:
         requirement_dir = root / "requirements"
         requirement_dir.mkdir()
