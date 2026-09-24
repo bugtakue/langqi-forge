@@ -314,6 +314,32 @@ class ToolAndTraceTests(unittest.TestCase):
                 result = json.loads(tools.execute("read_file", {"path": path}))
                 self.assertFalse(result["ok"], path)
 
+    def test_search_and_listing_do_not_follow_symlinks_into_hidden_or_secret_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
+            root = Path(directory)
+            (root / "frontend").mkdir()
+            (root / "backend").mkdir()
+            external = Path(outside) / "hidden-tests.txt"
+            external.write_text("HIDDEN_TEST_SENTINEL\n", encoding="utf-8")
+            secret = root / "backend" / ".env"
+            secret.write_text("SECRET_SENTINEL\n", encoding="utf-8")
+            (root / "frontend" / "outside-link.txt").symlink_to(external)
+            (root / "frontend" / "secret-link.txt").symlink_to(secret)
+            (root / "frontend" / "safe.txt").write_text("SAFE_SENTINEL\n", encoding="utf-8")
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3917)
+            for marker in ("HIDDEN_TEST_SENTINEL", "SECRET_SENTINEL"):
+                search = json.loads(tools.execute("search_text", {
+                    "query": marker, "directory": "frontend",
+                }))
+                self.assertTrue(search["ok"])
+                self.assertEqual(search["matches"], [])
+            safe_search = json.loads(tools.execute("search_text", {
+                "query": "SAFE_SENTINEL", "directory": "frontend",
+            }))
+            self.assertEqual([item["path"] for item in safe_search["matches"]], ["frontend/safe.txt"])
+            listing = json.loads(tools.execute("list_files", {"directory": "frontend"}))
+            self.assertEqual(listing["files"], ["frontend/safe.txt"])
+
     def test_large_tool_results_remain_valid_json_and_noop_writes_do_not_count(
         self,
     ) -> None:

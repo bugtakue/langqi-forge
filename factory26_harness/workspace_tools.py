@@ -384,17 +384,24 @@ class WorkspaceTools:
             files = [str(directory.relative_to(self.root))]
         elif directory.is_dir():
             for path in sorted(directory.rglob("*")):
-                if not path.is_file():
+                if not self._safe_discovered_file(path):
                     continue
-                relative = path.relative_to(self.root)
-                if any(
-                    part in EXCLUDED_PARTS for part in relative.parts
-                ) or _contains_sensitive_part(relative.parts):
-                    continue
-                files.append(str(relative))
+                files.append(str(path.relative_to(self.root)))
                 if len(files) >= 300:
                     break
         return {"ok": True, "files": files}
+
+    def _safe_discovered_file(self, path: Path) -> bool:
+        """Recheck discovered entries; a safe search root does not make links safe."""
+
+        if path.is_symlink():
+            return False
+        try:
+            relative = str(path.relative_to(self.root))
+            resolved = self._safe_path(relative)
+        except (OSError, ValueError):
+            return False
+        return resolved == path and resolved.is_file()
 
     def _tool_read_file(self, arguments: dict[str, Any]) -> dict[str, Any]:
         path = self._safe_path(str(arguments["path"]))
@@ -473,12 +480,7 @@ class WorkspaceTools:
         matches: list[dict[str, Any]] = []
         paths = [directory] if directory.is_file() else sorted(directory.rglob("*"))
         for path in paths:
-            relative_parts = path.relative_to(self.root).parts
-            if (
-                not path.is_file()
-                or any(part in EXCLUDED_PARTS for part in relative_parts)
-                or _contains_sensitive_part(relative_parts)
-            ):
+            if not self._safe_discovered_file(path):
                 continue
             try:
                 if path.stat().st_size > MAX_READ_FILE_BYTES:
