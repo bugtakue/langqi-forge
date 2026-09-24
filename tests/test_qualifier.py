@@ -162,9 +162,27 @@ children:
             output = root / "output"
             output.mkdir()
             (output / "existing.txt").write_text("keep me", encoding="utf-8")
-            with self.assertRaisesRegex(SystemExit, "must be empty"):
+            with self.assertRaisesRegex(SystemExit, "prior agent work"):
                 qualifier.main([str(requirement_dir), "--output-dir", str(output)])
             self.assertEqual((output / "existing.txt").read_text(), "keep me")
+
+    def test_runner_prepopulated_requirements_and_arc_are_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = self._requirement_dir(root)
+            output = root / "output"
+            (output / "requirements").mkdir(parents=True)
+            (output / ".arc").mkdir()
+            (output / ".arc" / "runner-events.jsonl").write_text("", encoding="utf-8")
+            with patch.object(
+                qualifier,
+                "OpenAIChatClient",
+                side_effect=RuntimeError("model unavailable"),
+            ):
+                status = qualifier.main([str(requirement_dir), "--output-dir", str(output)])
+            self.assertEqual(status, 1)
+            report = json.loads((output / ".arc" / "harness-report.json").read_text())
+            self.assertEqual(report["error"], "model unavailable")
 
     def test_context_is_data_and_preserved_for_atomic_prompt(self) -> None:
         tree = {

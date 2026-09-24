@@ -151,8 +151,20 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("output directory must be outside the agent source tree")
     if output_dir == requirement_dir or requirement_dir in output_dir.parents:
         raise SystemExit("output directory must not be inside the requirements directory")
-    if output_dir.exists() and any(output_dir.iterdir()):
-        raise SystemExit("output directory must be empty before a new run")
+    if output_dir.exists():
+        unexpected = {
+            item.name for item in output_dir.iterdir()
+        } - {"requirements", ".arc"}
+        prior_agent_artifacts = any(
+            (output_dir / ".arc" / name).exists()
+            for name in (
+                "production-trace.jsonl",
+                "compiled-plan.json",
+                "harness-report.json",
+            )
+        )
+        if unexpected or prior_agent_artifacts:
+            raise SystemExit("output directory contains prior agent work or unexpected files")
     output_dir.mkdir(parents=True, exist_ok=True)
     trace = ProductionTrace(output_dir / ".arc" / "production-trace.jsonl")
     started = time.monotonic()
