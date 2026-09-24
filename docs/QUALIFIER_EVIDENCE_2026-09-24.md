@@ -110,3 +110,10 @@
 - 该**精确 ZIP** 在旧版 arm64 Runner + 当前本地模拟器包装的完整协议运行目录 `../factory26-local-simulation/runs/qualifier-audit-protocol-20260925/`：自建固定响应模型夹具请求 5 次，浏览器探针点击并断言通过，独立 Playwright 1/1，容器退出码 0，官方 SDK 接入正常，本地检查 6/6，生产轨迹 31/31 行哈希链有效且未发现未脱敏夹具密钥；`score=null`，平台 Token/费用计量不可用。
 - 同一 ZIP 在本机缓存的主办方 amd64 基础镜像包装 `arcbench-local-current:20260924` **直启**，目录 `../factory26-local-simulation/runs/qualifier-audit-current-direct-20260925/`：进程退出码 0，自建模型请求/HTTP 尝试各 4 次，官方 SDK 正常，本地检查 6/6，轨迹 27/27 行有效。直启未运行浏览器探针，不能替代受本机 ARM→amd64 QEMU Chromium 预检限制的完整当前 Runner GUI 试验。
 - 两次协议运行都只证明参赛包、模型接口、写文件、构建启动、审计结束条件及 SDK/轨迹链路正常；夹具 1/1 **不是**真实编码模型的 BookStack/Keep 成绩、正式赛成绩或获奖依据。账号登录、正式上传与提交仍未执行；实际模型练习凭据与正式队伍访问仍待解决。
+
+## 2026-09-25 SDK 失败事件与当前候选包
+
+- 源码提交 `33f3f3d43db749a1ade4436bf9366e28a04b983f`。检查主办方 `arcbench-runtime==0.1.0` 的真实行为后确认：`mark_implementation_done` 同时修改 Git 跟踪的 `.arc/traceability/node_states.json`，因此“先 Git 提交、再标记需求完成”会留下脏状态，不能这样调整。保留 SDK 的同批提交顺序；实测提交失败后按运行异常路径发送 `mark_implementation_failed`，最终需求状态为 `FAILED`，运行状态为 `failed`。新增的修复是将需求级与运行级失败事件分开尝试：需求级事件写入异常时，仍尝试运行级失败事件，并把 SDK 错误记在本地报告和哈希链轨迹中。回归测试覆盖真实 SDK 提交失败路径及两个事件写入失败的隔离。
+- 当前精确 ZIP `dist/langqi-forge-qualifier.zip`：SHA-256 `18671d0842b58e19298c813b68f8c08466fc8eb2694556b75d8b6e1445e38529`，16 个文件，来源清单绑定上述源码提交，`unzip -t` 通过；后续仅追加本证据文档。主机单元测试 74 项，72 项通过、2 项因本机缺 Playwright/Chromium 跳过；旧版 arm64 Runner 容器里的浏览器测试 4/4 通过。
+- 同一 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的完整协议运行目录 `../factory26-local-simulation/runs/qualifier-failure-report-protocol-20260925/`：自建固定响应模型夹具请求 5 次，本地浏览器探针带断言通过，独立 Playwright 1/1，容器退出码 0，官方 SDK 接入正常，本地结构/构建/启动检查 6/6，独立生产轨迹 31/31 行哈希链有效。`score=null`，Meter Token/费用不可用。这里的 1/1 依旧只是协议夹具，不是实际模型的公开练习或正式赛成绩。
+- 同一精确 ZIP 在本机缓存的主办方 amd64 基础镜像包装 `arcbench-local-current:20260924` 下**直启**，目录 `../factory26-local-simulation/runs/qualifier-failure-report-current-direct-20260925/`：进程退出码 0，固定响应夹具模型请求/HTTP 尝试各 4 次，官方 SDK 正常，本地检查 6/6，轨迹 27/27 行哈希链有效。这个直启没有浏览器探针，不替代当前完整 Runner 的 GUI 运行；本机 ARM→amd64 QEMU 的 Chromium 预检障碍仍未消除。真实模型 BookStack/Keep 测试、正式队伍登录及提交都仍未完成。
