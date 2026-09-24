@@ -155,3 +155,10 @@
 - 从干净源码树生成的**新精确 ZIP**为 `dist/langqi-forge-qualifier.zip`，SHA-256 `6911807b0a1c93c61aefd57372f9670bbcf9d3d0f67e00fbbad58e6d1c45bfc8`，16 个文件，包内清单绑定上述源码提交，`unzip -t` 通过；新夹具、测试与文档不在 ZIP 内。
 - 同一 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的**会写持久状态**协议夹具运行于 `../factory26-local-simulation/runs/qualifier-probe-isolation-protocol-20260925/`：容器退出码 0、固定响应模型请求/尝试各 5 次、SDK 需求 `IMPLEMENTED`、运行完成，探针轨迹明确记录 `workspace_isolated=true`，37/37 行哈希链有效。探针断言 `count=1` 后，独立 Playwright 在自身动作前从 `/api/state` 仍读到种子 `count=0`，之后点击并读到 `count=1`，独立测试 1/1。SDK 的 Git 提交快照中 `backend/data/state.json` 是 `{"count":0}`；本地工作树在独立测试后是 `{"count":1}`，二者顺序与隔离合同一致。Meter 指向本地拒绝连接地址，费用和分数均为 `null`，不能把 1/1 当成真实模型成绩。
 - 同一新 ZIP 在缓存的当前 amd64 基础镜像直启普通单批协议夹具，目录 `../factory26-local-simulation/runs/qualifier-probe-isolation-current-direct-20260925/`：固定响应请求/尝试各 4 次，本地 6/6 检查通过，SDK 运行完成，生产轨迹 27/27 行有效；随后旧 arm64 浏览器隔离诊断 1/1。此路径不运行当前完整 Runner 的 Chromium 预检，也不测量真实模型对 BookStack/Keep 的能力。
+
+## 2026-09-25 后端启动健康检查也必须隔离
+
+- 新增一个会在服务**启动时**把 `backend/data/state.json` 从 `{"count":0}` 写成 `{"count":1}` 的通用回归夹具。修改前单独调用 `startup_check` 时，健康检查虽然通过，却实际污染原种子，测试先以 `1 != 0` 失败。源码提交 `0ca2d47fc3077289bb28b5098cd7b107c3656f27` 将浏览器探针和启动健康检查共用 `factory26_harness/isolation.py` 的临时应用副本；同一测试改后通过，原种子仍为 0。构建检查仍在原项目产生必需的 `frontend/dist`，因此不能把此修复称为对任意构建脚本副作用的完全隔离。
+- 主机全套 80 项测试为 77 通过、3 项浏览器环境依赖跳过；旧 arm64 浏览器镜像内临时安装参赛包锁定的 `arcbench-runtime==0.1.0` 后，80/80 全通过。新的精确 ZIP `dist/langqi-forge-qualifier.zip` SHA-256 为 `e35dedaf38d12ca813546f331092d24347b865719c4d1237d49d89cab15dbc5b`，17 个文件，哈希清单绑定上述源码提交，`unzip -t` 通过；新增的共享隔离模块进入白名单，测试夹具未进入 ZIP。
+- 该 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装运行同一有状态协议夹具，目录 `../factory26-local-simulation/runs/qualifier-startup-isolation-protocol-20260925/`：容器退出码 0、固定响应模型请求/尝试各 5 次、SDK 完成、6/6 本地检查通过，独立 Playwright 先读到 `count=0` 再自行改成 1，测试 1/1；SDK Git 提交快照仍为 `count=0`，37/37 行生产轨迹有效。Meter 指向拒绝连接的本地地址，费用和分数 `null`。
+- 同一 ZIP 在缓存的当前 amd64 基础镜像直启普通协议夹具，目录 `../factory26-local-simulation/runs/qualifier-startup-isolation-current-direct-20260925/`：固定响应请求/尝试各 4 次，6/6 本地检查通过，SDK 完成，轨迹 27/27 行有效；借旧 arm64 浏览器镜像进行隔离诊断 1/1。该混合路径不等于当前完整 Runner，不提供真实模型的公开练习或正式赛成绩。
