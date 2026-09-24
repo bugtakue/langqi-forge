@@ -532,9 +532,9 @@ def main(argv: list[str] | None = None) -> int:
                     requirement_ids=requirement_ids,
                     prior_source_paths=handoff_paths,
                     prior_handoff_count=len(handoff_notes),
+                    visual_inspection_enabled=visual_client is not None,
                     visual_references_available=reference_paths,
-                    visual_references_unavailable=sorted(set(named_references) - set(reference_paths))
-                    if visual_client is not None else [],
+                    visual_references_unavailable=sorted(set(named_references) - set(reference_paths)),
                 )
                 # Failed attempts never leak tentative edits into later attempts.
                 with tempfile.TemporaryDirectory(

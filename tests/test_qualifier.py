@@ -1030,7 +1030,7 @@ children:
     name: Example heading
     type: ATOMIC
     description: Display one visible heading named Example.
-    visual_reference: [./reference/only-listed.png]
+    visual_reference: [./reference/only-listed.png, ./reference/missing.png]
 """,
                 encoding="utf-8",
             )
@@ -1068,6 +1068,16 @@ children:
                 batch["payload"]["visual_references_available"],
                 ["reference/only-listed.png"],
             )
+            self.assertEqual(
+                batch["payload"]["visual_references_unavailable"],
+                ["reference/missing.png"],
+            )
+            first_prompt = next(
+                row["payload"]["messages"][1]["content"]
+                for row in rows if row["event"] == "model_request"
+            )
+            self.assertIn("not inspectable in this run", first_prompt)
+            self.assertIn("reference/missing.png", first_prompt)
             self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
 
     def test_shared_model_gateway_exposes_visual_reference_to_batch(self) -> None:
@@ -1128,6 +1138,7 @@ children:
     name: Example heading
     type: ATOMIC
     description: Display one visible heading named Example.
+    visual_reference: [./reference/unavailable.png]
 """,
                 encoding="utf-8",
             )
@@ -1146,6 +1157,12 @@ children:
                     (output / ".arc/production-trace.jsonl").read_text(encoding="utf-8").splitlines()]
             self.assertTrue(any(row["event"] == "visual_gateway_unavailable" for row in rows))
             self.assertFalse(any(row["event"] == "visual_gateway_selected" for row in rows))
+            started = next(row for row in rows if row["event"] == "implementation_batch_started")
+            self.assertEqual(started["payload"]["visual_references_available"], [])
+            self.assertEqual(
+                started["payload"]["visual_references_unavailable"],
+                ["reference/unavailable.png"],
+            )
 
 
 if __name__ == "__main__":
