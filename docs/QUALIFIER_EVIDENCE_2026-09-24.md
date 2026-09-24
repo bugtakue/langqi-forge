@@ -60,7 +60,7 @@
 - 绕开这项与智能体无关的浏览器预检后，将**同一 ZIP**在上述当前 amd64 基础镜像里直接运行主办方 `run_submission.py` 使用的入口/参数/环境合同：从镜像配置的 PyPI 镜像安装 `arcbench-runtime==0.1.0` 成功，使用自建模型协议夹具运行一条测试需求。运行目录 `../factory26-local-simulation/runs/qualifier-current-base-direct-20260924/`；报告 `status=local-contract-passed`、`arcbench_runtime=official-sdk`、`model_requests=4`，结构、包策略、交互策略、JavaScript 语法、前端构建、后端启动健康检查 6/6 通过。SDK 写入平台事件和需求状态，生成项目 Git 历史有初始提交及批次提交；独立生产轨迹 27/27 行哈希链有效，未发现未脱敏密钥。
 - 这个**直启兼容性试验不是完整 Runner/浏览器试验，也不是 BookStack、Keep 或正式赛成绩**。它证明当前基础镜像能安装参赛依赖、执行该 ZIP、与 SDK 交互并完成本地构建启动合同；完整当前 Runner GUI 仍需能运行 amd64 Chromium 的环境，真实模型完成公开练习仍需可用的练习模型凭据。
 
-## 通用浏览器交互探针与最终候选包（本页最新）
+## 通用浏览器交互探针与此前候选包
 
 - 为补上「能构建、能启动，但用户操作可能失效」的验收盲点，新增 `browser_probe`：只在当前源码通过 quick/full 后，使用 Runner 自带 Chromium 对**生成的本地应用**执行有界语义控件操作、刷新和可见文本断言；拦截浏览器外部 HTTP 请求，不提供任意脚本、远程网址或隐藏测试读取。每批最多 3 次，若已经使用探针但没有完成带断言的动作、探针失败或后来改动源码，则该批不得仅凭旧探针完成。报告分别记录 `behavioral_probe_tested`（本地探针）与 `behavioral_gui_tested=false`（没有独立平台 GUI 成绩）。
 - 第一次包含探针的协议 ZIP 在旧版 arm64 Runner 中失败关闭：宽范围的 Playwright 依赖让 pip 安装新版 Python Playwright，却保留旧版 Chromium 二进制；浏览器无法启动，模拟智能体没有虚报完成。修复为不在参赛 `requirements.txt` 覆盖 Runner 预装 Playwright；本机独立环境才自行安装匹配的 Python 包和 Chromium。这个失败是依赖版本适配证据，**不是比赛任务失败**。
@@ -69,3 +69,11 @@
 - **同一最终 ZIP** 在当前主办方 amd64 基础镜像（上节所列摘要）直启：`../factory26-local-simulation/runs/qualifier-current-base-final-direct-20260924/`。官方 SDK 可安装且正常记录，4 次自建模型协议请求后 `local-contract-passed`，6/6 构建/启动检查通过；此直启夹具没有调用浏览器探针，报告明确为 `behavioral_probe_tested=false`。完整新版 Runner 在本机仍卡于 arm64→amd64 QEMU 的 Chromium 预检，不能由直启结果替代它的 GUI 验证。
 - 同一最终 ZIP 又分别完成 BookStack、Keep 公开练习需求的**解包/预备工作区**检查，目录为 `../factory26-local-simulation/runs/qualifier-browser-final-{bookstack,keep}-preflight-20260924/`。需求解析分别得到 34 条/9 批、32 条/8 批；这一步没有调用模型、部署应用或执行 GUI 测试，只证明最终包可进入两题的本地运行准备流程。
 - 当前仍未取得真实模型对 BookStack 和 Keep 的生成结果、两题综合 GUI 通过率、真实开销、官方得分或晋级资格；正式队长账号也未登录，项目未上传或正式提交。
+
+## 长会话证据保全与当前候选包（本页最新）
+
+- 长会话超出上下文上限时，精简检查点现在保留浏览器探针的已用/剩余次数、需要重验状态、已验证源码版本，以及最近一次行为断言和页面错误摘要；原始逐步观察仍保存在哈希链轨迹中。对应测试覆盖精简结果的有界摘要和检查点字段，防止压缩后将失败探针误认为通过，或重复消耗探针额度。
+- 当前运行源码提交 `6228749c6259991725709c3627b2443d1dddcdf8`；同一参赛 ZIP `dist/langqi-forge-qualifier.zip` 的 SHA-256 为 `d68a703053e1c2562274c2aa93f0b8f58f556582a1f4d95bcd0f6c754752bd4f`，16 个文件，`unzip -t` 通过。主机单元测试运行 59 项，58 项通过、1 项因主机未装 Playwright/Chromium 而跳过；该浏览器集成测试在 arm64 Runner 容器里连同探针测试 3/3 通过。
+- 该**精确 ZIP** 在旧版 arm64 Runner 的完整协议模拟目录 `../factory26-local-simulation/runs/qualifier-context-probe-final-20260924/` 再次完成模型协议调用、源码修改、一次带断言的浏览器点击、构建启动及独立 Playwright 1/1；容器退出码 0，SDK 正常，生产轨迹 31/31 行哈希链有效且未发现未脱敏密钥。`score=null` 且 Meter 不可用；这仍只是自建协议夹具，不是公开题性能。
+- 该**精确 ZIP** 在当前主办方 amd64 基础镜像的直启目录 `../factory26-local-simulation/runs/qualifier-context-current-base-direct-20260924/` 完成 4 次自建模型请求、官方 SDK 记录和 6/6 构建/启动检查；该直启没有浏览器探针，仍不能替代因本机 QEMU Chromium 预检失败而缺失的完整当前 Runner GUI 试验。BookStack、Keep 的预备工作区也已用此包分别解包成功：`../factory26-local-simulation/runs/qualifier-context-{bookstack,keep}-preflight-20260924/`，仍未运行真实模型或测试。
+- 此后只追加本证据文档；最终候选 ZIP 的源码身份继续由其内置清单绑定上述 `6228749c...` 提交。真实模型两题结果、费用与官方成绩仍缺失，账号登录、上传、正式提交均未进行。
