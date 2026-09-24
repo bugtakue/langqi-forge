@@ -1,0 +1,166 @@
+"""Optional, task-neutral visual inspection of organizer-provided reference images.
+
+Image bytes go only to the configured vision gateway. They are never written to
+the production trace or copied into the generated application.
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import os
+import re
+import urllib.error
+import urllib.request
+from pathlib import Path, PurePosixPath
+from typing import Any
+from urllib.parse import urlsplit
+
+from .trace import ProductionTrace
+
+
+REFERENCE_PATTERN = re.compile(r"(?:\./)?(reference/[A-Za-z0-9_./-]+\.(?:png|jpg|jpeg|webp))\b", re.IGNORECASE)
+IMAGE_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+MAX_IMAGE_BYTES = 5_000_000
+MAX_VISUAL_RESPONSE_BYTES = 100_000
+MAX_CAPTION_CHARS = 1_500
+
+
+def referenced_images(descriptions: list[str]) -> tuple[str, ...]:
+    """List only image names explicitly referenced by current requirements."""
+    return tuple(sorted({match.group(1) for description in descriptions for match in REFERENCE_PATTERN.finditer(description)}))
+
+
+class VisualReferenceClient:
+    def __init__(self, requirement_dir: Path, trace: ProductionTrace) -> None:
+        self.requirement_dir = (requirement_dir.parent if requirement_dir.is_file() else requirement_dir).resolve()
+        self.reference_root = (self.requirement_dir / "reference").resolve()
+        self.trace = trace
+        self.api_key = os.environ.get("VISUAL_API_KEY", "").strip()
+        self.base_url = os.environ.get("VISUAL_BASE_URL", "").strip()
+        self.model = os.environ.get("VISUAL_MODEL", "").strip()
+        if not all((self.api_key, self.base_url, self.model)):
+            raise ValueError("VISUAL_API_KEY, VISUAL_BASE_URL and VISUAL_MODEL are required together")
+        self.endpoint = self.base_url.rstrip("/")
+        if not self.endpoint.endswith("/chat/completions"):
+            self.endpoint += "/chat/completions"
+        destination = urlsplit(self.endpoint)
+        if (
+            not destination.hostname
+            or destination.username
+            or destination.password
+            or destination.query
+            or destination.fragment
+            or not (
+                destination.scheme == "https"
+                or (destination.scheme == "http" and destination.hostname in {"127.0.0.1", "localhost"})
+            )
+        ):
+            raise ValueError("visual gateway requires HTTPS or a local test endpoint")
+        self.max_calls = max(1, min(24, int(os.environ.get("FACTORY26_MAX_VISUAL_CALLS", "8"))))
+        self.calls = 0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self._cache: dict[str, dict[str, Any]] = {}
+
+    def _image(self, relative: str) -> tuple[bytes, str, str]:
+        if "\\" in relative:
+            raise ValueError("reference path must be POSIX-style")
+        name = PurePosixPath(relative)
+        if name.is_absolute() or ".." in name.parts or len(name.parts) < 2 or name.parts[0] != "reference":
+            raise ValueError("only reference/ images can be inspected")
+        mime = IMAGE_MIME.get(name.suffix.lower())
+        if not mime:
+            raise ValueError("unsupported reference image type")
+        candidate = self.requirement_dir / name.as_posix()
+        if candidate.is_symlink() or not candidate.is_file():
+            raise ValueError("reference image is missing or a symlink")
+        resolved = candidate.resolve()
+        if self.reference_root not in resolved.parents:
+            raise ValueError("reference image escapes its directory")
+        if resolved.stat().st_size > MAX_IMAGE_BYTES:
+            raise ValueError("reference image exceeds byte limit")
+        raw = resolved.read_bytes()
+        if not (
+            (mime == "image/png" and raw.startswith(b"\x89PNG\r\n\x1a\n"))
+            or (mime == "image/jpeg" and raw.startswith(b"\xff\xd8\xff"))
+            or (mime == "image/webp" and raw.startswith(b"RIFF") and raw[8:12] == b"WEBP")
+        ):
+            raise ValueError("reference image signature does not match its type")
+        return raw, mime, hashlib.sha256(raw).hexdigest()
+
+    def can_inspect(self, relative: str) -> bool:
+        try:
+            self._image(relative)
+            return True
+        except (OSError, ValueError):
+            return False
+
+    def describe(self, relative: str) -> dict[str, Any]:
+        raw, mime, digest = self._image(relative)
+        if digest in self._cache:
+            return {**self._cache[digest], "cached": True}
+        if self.calls >= self.max_calls:
+            raise RuntimeError("visual reference call budget exhausted")
+        payload = {
+            "model": self.model,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": (
+                        "Describe this UI reference for a coding agent in at most 180 words. "
+                        "State visible layout, spacing, hierarchy, colors, labels, controls and "
+                        "distinctive interaction affordances. Do not invent hidden behavior or data."
+                    )},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}",
+                        "detail": "high",
+                    }},
+                ],
+            }],
+            "max_tokens": 500,
+        }
+        self.calls += 1
+        self.trace.record(
+            "visual_reference_request",
+            path=relative,
+            image_sha256=digest,
+            image_bytes=len(raw),
+            model=self.model,
+            endpoint_host=urlsplit(self.endpoint).hostname,
+        )
+        request = urllib.request.Request(
+            self.endpoint,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            method="POST",
+            headers={"authorization": "Bearer " + self.api_key, "content-type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                body = response.read(MAX_VISUAL_RESPONSE_BYTES + 1)
+            if len(body) > MAX_VISUAL_RESPONSE_BYTES:
+                raise ValueError("visual response exceeds byte limit")
+            result = json.loads(body.decode("utf-8"))
+            message = result["choices"][0]["message"]
+            caption = message.get("content") or ""
+            if isinstance(caption, list):
+                caption = " ".join(str(item.get("text") or "") for item in caption if isinstance(item, dict))
+            caption = str(caption).strip()[:MAX_CAPTION_CHARS]
+            if not caption:
+                raise ValueError("visual response was empty")
+            usage = result.get("usage") or {}
+            self.prompt_tokens += max(0, int(usage.get("prompt_tokens") or 0))
+            self.completion_tokens += max(0, int(usage.get("completion_tokens") or 0))
+            answer = {"path": relative, "image_sha256": digest, "description": caption, "cached": False}
+            self._cache[digest] = answer
+            self.trace.record("visual_reference_response", **answer, usage=usage)
+            return answer
+        except (urllib.error.URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            self.trace.record("visual_reference_error", path=relative, image_sha256=digest, error=str(exc)[:500])
+            raise RuntimeError(f"visual reference unavailable: {type(exc).__name__}") from exc

@@ -16,6 +16,7 @@ from .checks import (
     structure_check,
 )
 from .trace import ProductionTrace
+from .visual_reference import VisualReferenceClient
 
 
 EXCLUDED_PARTS = {".arc", ".git", "node_modules", "dist", "coverage", "__pycache__"}
@@ -40,10 +41,20 @@ def _contains_sensitive_part(parts: tuple[str, ...]) -> bool:
 
 
 class WorkspaceTools:
-    def __init__(self, root: Path, trace: ProductionTrace, smoke_port: int) -> None:
+    def __init__(
+        self,
+        root: Path,
+        trace: ProductionTrace,
+        smoke_port: int,
+        *,
+        visual_client: VisualReferenceClient | None = None,
+        reference_paths: tuple[str, ...] = (),
+    ) -> None:
         self.root = root.resolve()
         self.trace = trace
         self.smoke_port = smoke_port
+        self.visual_client = visual_client
+        self.reference_paths = tuple(sorted(set(reference_paths)))
         self.changed_files: set[str] = set()
         self.change_revision = 0
         self.validated_revision = -1
@@ -66,9 +77,8 @@ class WorkspaceTools:
             and self.validated_revision == self.change_revision
         )
 
-    @staticmethod
-    def schemas() -> list[dict[str, Any]]:
-        return [
+    def schemas(self) -> list[dict[str, Any]]:
+        schemas = [
             {
                 "type": "function",
                 "function": {
@@ -201,6 +211,30 @@ class WorkspaceTools:
                 },
             },
         ]
+        if self.visual_client is not None and self.reference_paths:
+            schemas.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "inspect_reference",
+                        "description": (
+                            "Describe one organizer-provided UI screenshot explicitly named "
+                            "in the current requirement batch. The image is not copied into "
+                            "the generated app. Use only when the visual cues matter."
+                        ),
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"path": {
+                                "type": "string",
+                                "enum": list(self.reference_paths),
+                            }},
+                            "required": ["path"],
+                            "additionalProperties": False,
+                        },
+                    },
+                }
+            )
+        return schemas
 
     def _safe_path(self, relative: str, *, writable: bool = False) -> Path:
         candidate = Path(str(relative or "."))
@@ -415,6 +449,12 @@ class WorkspaceTools:
                     if len(matches) >= 80:
                         return {"ok": True, "matches": matches, "truncated": True}
         return {"ok": True, "matches": matches, "truncated": False}
+
+    def _tool_inspect_reference(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        relative = str(arguments.get("path") or "")
+        if self.visual_client is None or relative not in self.reference_paths:
+            raise ValueError("reference image is not available to this batch")
+        return {"ok": True, **self.visual_client.describe(relative)}
 
     def _tool_write_file(self, arguments: dict[str, Any]) -> dict[str, Any]:
         path = self._safe_path(str(arguments["path"]), writable=True)

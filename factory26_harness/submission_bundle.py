@@ -26,6 +26,7 @@ BUNDLE_MODULES = (
     "factory26_harness/requirements.py",
     "factory26_harness/submission_bundle.py",
     "factory26_harness/trace.py",
+    "factory26_harness/visual_reference.py",
     "factory26_harness/workspace_tools.py",
 )
 EXCLUDED_PARTS = frozenset({"__pycache__", ".git", ".venv", "dist"})

@@ -11,7 +11,7 @@
 ## Prompts 与 Agent 迭代
 
 1. `agent.py:SYSTEM_PROMPT` 规定实现职责、不可信需求边界、前后端可运行、持久化、交互与后端状态校验；模型必须实际编辑文件并执行校验。
-2. `CodingAgent.implement` 为每一小批依赖有序需求构造用户 Prompt，包含需求 ID、描述、场景、父级上下文和相关文件。需求正文明确包裹为不可信数据。
+2. `CodingAgent.implement` 为每一小批依赖有序需求构造用户 Prompt，包含需求 ID、描述、场景、父级上下文和相关文件。需求正文明确包裹为不可信数据。若同时提供三项 `VISUAL_*` 配置，Prompt 会列出本批实际存在的参考截图，模型可按需调用 `inspect_reference`；视觉描述仍是不可信线索，不得覆盖文字需求。
 3. 模型调用由 `model.py:OpenAIChatClient` 发往环境注入的 OpenAI-compatible `/chat/completions`。没有 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`MODEL` 就失败，不切换到预制业务实现。
 4. 每次模型响应可提出多个工具调用。批次必须有实际源码修改且最后一次修改通过 quick 校验，随后进入 `ACCEPTANCE_AUDIT_PROMPT` 逐条审查；审计若再改动，必须重新校验。
 5. 全部批次结束后独立执行结构、包策略、交互策略、前端构建、后端启动/健康检查。失败时最多运行配置的修复轮次。局部检查通过不等于 GUI 行为通过。
@@ -20,7 +20,7 @@
 
 ## 工具调用与安全
 
-`workspace_tools.py` 暴露：`list_files`、`read_file`、`read_files`、`search_text`、`write_file`、`replace_text`、`run_validation`。写入只允许 `frontend/`、`backend/`，禁止访问 `.env`、密钥、控制目录和越界路径；覆写文件要求当前 SHA-256；有文件数、字节数及模型回合/Token 上限。模型生成的代码经 `checks.py` 在剥离密钥的环境中构建和启动。生产轨迹由 `trace.py` 脱敏并逐行哈希链接。
+`workspace_tools.py` 暴露：`list_files`、`read_file`、`read_files`、`search_text`、`write_file`、`replace_text`、`run_validation`；完整视觉配置时再按批次开放 `inspect_reference`。后者只接受需求正文明确引用且文件实际存在的 `reference/` 图片，默认最多 8 次视觉请求，缓存重复图片；只记录图片 SHA、模型响应与用量，不记录图片字节或密钥。写入只允许 `frontend/`、`backend/`，禁止访问 `.env`、密钥、控制目录和越界路径；覆写文件要求当前 SHA-256；有文件数、字节数及模型回合/Token 上限。模型生成的代码经 `checks.py` 在剥离密钥的环境中构建和启动。生产轨迹由 `trace.py` 脱敏并逐行哈希链接。
 
 ## 人工干预点
 

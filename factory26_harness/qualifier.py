@@ -34,6 +34,7 @@ from .submission_bundle import (
     verify_source_manifest,
 )
 from .trace import ProductionTrace
+from .visual_reference import VisualReferenceClient, referenced_images
 from .workspace_tools import WorkspaceTools
 
 
@@ -179,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         "checks": [],
     }
     model: OpenAIChatClient | None = None
+    visual_client: VisualReferenceClient | None = None
     try:
         source = _source_identity()
         tree = load_requirement_tree(requirement_dir)
@@ -230,14 +232,45 @@ def main(argv: list[str] | None = None) -> int:
             intervention_count=0,
             policy="autonomous generation; failures stop rather than claim completion",
         )
+        visual_settings = tuple(
+            bool(os.environ.get(name, "").strip())
+            for name in ("VISUAL_API_KEY", "VISUAL_BASE_URL", "VISUAL_MODEL")
+        )
+        if all(visual_settings):
+            visual_client = VisualReferenceClient(requirement_dir, trace)
+            trace.record(
+                "visual_gateway_selected",
+                model=visual_client.model,
+                maximum_calls=visual_client.max_calls,
+            )
+        elif any(visual_settings):
+            trace.record(
+                "visual_gateway_unavailable",
+                reason="incomplete VISUAL_API_KEY/VISUAL_BASE_URL/VISUAL_MODEL configuration",
+            )
         for index, group in enumerate(batches(nodes, args.batch_size), 1):
             requirement_ids = [node.req_id for node in group]
+            named_references = referenced_images([node.description for node in group])
+            reference_paths = tuple(
+                path
+                for path in named_references
+                if visual_client is not None and visual_client.can_inspect(path)
+            )
             trace.record(
                 "implementation_batch_started",
                 batch=index,
                 requirement_ids=requirement_ids,
+                visual_references_available=reference_paths,
+                visual_references_unavailable=sorted(set(named_references) - set(reference_paths))
+                if visual_client is not None else [],
             )
-            tools = WorkspaceTools(output_dir, trace, smoke_port)
+            tools = WorkspaceTools(
+                output_dir,
+                trace,
+                smoke_port,
+                visual_client=visual_client,
+                reference_paths=reference_paths,
+            )
             result = CodingAgent(
                 model, tools, trace, max_turns=args.max_agent_turns
             ).implement(group)
@@ -317,6 +350,11 @@ def main(argv: list[str] | None = None) -> int:
             report["model_requests"] = model.request_count
             report["prompt_tokens"] = model.total_prompt_tokens
             report["completion_tokens"] = model.total_completion_tokens
+        if visual_client is not None:
+            report["visual_model"] = visual_client.model
+            report["visual_requests"] = visual_client.calls
+            report["visual_prompt_tokens"] = visual_client.prompt_tokens
+            report["visual_completion_tokens"] = visual_client.completion_tokens
         _write_json(output_dir / ".arc" / "harness-report.json", report)
         print(
             f"[factory26] {report['status']}; model_requests={report.get('model_requests', 0)}",

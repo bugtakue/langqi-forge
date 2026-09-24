@@ -11,6 +11,7 @@
 - 打包采用明确文件白名单。提交包不含 GitHub、Spreadsheet、BookStack、Keep 的页面、API、种子或业务实现；`generic_scaffold.py` 仅提供空前端、静态资源服务、健康检查及通用 HTTP/原子 JSON 存储辅助函数。
 - 正常生成路径必须调用平台注入的 OpenAI-compatible 模型网关。模型缺失、实现批次未完成或构建/启动失败均返回非零；不会把空 scaffold 冒充完成品。
 - 旧成绩不是本版性能证据。任何真实通过率以主办方独立 GUI 评测为准。
+- 若运行环境另外提供 `VISUAL_API_KEY`、`VISUAL_BASE_URL`、`VISUAL_MODEL`，智能体会按需读取需求明确引用的 `reference/` 截图，通过视觉模型提取布局线索。图片只发往所配置的视觉网关，不写入生产轨迹或生成应用；没有完整视觉配置时不启用此工具。
 
 主办方本地模拟器：[hackathon-local-simulation](https://github.com/code-philia/hackathon-local-simulation)。报名与项目提交由队长操作；此处的打包命令**不会上传**。
 
@@ -41,11 +42,15 @@ python3 -m venv .venv
 export OPENAI_API_KEY='...'
 export OPENAI_BASE_URL='https://your-gateway.example/v1'
 export MODEL='your-model'
+# 可选：三项必须同时提供，才启用按需视觉参考
+export VISUAL_API_KEY='...'
+export VISUAL_BASE_URL='https://your-vision-gateway.example/v1'
+export VISUAL_MODEL='your-vision-model'
 .venv/bin/python main.py /absolute/path/to/requirements \
   --output-dir /absolute/path/to/generated-project
 ```
 
-模型服务也可以由比赛平台注入；本地没有密钥时只能跑单元/协议测试，不能宣称真实智能体成绩。
+模型服务也可以由比赛平台注入；本地没有密钥时只能跑单元/协议测试，不能宣称真实智能体成绩。当前用协议夹具完成过一次浏览器链路自测（1/1），只代表测试基础设施贯通，不代表 BookStack/Keep 的通过率；详见本地验证记录。
 
 ```bash
 .venv/bin/python -m unittest tests.test_qualifier tests.test_submission_bundle
