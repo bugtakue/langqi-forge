@@ -1,0 +1,25 @@
+id: ROOT
+name: Split-retry protocol fixture
+type: FOLDER
+description: Local runner protocol test only, not a public task.
+children:
+  - id: REQ-1
+    name: Heading
+    type: ATOMIC
+    description: Show a visible Salvaged heading.
+    dependencies: []
+  - id: REQ-2
+    name: Button
+    type: ATOMIC
+    description: Show a Try button that displays Clicked when activated.
+    dependencies: [REQ-1]
+  - id: REQ-3
+    name: Unimplemented fixture feature
+    type: ATOMIC
+    description: Show a visible Third heading.
+    dependencies: []
+  - id: REQ-4
+    name: Dependent fixture feature
+    type: ATOMIC
+    description: Show a Fourth heading after Third.
+    dependencies: [REQ-3]

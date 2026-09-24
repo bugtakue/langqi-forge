@@ -98,6 +98,257 @@ class ScriptedModel:
 
 
 class QualifierTests(unittest.TestCase):
+    def test_failed_four_node_batch_salvages_validated_half(self) -> None:
+        class SplitFixtureAgent:
+            attempted: list[tuple[str, ...]] = []
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def implement(self, nodes, related_files=()) -> AgentRun:
+                ids = tuple(node.req_id for node in nodes)
+                type(self).attempted.append(ids)
+                self.model.request_count += 1
+                if ids == ("REQ-1", "REQ-2", "REQ-3", "REQ-4"):
+                    replacement = "<h1>Discard this failed whole-batch edit</h1>"
+                elif ids == ("REQ-1", "REQ-2"):
+                    replacement = "<h1>Validated first half</h1>"
+                elif ids == ("REQ-3", "REQ-4"):
+                    replacement = "<h1>Discard this failed second-half edit</h1>"
+                else:
+                    raise AssertionError(ids)
+                changed = json.loads(self.tools.execute(
+                    "replace_text",
+                    {
+                        "path": "frontend/src/app.js",
+                        "old": (
+                            "<h1>Validated first half</h1>"
+                            if ids == ("REQ-3", "REQ-4")
+                            else "// The coding agent implements the requested application here."
+                        ),
+                        "new": f'document.querySelector("#app").innerHTML = "{replacement}";',
+                    },
+                ))
+                self.assert_change(changed)
+                if ids == ("REQ-1", "REQ-2"):
+                    validated = json.loads(self.tools.execute("run_validation", {"scope": "quick"}))
+                    self.assert_change(validated)
+                    return AgentRun(True, "first half validated", tuple(self.tools.changed_files), 1)
+                return AgentRun(False, "fixture stopped", tuple(self.tools.changed_files), 1)
+
+            @staticmethod
+            def assert_change(result: dict) -> None:
+                if not result["ok"]:
+                    raise AssertionError(result)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirements = root / "requirements"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: ROOT
+name: Salvage fixture
+type: FOLDER
+children:
+  - {id: REQ-1, name: First, type: ATOMIC, description: First feature.}
+  - {id: REQ-2, name: Second, type: ATOMIC, description: Second feature., dependencies: [REQ-1]}
+  - {id: REQ-3, name: Third, type: ATOMIC, description: Third feature.}
+  - {id: REQ-4, name: Fourth, type: ATOMIC, description: Fourth feature., dependencies: [REQ-3]}
+""",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            SplitFixtureAgent.attempted = []
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", SplitFixtureAgent),
+            ):
+                status = qualifier.main([str(requirements), "--output-dir", str(output)])
+            self.assertEqual(status, 0)
+            self.assertEqual(SplitFixtureAgent.attempted, [
+                ("REQ-1", "REQ-2", "REQ-3", "REQ-4"),
+                ("REQ-1", "REQ-2"),
+                ("REQ-3", "REQ-4"),
+            ])
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertEqual(report["status"], "local-contract-partial")
+            self.assertEqual(report["salvage_attempts"], 2)
+            self.assertEqual(report["implemented_requirements"], ["REQ-1", "REQ-2"])
+            self.assertEqual(report["failed_requirements"], ["REQ-3", "REQ-4"])
+            self.assertEqual(
+                [item["committed"] for item in report["browser_probe_batches"]],
+                [False, True, False],
+            )
+            source = (output / "frontend/src/app.js").read_text()
+            self.assertIn("Validated first half", source)
+            self.assertNotIn("Discard this", source)
+            rows = [json.loads(line) for line in (output / ".arc/production-trace.jsonl").read_text().splitlines()]
+            self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
+            split = next(row for row in rows if row["event"] == "implementation_batch_split")
+            self.assertEqual(split["payload"]["retry_groups"], [["REQ-1", "REQ-2"], ["REQ-3", "REQ-4"]])
+            if report["arcbench_runtime"] == "official-sdk":
+                states = json.loads((output / ".arc/traceability/node_states.json").read_text())
+                self.assertEqual([states[f"REQ-{i}"]["state"] for i in range(1, 5)], [
+                    "IMPLEMENTED", "IMPLEMENTED", "FAILED", "FAILED",
+                ])
+
+    def test_split_retry_blocks_dependents_but_runs_independent_node(self) -> None:
+        class DependencyFixtureAgent:
+            attempted: list[tuple[str, ...]] = []
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+                self.tools = tools
+
+            def implement(self, nodes, related_files=()) -> AgentRun:
+                ids = tuple(node.req_id for node in nodes)
+                type(self).attempted.append(ids)
+                self.model.request_count += 1
+                if ids != ("REQ-4",):
+                    return AgentRun(False, "fixture failed", (), 1)
+                changed = json.loads(self.tools.execute("replace_text", {
+                    "path": "frontend/src/app.js",
+                    "old": "// The coding agent implements the requested application here.",
+                    "new": 'document.querySelector("#app").innerHTML = "<h1>Independent</h1>";',
+                }))
+                if not changed["ok"]:
+                    raise AssertionError(changed)
+                validated = json.loads(self.tools.execute("run_validation", {"scope": "quick"}))
+                if not validated["ok"]:
+                    raise AssertionError(validated)
+                return AgentRun(True, "independent node validated", tuple(self.tools.changed_files), 1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirements = root / "requirements"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: ROOT
+name: Dependency fixture
+type: FOLDER
+children:
+  - {id: REQ-1, name: First, type: ATOMIC, description: First feature.}
+  - {id: REQ-2, name: Second, type: ATOMIC, description: Second feature.}
+  - {id: REQ-3, name: Dependent, type: ATOMIC, description: Needs first., dependencies: [REQ-1]}
+  - {id: REQ-4, name: Independent, type: ATOMIC, description: Independent feature.}
+""",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            DependencyFixtureAgent.attempted = []
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", DependencyFixtureAgent),
+            ):
+                status = qualifier.main([str(requirements), "--output-dir", str(output)])
+            self.assertEqual(status, 0)
+            self.assertEqual(DependencyFixtureAgent.attempted, [
+                ("REQ-1", "REQ-2", "REQ-3", "REQ-4"),
+                ("REQ-1", "REQ-2"),
+                ("REQ-4",),
+            ])
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertEqual(report["implemented_requirements"], ["REQ-4"])
+            self.assertEqual(report["failed_requirements"], ["REQ-1", "REQ-2", "REQ-3"])
+            self.assertEqual(report["salvage_attempts"], 2)
+            self.assertIn("Independent", (output / "frontend/src/app.js").read_text())
+            rows = [json.loads(line) for line in (output / ".arc/production-trace.jsonl").read_text().splitlines()]
+            self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
+            self.assertTrue(any(row["event"] == "implementation_dependency_blocked" for row in rows))
+
+    def test_salvage_attempts_are_bounded_and_can_be_disabled(self) -> None:
+        class AlwaysFailAgent:
+            attempted: list[tuple[str, ...]] = []
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+
+            def implement(self, nodes, related_files=()) -> AgentRun:
+                type(self).attempted.append(tuple(node.req_id for node in nodes))
+                self.model.request_count += 1
+                return AgentRun(False, "fixture failed", (), 1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirements = root / "requirements"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: ROOT
+name: Retry limit fixture
+type: FOLDER
+children:
+  - {id: REQ-1, name: First, type: ATOMIC, description: First feature.}
+  - {id: REQ-2, name: Second, type: ATOMIC, description: Second feature.}
+""",
+                encoding="utf-8",
+            )
+            for salvage_splits, expected_attempts in (
+                ("1", [("REQ-1", "REQ-2"), ("REQ-1",), ("REQ-2",)]),
+                ("0", [("REQ-1", "REQ-2")]),
+            ):
+                with self.subTest(salvage_splits=salvage_splits):
+                    AlwaysFailAgent.attempted = []
+                    output = root / f"output-{salvage_splits}"
+                    with (
+                        patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                        patch.object(qualifier, "CodingAgent", AlwaysFailAgent),
+                    ):
+                        status = qualifier.main([
+                            str(requirements), "--output-dir", str(output),
+                            "--salvage-splits", salvage_splits,
+                        ])
+                    self.assertEqual(status, 1)
+                    self.assertEqual(AlwaysFailAgent.attempted, expected_attempts)
+                    report = json.loads((output / ".arc/harness-report.json").read_text())
+                    self.assertEqual(report["failed_requirements"], ["REQ-1", "REQ-2"])
+                    self.assertEqual(report["salvage_attempts"], len(expected_attempts) - 1)
+                    rows = [json.loads(line) for line in (output / ".arc/production-trace.jsonl").read_text().splitlines()]
+                    self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
+                    self.assertEqual(
+                        sum(row["event"] == "implementation_batch_split" for row in rows),
+                        int(salvage_splits),
+                    )
+
+    def test_model_runtime_error_does_not_trigger_split_retry(self) -> None:
+        class BrokenGatewayAgent:
+            attempted = 0
+
+            def __init__(self, model, tools, _trace, max_turns=20) -> None:
+                self.model = model
+
+            def implement(self, nodes, related_files=()) -> AgentRun:
+                type(self).attempted += 1
+                self.model.request_count += 1
+                raise RuntimeError("fixture model gateway unavailable")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirements = root / "requirements"
+            requirements.mkdir()
+            (requirements / "requirements.yaml").write_text(
+                """id: ROOT
+name: Gateway fixture
+type: FOLDER
+children:
+  - {id: REQ-1, name: First, type: ATOMIC, description: First feature.}
+  - {id: REQ-2, name: Second, type: ATOMIC, description: Second feature.}
+""",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            BrokenGatewayAgent.attempted = 0
+            with (
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                patch.object(qualifier, "CodingAgent", BrokenGatewayAgent),
+            ):
+                status = qualifier.main([str(requirements), "--output-dir", str(output)])
+            self.assertEqual(status, 1)
+            self.assertEqual(BrokenGatewayAgent.attempted, 1)
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertEqual(report["salvage_attempts"], 0)
+            self.assertEqual(report["failed_requirements"], ["REQ-1", "REQ-2"])
+
     def test_failed_batch_drops_its_edits_and_keeps_independent_credit(self) -> None:
         class PartialFixtureAgent:
             attempted: list[str] = []
@@ -487,7 +738,7 @@ children:
             self.assertFalse(report["behavioral_gui_tested"])
             self.assertEqual(report["browser_probe_batches"][0]["calls"], 0)
             self.assertGreaterEqual(report["model_requests"], 4)
-            self.assertEqual(report["model_budget"]["planned_turns"], 60)
+            self.assertEqual(report["model_budget"]["planned_turns"], 100)
             self.assertIn("<h1>Example</h1>", (output / "frontend/src/app.js").read_text())
             rows = [
                 json.loads(line)

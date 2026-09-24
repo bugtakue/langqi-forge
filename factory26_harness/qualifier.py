@@ -71,6 +71,13 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=int(os.environ.get("FACTORY26_REPAIR_ROUNDS", "2")),
     )
+    parser.add_argument(
+        "--salvage-splits",
+        type=int,
+        choices=(0, 1),
+        default=int(os.environ.get("FACTORY26_SALVAGE_SPLITS", "1")),
+        help="After a multi-requirement batch fails, retry its two halves once (0 disables)",
+    )
     return parser.parse_args(argv)
 
 
@@ -326,6 +333,8 @@ def main(argv: list[str] | None = None) -> int:
         "checks": [],
         "browser_probe_batches": [],
         "browser_probe_repairs": [],
+        "salvage_splits": args.salvage_splits,
+        "salvage_attempts": 0,
     }
     model: OpenAIChatClient | None = None
     visual_client: VisualReferenceClient | None = None
@@ -367,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
                     [node.req_id for node in group]
                     for group in groups
                 ],
+                "salvage_splits": args.salvage_splits,
                 "route": "model-generated-implementation",
                 "task_specific_prebuilt_code": False,
             },
@@ -383,7 +393,9 @@ def main(argv: list[str] | None = None) -> int:
 
         model = OpenAIChatClient(
             trace,
-            planned_turns=(len(groups) + args.repair_rounds) * args.max_agent_turns,
+            planned_turns=(
+                len(groups) * (1 + 2 * args.salvage_splits) + args.repair_rounds
+            ) * args.max_agent_turns,
         )
         trace.record(
             "model_gateway_selected",
@@ -397,7 +409,8 @@ def main(argv: list[str] | None = None) -> int:
             intervention_count=0,
             policy=(
                 "autonomous generation; failed batches discard unverified edits and "
-                "remain failed while independent batches may continue"
+                "may receive one bounded split retry; dependent requirements remain "
+                "failed while independent batches may continue"
             ),
         )
         visual_settings = tuple(
@@ -418,108 +431,141 @@ def main(argv: list[str] | None = None) -> int:
             )
         failed_ids: set[str] = set()
         for index, group in enumerate(groups, 1):
-            blocked: list[RequirementNode] = []
-            for node in group:
-                if any(dependency in failed_ids for dependency in node.dependencies):
-                    blocked.append(node)
-                    failed_ids.add(node.req_id)
-            if blocked:
-                blocked_ids = [node.req_id for node in blocked]
-                report["failed_requirements"].extend(blocked_ids)
-                trace.record(
-                    "implementation_dependency_blocked",
-                    batch=index,
-                    requirement_ids=blocked_ids,
-                    failed_dependencies=sorted(
-                        {dependency for node in blocked for dependency in node.dependencies if dependency in failed_ids}
-                    ),
-                )
-                if arc_runtime is not None:
-                    arc_runtime.fail_batch(blocked_ids, "Prerequisite implementation failed")
-            active_group = [node for node in group if node not in blocked]
-            if not active_group:
-                continue
-            requirement_ids = [node.req_id for node in active_group]
-            active_batch_ids = requirement_ids
-            if arc_runtime is not None:
-                arc_runtime.begin_batch(requirement_ids)
-            named_references = _named_reference_images(active_group)
-            reference_paths = tuple(
-                path
-                for path in named_references
-                if visual_client is not None and visual_client.can_inspect(path)
-            )
-            trace.record(
-                "implementation_batch_started",
-                batch=index,
-                requirement_ids=requirement_ids,
-                prior_source_paths=handoff_paths,
-                visual_references_available=reference_paths,
-                visual_references_unavailable=sorted(set(named_references) - set(reference_paths))
-                if visual_client is not None else [],
-            )
-            # A failed model turn must not leave half-written code in the app that
-            # later batches and the independent evaluator will execute.
-            with tempfile.TemporaryDirectory(
-                prefix="factory26-batch-"
-            ) as staged_directory:
-                staged = Path(staged_directory)
-                stage_app_project(output_dir, staged)
-                tools = WorkspaceTools(
-                    staged,
-                    trace,
-                    smoke_port,
-                    visual_client=visual_client,
-                    reference_paths=reference_paths,
-                )
-                try:
-                    result = CodingAgent(
-                        model, tools, trace, max_turns=args.max_agent_turns
-                    ).implement(active_group, related_files=handoff_paths)
-                except RuntimeError as exc:
+            pending: list[tuple[list[RequirementNode], int]] = [(group, 0)]
+            attempt = 0
+            while pending:
+                candidates, split_depth = pending.pop(0)
+                blocked: list[RequirementNode] = []
+                for node in candidates:
+                    if any(dependency in failed_ids for dependency in node.dependencies):
+                        blocked.append(node)
+                        failed_ids.add(node.req_id)
+                if blocked:
+                    blocked_ids = [node.req_id for node in blocked]
+                    report["failed_requirements"].extend(blocked_ids)
                     trace.record(
-                        "implementation_batch_exception",
+                        "implementation_dependency_blocked",
                         batch=index,
-                        requirement_ids=requirement_ids,
-                        error=str(exc),
+                        requirement_ids=blocked_ids,
+                        failed_dependencies=sorted(
+                            {dependency for node in blocked for dependency in node.dependencies if dependency in failed_ids}
+                        ),
                     )
-                    result = AgentRun(
-                        False, str(exc), tuple(sorted(tools.changed_files)), 0
-                    )
-                if result.completed:
-                    _promote_staged_app(staged, output_dir)
-            probe_evidence = {
-                "batch": index,
-                "calls": tools.browser_probe_calls,
-                "committed": result.completed,
-                "behavioral_probe_verified": (
-                    tools.browser_probe_verified_revision == tools.change_revision
-                ),
-            }
-            report["browser_probe_batches"].append(probe_evidence)
-            trace.record(
-                "implementation_batch_finished",
-                batch=index,
-                requirement_ids=requirement_ids,
-                completed=result.completed,
-                changed_files=result.changed_files,
-                turns=result.turns,
-                summary=result.summary,
-                staged_changes_committed=result.completed,
-                browser_probe=probe_evidence,
-            )
-            if not result.completed:
-                failed_ids.update(requirement_ids)
-                report["failed_requirements"].extend(requirement_ids)
+                    if arc_runtime is not None:
+                        arc_runtime.fail_batch(blocked_ids, "Prerequisite implementation failed")
+                active_group = [node for node in candidates if node not in blocked]
+                if not active_group:
+                    continue
+                attempt += 1
+                if split_depth:
+                    report["salvage_attempts"] += 1
+                requirement_ids = [node.req_id for node in active_group]
+                active_batch_ids = requirement_ids
                 if arc_runtime is not None:
-                    arc_runtime.fail_batch(requirement_ids, result.summary)
+                    arc_runtime.begin_batch(requirement_ids)
+                named_references = _named_reference_images(active_group)
+                reference_paths = tuple(
+                    path
+                    for path in named_references
+                    if visual_client is not None and visual_client.can_inspect(path)
+                )
+                trace.record(
+                    "implementation_batch_started",
+                    batch=index,
+                    attempt=attempt,
+                    split_depth=split_depth,
+                    requirement_ids=requirement_ids,
+                    prior_source_paths=handoff_paths,
+                    visual_references_available=reference_paths,
+                    visual_references_unavailable=sorted(set(named_references) - set(reference_paths))
+                    if visual_client is not None else [],
+                )
+                # Failed attempts never leak tentative edits into later attempts.
+                with tempfile.TemporaryDirectory(
+                    prefix="factory26-batch-"
+                ) as staged_directory:
+                    staged = Path(staged_directory)
+                    stage_app_project(output_dir, staged)
+                    tools = WorkspaceTools(
+                        staged,
+                        trace,
+                        smoke_port,
+                        visual_client=visual_client,
+                        reference_paths=reference_paths,
+                    )
+                    model_exception = False
+                    try:
+                        result = CodingAgent(
+                            model, tools, trace, max_turns=args.max_agent_turns
+                        ).implement(active_group, related_files=handoff_paths)
+                    except RuntimeError as exc:
+                        model_exception = True
+                        trace.record(
+                            "implementation_batch_exception",
+                            batch=index,
+                            attempt=attempt,
+                            requirement_ids=requirement_ids,
+                            error=str(exc),
+                        )
+                        result = AgentRun(
+                            False, str(exc), tuple(sorted(tools.changed_files)), 0
+                        )
+                    if result.completed:
+                        _promote_staged_app(staged, output_dir)
+                probe_evidence = {
+                    "batch": index,
+                    "attempt": attempt,
+                    "calls": tools.browser_probe_calls,
+                    "committed": result.completed,
+                    "behavioral_probe_verified": (
+                        tools.browser_probe_verified_revision == tools.change_revision
+                    ),
+                }
+                report["browser_probe_batches"].append(probe_evidence)
+                trace.record(
+                    "implementation_batch_finished",
+                    batch=index,
+                    attempt=attempt,
+                    requirement_ids=requirement_ids,
+                    completed=result.completed,
+                    changed_files=result.changed_files,
+                    turns=result.turns,
+                    summary=result.summary,
+                    staged_changes_committed=result.completed,
+                    browser_probe=probe_evidence,
+                )
+                if not result.completed:
+                    active_batch_ids = []
+                    model_limit = getattr(model, "max_requests", None)
+                    can_retry = model_limit is None or model.request_count < model_limit
+                    if (
+                        not model_exception
+                        and split_depth < args.salvage_splits
+                        and len(active_group) > 1
+                        and can_retry
+                    ):
+                        midpoint = len(active_group) // 2
+                        halves = (active_group[:midpoint], active_group[midpoint:])
+                        trace.record(
+                            "implementation_batch_split",
+                            batch=index,
+                            failed_attempt=attempt,
+                            requirement_ids=requirement_ids,
+                            retry_groups=[[node.req_id for node in half] for half in halves],
+                            maximum_extra_attempts=2,
+                        )
+                        pending = [(half, split_depth + 1) for half in halves] + pending
+                        continue
+                    failed_ids.update(requirement_ids)
+                    report["failed_requirements"].extend(requirement_ids)
+                    if arc_runtime is not None:
+                        arc_runtime.fail_batch(requirement_ids, result.summary)
+                    continue
+                handoff_paths = _recent_handoff_paths(handoff_paths, result.changed_files)
+                if arc_runtime is not None:
+                    arc_runtime.finish_batch(index, requirement_ids)
+                report["implemented_requirements"].extend(requirement_ids)
                 active_batch_ids = []
-                continue
-            handoff_paths = _recent_handoff_paths(handoff_paths, result.changed_files)
-            if arc_runtime is not None:
-                arc_runtime.finish_batch(index, requirement_ids)
-            report["implemented_requirements"].extend(requirement_ids)
-            active_batch_ids = []
 
         if not report["implemented_requirements"]:
             raise RuntimeError("no requirement batch completed; refusing empty scaffold")
