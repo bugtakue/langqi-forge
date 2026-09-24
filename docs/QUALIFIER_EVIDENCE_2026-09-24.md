@@ -77,3 +77,11 @@
 - 该**精确 ZIP** 在旧版 arm64 Runner 的完整协议模拟目录 `../factory26-local-simulation/runs/qualifier-context-probe-final-20260924/` 再次完成模型协议调用、源码修改、一次带断言的浏览器点击、构建启动及独立 Playwright 1/1；容器退出码 0，SDK 正常，生产轨迹 31/31 行哈希链有效且未发现未脱敏密钥。`score=null` 且 Meter 不可用；这仍只是自建协议夹具，不是公开题性能。
 - 该**精确 ZIP** 在当前主办方 amd64 基础镜像的直启目录 `../factory26-local-simulation/runs/qualifier-context-current-base-direct-20260924/` 完成 4 次自建模型请求、官方 SDK 记录和 6/6 构建/启动检查；该直启没有浏览器探针，仍不能替代因本机 QEMU Chromium 预检失败而缺失的完整当前 Runner GUI 试验。BookStack、Keep 的预备工作区也已用此包分别解包成功：`../factory26-local-simulation/runs/qualifier-context-{bookstack,keep}-preflight-20260924/`，仍未运行真实模型或测试。
 - 此后只追加本证据文档；最终候选 ZIP 的源码身份继续由其内置清单绑定上述 `6228749c...` 提交。真实模型两题结果、费用与官方成绩仍缺失，账号登录、上传、正式提交均未进行。
+
+## 2026-09-25 模型故障恢复与新候选包
+
+- 新源码提交 `7b00deb0846b6abd8e4c4f2a6fe1496d3299f86f`；新 ZIP `dist/langqi-forge-qualifier.zip` 的 SHA-256 为 `afb4d480d9d178714e6983bbd6fd51d1efdd2ba31512c25b8bd9d5f405753a98`，16 个文件，`unzip -t` 通过。包内来源清单绑定这次源码提交，不包含协议测试、密钥或题目专用业务代码。后续只提交本页记录，不改变已验证 ZIP 的源码内容。
+- 修正模型网关的失败恢复：临时 HTTP 408/425/429/5xx 及连接中断最多尝试 3 次；遵守有界 `Retry-After`；认证失败、非临时 4xx 与格式错误的 200 响应不再重复请求。提供商错误正文不进入轨迹。报告分别记录成功模型响应 `model_requests` 和实际 `model_http_attempts`，后者包括重试，**两者都不是平台账单**。本机假 HTTP 服务测试覆盖 429→503→恢复、401 不重试且不记录错误正文、超长等待失败关闭、HTTP 日期与格式错误响应不重试。主机单元测试共 64 项，63 项通过、1 项因主机无 Playwright/Chromium 跳过。
+- 该**精确新 ZIP** 在旧版 arm64 Runner + 当前本地模拟器包装中运行自建模型协议夹具，目录 `../factory26-local-simulation/runs/qualifier-retry-browser-20260925/`。容器退出码 0，独立 Playwright 1/1，`score=null`、费用与 Token 账单为 `null`；模型协议请求 5 次、HTTP 尝试 5 次，浏览器探针点击并断言通过，本地 6/6 结构/构建/启动检查通过，官方 SDK 正常写入，生产轨迹 31/31 行哈希链有效且未发现未脱敏密钥。
+- 同一 ZIP 在本机缓存的主办方 amd64 基础镜像包装 `arcbench-local-current:20260924` 下**直启**，目录 `../factory26-local-simulation/runs/qualifier-retry-current-base-direct-20260925/`：容器退出码 0，模型协议请求及 HTTP 尝试各 4 次，SDK 正常，本地 6/6 检查通过，生产轨迹 27/27 行哈希链有效且未发现未脱敏密钥。此直启不做浏览器探针，也不等于完整当前 Runner；本机 ARM→amd64 QEMU 仍无法通过当前 Runner 的 Chromium 预检。镜像标签与摘要仅代表已缓存版本，不证明主办方后续没有更新。
+- 上述两个运行均使用**自建、固定响应的协议网关**，不是实际编码大模型；1/1 只是协议夹具，不是 BookStack/Keep 的通过率、公开赛排名或获奖概率。尚未取得真实模型的两道公开练习结果、真实成本与官方成绩；ARC-Bench 账号未登录，项目未上传、未正式提交。
