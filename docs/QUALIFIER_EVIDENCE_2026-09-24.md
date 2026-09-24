@@ -102,3 +102,11 @@
 - 新精确 ZIP `dist/langqi-forge-qualifier.zip`：SHA-256 `e9cfe63f30cc6ef7c9e60a08d6eb0e970640be12eba07b446e3feaf15724cf0b`，16 个文件，`unzip -t` 通过，包内清单绑定 `b7b3b9c...`。该 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装上执行**单批自建协议夹具**，目录 `../factory26-local-simulation/runs/qualifier-handoff-browser-20260925/`：容器退出码 0，模型协议请求 5 次，浏览器探针通过，独立 Playwright 1/1，官方 SDK 正常，本地检查 6/6，生产轨迹 31/31 行完整且未发现未脱敏密钥。单批协议运行只验证新包无回归；跨批交接由上述两批集成测试验证，二者都不能证明真实大模型解题效果。
 - 同一精确 ZIP 在本机缓存的主办方当前 amd64 基础镜像包装 `arcbench-local-current:20260924` 下直启，目录 `../factory26-local-simulation/runs/qualifier-handoff-current-base-direct-20260925/`：进程退出码 0，模型协议请求/HTTP 尝试各 4 次，官方 SDK 正常，本地 6/6 检查通过，生产轨迹 27/27 行有效且未发现未脱敏密钥。这个直启不运行浏览器探针，不能代替本机因 QEMU 浏览器预检失败而缺失的当前 Runner 完整 GUI 试验。
 - 真实模型 BookStack/Keep 练习结果、正式赛 200 测试成绩、实际 Token 效率和费用仍缺失；本轮没有账号登录、上传或提交。
+
+## 2026-09-25 审计完成条件收紧（当前候选包）
+
+- 源码提交 `c4d14061c575656d384d58d056df9aaf2f20ca1a` 修正一个完成条件漏洞：过去进入逐需求审计后，模型只需再调用一次成功的 `run_validation`，主循环就直接记录“审计完成”，即使没有模型审计结论。现在必须在最新修改已校验、旧探针无待重验的前提下，收到以 `AUDIT PASS:` 开头的无工具回复；再次校验、空回复和 `AUDIT BLOCKED` 不会结束批次。轨迹增加 `acceptance_audit_self_reported=true`，明确这仍是模型自审，不能冒充逐需求独立 GUI 测试。回归测试覆盖重复校验和明确未通过均失败关闭。
+- 当前精确 ZIP 为 `dist/langqi-forge-qualifier.zip`，SHA-256 `a85aea1042d902dae22c80f83be64ab42d9545b6aaad817965b4fc991009ca21`，16 个文件，来源清单绑定上述源码提交，`unzip -t` 通过；后续只追加本证据文档，不改变已验证 ZIP 的源码身份。主机单元测试共 69 项，67 项通过、2 项因本机缺 Playwright/Chromium 跳过；浏览器相关测试在旧版 arm64 Runner 容器里 4/4 通过。
+- 该**精确 ZIP** 在旧版 arm64 Runner + 当前本地模拟器包装的完整协议运行目录 `../factory26-local-simulation/runs/qualifier-audit-protocol-20260925/`：自建固定响应模型夹具请求 5 次，浏览器探针点击并断言通过，独立 Playwright 1/1，容器退出码 0，官方 SDK 接入正常，本地检查 6/6，生产轨迹 31/31 行哈希链有效且未发现未脱敏夹具密钥；`score=null`，平台 Token/费用计量不可用。
+- 同一 ZIP 在本机缓存的主办方 amd64 基础镜像包装 `arcbench-local-current:20260924` **直启**，目录 `../factory26-local-simulation/runs/qualifier-audit-current-direct-20260925/`：进程退出码 0，自建模型请求/HTTP 尝试各 4 次，官方 SDK 正常，本地检查 6/6，轨迹 27/27 行有效。直启未运行浏览器探针，不能替代受本机 ARM→amd64 QEMU Chromium 预检限制的完整当前 Runner GUI 试验。
+- 两次协议运行都只证明参赛包、模型接口、写文件、构建启动、审计结束条件及 SDK/轨迹链路正常；夹具 1/1 **不是**真实编码模型的 BookStack/Keep 成绩、正式赛成绩或获奖依据。账号登录、正式上传与提交仍未执行；实际模型练习凭据与正式队伍访问仍待解决。
