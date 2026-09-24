@@ -33,6 +33,7 @@ DUMMY_BUILD = (
 class _ModelHandler(BaseHTTPRequestHandler):
     calls = 0
     payloads: list[dict] = []
+    audit_mode = "pass"
 
     def log_message(self, *_args) -> None:
         return
@@ -76,7 +77,7 @@ class _ModelHandler(BaseHTTPRequestHandler):
                     }
                 ],
             }
-        else:
+        elif type(self).audit_mode == "revalidate":
             message = {
                 "role": "assistant",
                 "content": "",
@@ -90,6 +91,15 @@ class _ModelHandler(BaseHTTPRequestHandler):
                         },
                     }
                 ],
+            }
+        else:
+            message = {
+                "role": "assistant",
+                "content": (
+                    "AUDIT BLOCKED: fixture does not cover the requirement"
+                    if type(self).audit_mode == "blocked"
+                    else "AUDIT PASS: fixture validated; browser behavior unverified"
+                ),
             }
         payload = {
             "choices": [{"message": message}],
@@ -433,6 +443,7 @@ class ModelLoopTests(unittest.TestCase):
     def test_openai_tool_loop_edits_workspace_and_tracks_usage(self) -> None:
         _ModelHandler.calls = 0
         _ModelHandler.payloads = []
+        _ModelHandler.audit_mode = "pass"
         server = ThreadingHTTPServer(("127.0.0.1", 0), _ModelHandler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -534,14 +545,74 @@ class ModelLoopTests(unittest.TestCase):
                     audit_requests[-1]["payload"].get("trigger"),
                     "first_passing_implementation_validation",
                 )
-                self.assertTrue(
-                    completions[-1]["payload"].get("completed_on_validation")
+                self.assertEqual(
+                    completions[-1]["payload"]["summary"],
+                    "AUDIT PASS: fixture validated; browser behavior unverified",
                 )
+                self.assertTrue(
+                    completions[-1]["payload"]["acceptance_audit_self_reported"]
+                )
+                self.assertNotIn("completed_on_validation", completions[-1]["payload"])
                 self.assertNotIn(
                     "test-secret",
                     (root / ".arc" / "trace.jsonl").read_text(encoding="utf-8"),
                 )
         finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_revalidation_or_blocked_audit_cannot_complete_implementation(self) -> None:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _ModelHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for mode in ("revalidate", "blocked"):
+                with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                    _ModelHandler.calls = 0
+                    _ModelHandler.audit_mode = mode
+                    root = Path(directory)
+                    for component, scripts in (
+                        ("frontend", {"build": DUMMY_BUILD}),
+                        ("backend", {"start": 'node -e ""'}),
+                    ):
+                        (root / component).mkdir()
+                        (root / component / "package.json").write_text(
+                            json.dumps({"name": component, "private": True, "scripts": scripts}),
+                            encoding="utf-8",
+                        )
+                    trace = ProductionTrace(root / ".arc" / "trace.jsonl")
+                    with patch.dict(
+                        os.environ,
+                        {
+                            "OPENAI_API_KEY": "test-secret",
+                            "OPENAI_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1",
+                            "MODEL": "mock-model",
+                        },
+                        clear=False,
+                    ):
+                        model = OpenAIChatClient(trace)
+                        tools = WorkspaceTools(root, trace, smoke_port=3923)
+                        node = RequirementNode(
+                            req_id="R1",
+                            name="Generate a file",
+                            description="Create one implementation file.",
+                            dependencies=(),
+                            scenarios=(),
+                            visual_reference=(),
+                            raw={},
+                        )
+                        result = CodingAgent(model, tools, trace, max_turns=4).implement([node])
+                    self.assertFalse(result.completed)
+                    self.assertEqual(result.turns, 4)
+                    self.assertTrue(tools.current_changes_validated)
+                    events = [
+                        json.loads(line)["event"]
+                        for line in trace.path.read_text(encoding="utf-8").splitlines()
+                    ]
+                    self.assertIn("agent_session_exhausted", events)
+                    self.assertNotIn("agent_session_completed", events)
+        finally:
+            _ModelHandler.audit_mode = "pass"
             server.shutdown()
             server.server_close()
 

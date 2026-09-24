@@ -83,9 +83,9 @@ class ScriptedModel:
             ]
         else:
             calls = []
-        message = {"role": "assistant", "content": "fixture completed", "tool_calls": calls}
+        message = {"role": "assistant", "content": "AUDIT PASS: fixture completed", "tool_calls": calls}
         return ModelReply(
-            content="fixture completed",
+            content="AUDIT PASS: fixture completed",
             tool_calls=tuple(calls),
             raw_message=message,
             prompt_tokens=0,

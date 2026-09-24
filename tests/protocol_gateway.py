@@ -92,7 +92,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "message": {
                         "role": "assistant",
-                        "content": "protocol fixture completed" if not name else "",
+                        "content": "AUDIT PASS: protocol fixture completed" if not name else "",
                         "tool_calls": tool_calls,
                     },
                     "finish_reason": "tool_calls" if name else "stop",

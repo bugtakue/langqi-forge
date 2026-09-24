@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -86,8 +87,9 @@ with at least one explicit visible-text assertion. A no-step inspection may prec
 but is not behavioral evidence. If a probe fails or you change code afterward, run
 quick validation and repeat the behavioral assertion before finishing.
 
-If any gap exists, patch only that gap and run quick validation once. If none exists
-and the browser probe passed, return a short `AUDIT PASS` summary without tools."""
+If any gap exists, patch only that gap and run quick validation once. If none exists,
+return a short no-tool summary beginning with `AUDIT PASS:` and name any behavior you
+could not verify. Do not use `AUDIT PASS` if a requirement remains unimplemented."""
 
 MAX_SOURCE_SNAPSHOT_BYTES = 12_000
 
@@ -361,6 +363,21 @@ class CodingAgent:
                             trigger="validated_implementation_summary",
                         )
                         continue
+                    if stage == "implementation" and not re.match(
+                        r"^AUDIT PASS(?:\s|:|$)", final_summary
+                    ):
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "The acceptance audit is not complete. If a requirement is "
+                                    "missing, fix it and revalidate. Otherwise give a no-tool "
+                                    "summary beginning with `AUDIT PASS:` and state any "
+                                    "unverified behavior."
+                                ),
+                            }
+                        )
+                        continue
                     self.trace.record(
                         "agent_session_completed",
                         stage=stage,
@@ -368,6 +385,7 @@ class CodingAgent:
                         changed_files=changed,
                         summary=final_summary,
                         acceptance_audit=acceptance_audit_requested,
+                        acceptance_audit_self_reported=(stage == "implementation"),
                     )
                     return AgentRun(True, final_summary, changed, turn)
                 if not has_required_change:
@@ -406,7 +424,6 @@ class CodingAgent:
             total_tool_calls += call_count
             recognized_tool = False
             successful_tool = False
-            audit_validation_completed = False
             implementation_validation_completed = False
             compact_results: list[dict[str, Any]] = []
             for call in reply.tool_calls:
@@ -443,12 +460,6 @@ class CodingAgent:
                             item_sha256 = str(item.get("sha256") or "")
                             if len(item_sha256) == 64:
                                 observed_sha256[item_path] = item_sha256
-                    audit_validation_completed = audit_validation_completed or (
-                        acceptance_audit_requested
-                        and name == "run_validation"
-                        and bool(result_payload.get("ok"))
-                        and self.tools.current_changes_validated
-                    )
                     implementation_validation_completed = (
                         implementation_validation_completed
                         or (
@@ -469,19 +480,6 @@ class CodingAgent:
                         "content": result,
                     }
                 )
-            if audit_validation_completed and not self.tools.browser_probe_requires_recheck:
-                changed = tuple(sorted(self.tools.changed_files - changed_before))
-                final_summary = "Acceptance audit completed; the final changed revision passed validation."
-                self.trace.record(
-                    "agent_session_completed",
-                    stage=stage,
-                    requirement_ids=requirement_ids,
-                    changed_files=changed,
-                    summary=final_summary,
-                    acceptance_audit=True,
-                    completed_on_validation=True,
-                )
-                return AgentRun(True, final_summary, changed, turn)
             context_before = _context_characters(messages)
             if context_before > self.maximum_context_characters:
                 checkpoint = {
