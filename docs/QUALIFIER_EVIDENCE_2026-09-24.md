@@ -117,3 +117,11 @@
 - 当前精确 ZIP `dist/langqi-forge-qualifier.zip`：SHA-256 `18671d0842b58e19298c813b68f8c08466fc8eb2694556b75d8b6e1445e38529`，16 个文件，来源清单绑定上述源码提交，`unzip -t` 通过；后续仅追加本证据文档。主机单元测试 74 项，72 项通过、2 项因本机缺 Playwright/Chromium 跳过；旧版 arm64 Runner 容器里的浏览器测试 4/4 通过。
 - 同一 ZIP 在旧版 arm64 Runner + 当前本地模拟器包装的完整协议运行目录 `../factory26-local-simulation/runs/qualifier-failure-report-protocol-20260925/`：自建固定响应模型夹具请求 5 次，本地浏览器探针带断言通过，独立 Playwright 1/1，容器退出码 0，官方 SDK 接入正常，本地结构/构建/启动检查 6/6，独立生产轨迹 31/31 行哈希链有效。`score=null`，Meter Token/费用不可用。这里的 1/1 依旧只是协议夹具，不是实际模型的公开练习或正式赛成绩。
 - 同一精确 ZIP 在本机缓存的主办方 amd64 基础镜像包装 `arcbench-local-current:20260924` 下**直启**，目录 `../factory26-local-simulation/runs/qualifier-failure-report-current-direct-20260925/`：进程退出码 0，固定响应夹具模型请求/HTTP 尝试各 4 次，官方 SDK 正常，本地检查 6/6，轨迹 27/27 行哈希链有效。这个直启没有浏览器探针，不替代当前完整 Runner 的 GUI 运行；本机 ARM→amd64 QEMU 的 Chromium 预检障碍仍未消除。真实模型 BookStack/Keep 测试、正式队伍登录及提交都仍未完成。
+
+## 2026-09-25 同一 ZIP 的两批端到端协议验证
+
+- 新增**只在本仓库测试目录**的 `tests/protocol_gateway_two_batch.py`、`tests/protocol_requirements_two_batch/` 和 `tests/protocol_playwright_two_batch/`，没有写入参赛 ZIP。固定响应夹具在两批间重开模型上下文：第一批新增 `frontend/src/first-feature.js`；第二批接口收到的 Prompt 必须含该文件的交接路径，随后实际调用 `read_files` 读取它，再新增 `second-feature.js` 并扩展页面。若无交接路径，夹具返回错误而不是假装完成。运行时设 `FACTORY26_BATCH_SIZE=1`，仅用于强制两个测试需求分批。
+- **成功路径**直接使用上节 SHA-256 为 `18671d08...` 的精确 ZIP，在旧版 arm64 Runner + 当前本地模拟器包装运行于 `../factory26-local-simulation/runs/qualifier-two-batch-protocol-20260925/`：容器退出码 0，固定响应夹具模型请求 10 次，两批各自完成一次带可见文本断言的浏览器探针，独立 Playwright 2/2，本地检查 6/6。SDK 需求状态 `REQ-1/REQ-2` 均为 `IMPLEMENTED`；生成项目有初始提交及两笔独立批次提交。`implementation_batch_started` 明确记录第二批的 `prior_source_paths` 含第一批新增模块；独立生产轨迹 58/58 行哈希链有效，未发现未脱敏夹具密钥。`score=null`，Meter 计量不可用。
+- **故意失败路径**仍用同一 ZIP 和需求，但固定响应夹具在第二批拒绝实施，运行于 `../factory26-local-simulation/runs/qualifier-two-batch-fail-20260925/`：容器退出码 1、独立 GUI 测试未运行，报告 `status=failed`、`implemented_requirements=[REQ-1]`、`failed_requirements=[REQ-2]`。SDK 最终状态分别为 `IMPLEMENTED` / `FAILED`，运行级事件为 `running → failed`；第一批 Git 提交保留，未产生第二批成功提交。生产轨迹 46/46 行哈希链有效。这是有意注入的失败，不是参赛包在正常输入下的能力测试。
+- 网关自身另有单元测试：第二批若未收到前批模块路径就返回 HTTP 422；收到后会读该模块并发出实际编辑工具调用；故意失败模式明确回 `AUDIT BLOCKED`。当前主机单元测试共 75 项，73 项通过、2 项因本机缺 Playwright/Chromium 跳过；浏览器环境的 4 项独立测试已在前述旧版 arm64 Runner 容器内运行通过。
+- 两条路径共同证明的是**编排、跨批文件交接、状态、提交、行为探针及失败记录**，并不测量真实编码模型对 BookStack、Keep 或正式赛任务的完成度。正式赛账号、上传与提交仍未触碰。

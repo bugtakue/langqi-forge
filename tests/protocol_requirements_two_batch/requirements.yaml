@@ -1,0 +1,17 @@
+id: ROOT
+name: Two-batch protocol fixture
+type: FOLDER
+description: Local runner integration test only; not a public task.
+children:
+  - id: REQ-1
+    name: First module
+    type: ATOMIC
+    description: Render an Example heading and working Try button from a new frontend module.
+    dependencies: []
+    scenarios: []
+  - id: REQ-2
+    name: Follow-up module
+    type: ATOMIC
+    description: Preserve the first behavior and add a Second button that shows Ready.
+    dependencies: [REQ-1]
+    scenarios: []
