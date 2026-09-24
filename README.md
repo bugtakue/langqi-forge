@@ -29,7 +29,7 @@ requirements.yaml
 
 工具仅允许读项目文件、查询文本、修改 `frontend/` / `backend/` 和运行安全校验。覆写文件需要已观察的 SHA-256，限制写入文件数和字节数；模型看不到环境密钥。生产轨迹记录 Prompt、模型请求与响应、工具参数与结果、批次、校验和人工干预点，并对敏感字段脱敏、逐行链接哈希。
 
-具体 Prompt、工具、循环及证据位置见 [参赛运行说明](docs/QUALIFIER_OPERATIONS.md)。
+具体 Prompt、工具、循环及证据位置见 [参赛运行说明](docs/QUALIFIER_OPERATIONS.md) 和 [本地验证记录](docs/QUALIFIER_EVIDENCE_2026-09-24.md)。
 
 ## 本地运行
 

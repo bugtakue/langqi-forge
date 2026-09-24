@@ -1,0 +1,11 @@
+id: ROOT
+name: Protocol fixture application
+type: FOLDER
+description: Local launcher and model protocol test only.
+children:
+  - id: REQ-1
+    name: Example heading
+    type: ATOMIC
+    description: Display one visible heading named Example.
+    dependencies: []
+    scenarios: []
