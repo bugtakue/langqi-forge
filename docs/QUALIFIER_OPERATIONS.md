@@ -6,7 +6,7 @@
 
 入口接受主办方 `requirements/requirements.yaml` 路径及 `--output-dir`。输出根目录有 `frontend/` 与 `backend/`，后端由 `npm start` 按 `PORT` 监听，前端由 `npm run build` 产出 `frontend/dist/`。默认静态服务和 `/api/health` 是通用运行底座，不包含题目专用行为。
 
-`requirements.py` 校验树、按依赖排序原子需求，并从**本次**需求生成最多 8,000 字符的全局架构目录：只有应用名、原子需求 ID、短名称和依赖，没有需求正文、测试答案或题目预制实现。`qualifier.py` 把父级模块描述及父级显式 `visual_reference` 继承到各原子需求，避免遗漏父级背景。视觉图片清单同时读取描述中的 `reference/` 路径和显式 `visual_reference` 字段；是否可检查仍由图片路径、存在性、文件类型、大小和视觉网关配置共同决定。空页面、空样式、健康端点及通用 HTTP/原子 JSON 存储辅助函数由 `generic_scaffold.py` 创建，业务代码只能由模型工具调用写入。
+`requirements.py` 校验树、按原子及父级文件夹依赖排序原子需求，并从**本次**需求生成最多 8,000 字符的全局架构目录：只有应用名、原子需求 ID、短名称和原子依赖，没有需求正文、测试答案或题目预制实现。父级文件夹依赖展开成其全部原子后代的**编排先后**约束，出现循环或未知引用则拒绝；为避免一个早期细项失败让其余可独立完成的功能全数跳过，失败级联仍只依据原子节点显式依赖。`qualifier.py` 把父级模块描述、父级依赖提示及父级显式 `visual_reference` 继承到各原子需求，避免遗漏父级背景。原子、场景、步骤或祖先文件夹出现当前简版编译器不认识的附加字段时，当前批次改为 `ABBREVIATED`，模型在改代码前必须通过 `read_requirement_spec` 逐页读完包含原始字段的完整规格，不能静默丢掉约束。视觉图片清单同时读取描述中的 `reference/` 路径和显式 `visual_reference` 字段；是否可检查仍由图片路径、存在性、文件类型、大小和视觉网关配置共同决定。空页面、空样式、健康端点及通用 HTTP/原子 JSON 存储辅助函数由 `generic_scaffold.py` 创建，业务代码只能由模型工具调用写入。
 
 `arc_runtime.py` 只调用主办方公开 `arcbench-runtime==0.1.0` SDK 的高层方法：`AgentRuntime.from_env(project_dir=...)`、运行状态、`traceability.store_requirement_tree`、需求实现状态及 `git.ensure_repo/commit`。平台事件格式和 `.arc/traceability/` 表由 SDK 生成，本参赛包不构造事件载荷。在 Runner 环境中 SDK 缺失会失败关闭。每批代码与对应需求状态由 SDK 一并提交；状态文件也在 Git 内，不能先提交代码、再写完成状态。提交失败会把当前需求标记为失败并使运行失败；即使某个需求级失败事件写入报错，也仍独立尝试写运行级失败事件，并在本地报告保留 SDK 报错。通用构建/启动检查不宣称逐需求 GUI 测试通过，也不会发送 `mark_test_passed`。本地 `.arc/production-trace.jsonl` 是额外的独立审计链，不代替平台事件。
 

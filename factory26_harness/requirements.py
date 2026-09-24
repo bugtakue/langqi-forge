@@ -17,6 +17,13 @@ MAX_REQUIREMENT_BYTES = max(
 MAX_TREE_NODES = max(1, int(os.environ.get("FACTORY26_MAX_REQUIREMENT_NODES", "10000")))
 MAX_TREE_DEPTH = max(1, int(os.environ.get("FACTORY26_MAX_REQUIREMENT_DEPTH", "64")))
 MAX_TASK_OUTLINE_CHARS = 8_000
+MAX_FOLDER_ORDERING_EDGES = 100_000
+INLINE_ATOMIC_FIELDS = frozenset({
+    "id", "req_id", "type", "name", "description", "dependencies",
+    "scenarios", "visual_reference", "children",
+})
+INLINE_SCENARIO_FIELDS = frozenset({"id", "name", "steps"})
+INLINE_STEP_FIELDS = frozenset({"keyword", "content", "text"})
 
 
 def _bounded(value: Any, maximum: int) -> str:
@@ -57,6 +64,11 @@ class RequirementNode:
     context_abbreviated: bool = False
 
     def is_abbreviated(self) -> bool:
+        # The compact prompt renders only the known schema. An organizer may
+        # add acceptance or actor fields in a later task; force the pageable
+        # original through the tool instead of silently omitting those rules.
+        if self.raw.keys() - INLINE_ATOMIC_FIELDS:
+            return True
         if (
             self.context_abbreviated
             or len(self.name) > 500
@@ -73,6 +85,8 @@ class RequirementNode:
         ):
             return True
         for scenario in self.scenarios:
+            if scenario.keys() - INLINE_SCENARIO_FIELDS:
+                return True
             if len(str(scenario.get("name") or scenario.get("id") or "scenario").strip()) > 500:
                 return True
             steps = scenario.get("steps") or []
@@ -80,6 +94,8 @@ class RequirementNode:
                 return True
             for step in steps:
                 if isinstance(step, dict):
+                    if step.keys() - INLINE_STEP_FIELDS:
+                        return True
                     if (
                         len(str(step.get("keyword") or "").strip()) > 40
                         or len(str(step.get("content") or step.get("text") or "").strip()) > 1200
@@ -284,16 +300,80 @@ def flatten_atomic(tree: dict[str, Any]) -> list[RequirementNode]:
         )
     if not nodes:
         raise ValueError("no atomic requirement nodes found")
-    return _stable_topological_order(nodes)
+    return _stable_topological_order(nodes, _folder_ordering_dependencies(tree))
 
 
-def _stable_topological_order(nodes: list[RequirementNode]) -> list[RequirementNode]:
+def _folder_ordering_dependencies(tree: dict[str, Any]) -> dict[str, set[str]]:
+    """Expand folder edges for scheduling, without inventing hard failure edges."""
+
+    raw_nodes = list(_walk(tree))
+    by_id: dict[str, dict[str, Any]] = {}
+    for raw in raw_nodes:
+        identifier = _safe_identifier(
+            raw.get("id") or raw.get("req_id"), label="requirement id"
+        )
+        if identifier in by_id:
+            raise ValueError(f"duplicate requirement id: {identifier}")
+        by_id[identifier] = raw
+
+    descendants: dict[str, tuple[str, ...]] = {}
+    for raw in reversed(raw_nodes):
+        identifier = str(raw.get("id") or raw.get("req_id"))
+        children = _list_field(raw, "children")
+        if _is_atomic(raw):
+            if children:
+                raise ValueError(f"atomic requirement {identifier} has children")
+            descendants[identifier] = (identifier,)
+        else:
+            descendants[identifier] = tuple(
+                leaf
+                for child in children
+                for leaf in descendants[str(child.get("id") or child.get("req_id"))]
+            )
+
+    ordering: dict[str, set[str]] = {}
+    edge_count = 0
+    for raw in raw_nodes:
+        if not _list_field(raw, "children"):
+            continue
+        folder_id = str(raw.get("id") or raw.get("req_id"))
+        dependencies = tuple(
+            _safe_identifier(value, label=f"dependency of {folder_id}")
+            for value in _list_field(raw, "dependencies")
+        )
+        if len(set(dependencies)) != len(dependencies):
+            raise ValueError(f"requirement {folder_id} contains duplicate dependencies")
+        for dependency in dependencies:
+            if dependency not in descendants:
+                raise ValueError(
+                    f"requirement {folder_id} has unknown dependency {dependency}"
+                )
+            for leaf in descendants[folder_id]:
+                prerequisites = ordering.setdefault(leaf, set())
+                for prior in descendants[dependency]:
+                    if prior == leaf:
+                        raise ValueError("requirement dependency graph contains a cycle")
+                    if prior not in prerequisites:
+                        prerequisites.add(prior)
+                        edge_count += 1
+                        if edge_count > MAX_FOLDER_ORDERING_EDGES:
+                            raise ValueError(
+                                "folder dependency graph exceeds ordering edge safety limit"
+                            )
+    return ordering
+
+
+def _stable_topological_order(
+    nodes: list[RequirementNode],
+    folder_ordering: dict[str, set[str]] | None = None,
+) -> list[RequirementNode]:
     by_id = {node.req_id: node for node in nodes}
     position = {node.req_id: index for index, node in enumerate(nodes)}
     indegree = {node.req_id: 0 for node in nodes}
     outgoing: dict[str, list[str]] = {node.req_id: [] for node in nodes}
     for node in nodes:
-        for dependency in node.dependencies:
+        dependencies = set(node.dependencies) | (folder_ordering or {}).get(node.req_id, set())
+        for dependency in sorted(dependencies, key=lambda value: position.get(value, len(nodes))):
             if dependency == node.req_id:
                 raise ValueError(f"requirement cannot depend on itself: {node.req_id}")
             if dependency not in by_id:

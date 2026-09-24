@@ -123,10 +123,40 @@ def _contextual_nodes(
         if children:
             full_name = str(raw.get("name") or "").strip()
             full_description = str(raw.get("description") or "").strip()
-            context = inherited + [" — ".join(value for value in (full_name[:200], full_description[:1200]) if value)]
-            full_context = full_inherited + (" — ".join(value for value in (full_name, full_description) if value),)
+            folder_dependencies = raw.get("dependencies") or []
+            if not isinstance(folder_dependencies, list):
+                raise ValueError("folder dependencies must be an array")
+            dependency_names = [str(value).strip() for value in folder_dependencies]
+            if any(not value for value in dependency_names):
+                raise ValueError("folder dependency id is missing")
+            short_context = " — ".join(
+                value for value in (full_name[:200], full_description[:1200]) if value
+            )
+            if dependency_names:
+                short_context += (
+                    " | Folder dependencies: "
+                    + ", ".join(value[:160] for value in dependency_names[:20])
+                )
+            context = inherited + [short_context]
+            # A full-spec read must recover *all* ancestor metadata, not just
+            # the fields known to this version of the prompt compiler.
+            full_context = full_inherited + (json.dumps(
+                {key: value for key, value in raw.items() if key != "children"},
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            ),)
+            inline_folder_fields = {
+                "id", "req_id", "type", "name", "description",
+                "dependencies", "visual_reference", "children",
+            }
             context_abbreviated = (
-                parent_abbreviated or len(full_name) > 200 or len(full_description) > 1200
+                parent_abbreviated
+                or len(full_name) > 200
+                or len(full_description) > 1200
+                or len(dependency_names) > 20
+                or any(len(value) > 160 for value in dependency_names)
+                or bool(raw.keys() - inline_folder_fields)
             )
             raw_references = raw.get("visual_reference") or []
             if not isinstance(raw_references, list):

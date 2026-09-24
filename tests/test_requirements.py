@@ -16,6 +16,87 @@ from factory26_harness.requirements import (
 
 
 class RequirementCompilerTests(unittest.TestCase):
+    def test_nonstandard_requirement_fields_are_not_silently_omitted(self) -> None:
+        variants = (
+            ("atomic", {"acceptance_criteria": "ATOMIC_EXTRA"}),
+            ("scenario", {"scenarios": [{"name": "flow", "expected_result": "SCENARIO_EXTRA", "steps": []}]}),
+            ("step", {"scenarios": [{"steps": [{"keyword": "THEN", "expected": "STEP_EXTRA"}]}]}),
+        )
+        for label, additions in variants:
+            with self.subTest(label=label):
+                tree = {
+                    "id": "ROOT", "type": "FOLDER", "children": [
+                        {"id": "REQ-1", "type": "ATOMIC", "description": "Ordinary body", **additions}
+                    ],
+                }
+                node = flatten_atomic(tree)[0]
+                self.assertTrue(node.is_abbreviated())
+                self.assertIn("read_requirement_spec", node.compact_spec())
+                self.assertIn(label.upper() + "_EXTRA", node.full_spec_document())
+
+        tree = {
+            "id": "ROOT", "type": "FOLDER", "name": "Parent",
+            "release_condition": "PARENT_EXTRA",
+            "children": [{"id": "REQ-1", "type": "ATOMIC", "description": "Ordinary body"}],
+        }
+        node = _contextual_nodes(tree, flatten_atomic(tree))[0]
+        self.assertTrue(node.is_abbreviated())
+        self.assertIn("read_requirement_spec", node.compact_spec())
+        self.assertIn("PARENT_EXTRA", node.full_spec_document())
+
+    def test_parent_folder_dependencies_reach_the_atomic_prompt(self) -> None:
+        tree = {
+            "id": "ROOT", "type": "FOLDER", "children": [
+                {"id": "BASE", "type": "ATOMIC", "name": "Base"},
+                {
+                    "id": "GROUP", "type": "FOLDER", "name": "Grouped feature",
+                    "dependencies": ["BASE"],
+                    "children": [{"id": "CHILD", "type": "ATOMIC", "name": "Child"}],
+                },
+            ],
+        }
+        nodes = _contextual_nodes(tree, flatten_atomic(tree))
+        child = next(node for node in nodes if node.req_id == "CHILD")
+        self.assertIn("Folder dependencies: BASE", child.compact_spec())
+
+    def test_parent_folder_dependencies_order_batches_without_hard_failure_edges(self) -> None:
+        tree = {
+            "id": "ROOT", "type": "FOLDER", "children": [
+                {
+                    "id": "LATER", "type": "FOLDER", "dependencies": ["FOUNDATION"],
+                    "children": [{"id": "LATER-1", "type": "ATOMIC"}],
+                },
+                {
+                    "id": "FOUNDATION", "type": "FOLDER",
+                    "children": [
+                        {"id": "BASE-1", "type": "ATOMIC"},
+                        {"id": "BASE-2", "type": "ATOMIC"},
+                    ],
+                },
+            ],
+        }
+        nodes = flatten_atomic(tree)
+        self.assertEqual(
+            [node.req_id for node in nodes], ["BASE-1", "BASE-2", "LATER-1"]
+        )
+        self.assertEqual(nodes[-1].dependencies, ())
+
+    def test_cyclic_parent_folder_dependencies_fail_closed(self) -> None:
+        tree = {
+            "id": "ROOT", "type": "FOLDER", "children": [
+                {
+                    "id": "ONE", "type": "FOLDER", "dependencies": ["TWO"],
+                    "children": [{"id": "ONE-1", "type": "ATOMIC"}],
+                },
+                {
+                    "id": "TWO", "type": "FOLDER", "dependencies": ["ONE"],
+                    "children": [{"id": "TWO-1", "type": "ATOMIC"}],
+                },
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            flatten_atomic(tree)
+
     def test_abbreviated_requirement_retains_full_atomic_and_parent_details(self) -> None:
         tree = {
             "id": "ROOT",
