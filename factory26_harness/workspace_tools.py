@@ -23,6 +23,7 @@ MAX_READ_FILE_BYTES = 2_000_000
 MAX_BATCH_READ_FILES = 8
 MAX_BATCH_READ_BYTES = 4_000_000
 MAX_BATCH_RESULT_CONTENT_CHARS = 9_000
+MAX_REQUIREMENT_PAGE_CHARS = 4_000
 
 
 def _contains_sensitive_part(parts: tuple[str, ...]) -> bool:
@@ -52,6 +53,8 @@ class WorkspaceTools:
         self.visual_client = visual_client
         self.reference_paths = tuple(sorted(set(reference_paths)))
         self.handoff_notes = handoff_notes
+        self.requirement_specs: dict[str, str] = {}
+        self.requirement_spec_offsets: dict[str, int] = {}
         self.changed_files: set[str] = set()
         self.change_revision = 0
         self.validated_revision = -1
@@ -78,6 +81,32 @@ class WorkspaceTools:
             and self.validation_scope in VALIDATING_SCOPES
             and self.validated_revision == self.change_revision
         )
+
+    def register_requirement_specs(self, specs: dict[str, str]) -> None:
+        """Expose only abbreviated requirements assigned to the current batch."""
+
+        if self.requirement_specs:
+            raise ValueError("requirement specs were already registered for this batch")
+        self.requirement_specs = dict(specs)
+        self.requirement_spec_offsets = {req_id: 0 for req_id in specs}
+
+    @property
+    def requirement_specs_complete(self) -> bool:
+        return all(
+            self.requirement_spec_offsets.get(req_id, 0) >= len(document)
+            for req_id, document in self.requirement_specs.items()
+        )
+
+    def _require_complete_specs(self) -> None:
+        unread = sorted(
+            req_id for req_id, document in self.requirement_specs.items()
+            if self.requirement_spec_offsets.get(req_id, 0) < len(document)
+        )
+        if unread:
+            raise ValueError(
+                "read complete abbreviated requirement specs before editing: "
+                + ", ".join(unread)
+            )
 
     def schemas(self) -> list[dict[str, Any]]:
         schemas = [
@@ -213,6 +242,30 @@ class WorkspaceTools:
                 },
             },
         ]
+        if self.requirement_specs:
+            schemas.append({
+                "type": "function",
+                "function": {
+                    "name": "read_requirement_spec",
+                    "description": (
+                        "Read the original public specification for one abbreviated "
+                        "requirement in this batch, in sequential bounded pages. "
+                        "Continue from next_start_char until complete=true before editing."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "requirement_id": {
+                                "type": "string",
+                                "enum": sorted(self.requirement_specs),
+                            },
+                            "start_char": {"type": "integer", "minimum": 0},
+                        },
+                        "required": ["requirement_id", "start_char"],
+                        "additionalProperties": False,
+                    },
+                },
+            })
         if self.maximum_browser_probe_calls:
             schemas.append(
                 {
@@ -427,6 +480,34 @@ class WorkspaceTools:
             "total_lines": len(lines),
         }
 
+    def _tool_read_requirement_spec(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        req_id = str(arguments["requirement_id"])
+        if req_id not in self.requirement_specs:
+            raise ValueError("requirement is not assigned or is not abbreviated")
+        start = int(arguments["start_char"])
+        current = self.requirement_spec_offsets[req_id]
+        if start != current:
+            raise ValueError(f"read requirement {req_id} sequentially from character {current}")
+        document = self.requirement_specs[req_id]
+        end = min(len(document), start + MAX_REQUIREMENT_PAGE_CHARS)
+        digest = hashlib.sha256(document.encode("utf-8")).hexdigest()
+        while True:
+            result = {
+                "ok": True,
+                "requirement_id": req_id,
+                "start_char": start,
+                "next_start_char": end,
+                "total_chars": len(document),
+                "complete": end == len(document),
+                "sha256": digest,
+                "content": document[start:end],
+            }
+            if len(json.dumps(result, ensure_ascii=False, sort_keys=True)) <= MAX_TOOL_RESULT_CHARS:
+                break
+            end = start + max(1, (end - start) // 2)
+        self.requirement_spec_offsets[req_id] = end
+        return result
+
     def _tool_read_files(self, arguments: dict[str, Any]) -> dict[str, Any]:
         requested = arguments.get("paths")
         if (
@@ -511,6 +592,7 @@ class WorkspaceTools:
         return {"ok": True, **self.visual_client.describe(relative)}
 
     def _tool_write_file(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        self._require_complete_specs()
         path = self._safe_path(str(arguments["path"]), writable=True)
         content = str(arguments["content"])
         encoded = content.encode("utf-8")
@@ -551,6 +633,7 @@ class WorkspaceTools:
         }
 
     def _tool_replace_text(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        self._require_complete_specs()
         path = self._safe_path(str(arguments["path"]), writable=True)
         old = str(arguments["old"])
         new = str(arguments["new"])

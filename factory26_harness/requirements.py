@@ -53,8 +53,97 @@ class RequirementNode:
     scenarios: tuple[dict[str, Any], ...]
     visual_reference: tuple[str, ...]
     raw: dict[str, Any]
+    full_context: tuple[str, ...] = ()
+    context_abbreviated: bool = False
+
+    def is_abbreviated(self) -> bool:
+        if (
+            self.context_abbreviated
+            or len(self.name) > 500
+            or len(self.description) > 6000
+            or len(self.dependencies) > 100
+            or len(self.scenarios) > 100
+            or len(self.visual_reference) > 50
+        ):
+            return True
+        if (
+            len(str(self.raw.get("name") or "").strip()) > 1000
+            or len(str(self.raw.get("description") or "").strip()) > 20000
+            or any(len(str(value).strip()) > 2000 for value in self.raw.get("visual_reference") or [])
+        ):
+            return True
+        for scenario in self.scenarios:
+            if len(str(scenario.get("name") or scenario.get("id") or "scenario").strip()) > 500:
+                return True
+            steps = scenario.get("steps") or []
+            if len(steps) > 100:
+                return True
+            for step in steps:
+                if isinstance(step, dict):
+                    if (
+                        len(str(step.get("keyword") or "").strip()) > 40
+                        or len(str(step.get("content") or step.get("text") or "").strip()) > 1200
+                    ):
+                        return True
+                elif len(str(step).strip()) > 1200:
+                    return True
+        estimated_content = len(self.name) + len(self.description)
+        for scenario in self.scenarios:
+            estimated_content += len(str(scenario.get("name") or scenario.get("id") or "scenario"))
+            for step in scenario.get("steps") or []:
+                estimated_content += len(str(step.get("content") or step.get("text") or "")) if isinstance(step, dict) else len(str(step))
+        return estimated_content > 7_000
+
+    def full_spec_document(self) -> str:
+        """Pageable original requirement data, never a hidden test or future batch."""
+
+        atomic = (
+            {key: value for key, value in self.raw.items() if key != "children"}
+            if self.raw else {
+                "id": self.req_id,
+                "name": self.name,
+                "description": self.description,
+                "dependencies": list(self.dependencies),
+                "scenarios": list(self.scenarios),
+                "visual_reference": list(self.visual_reference),
+            }
+        )
+        return json.dumps(
+            {
+                "requirement_id": self.req_id,
+                "folder_context": list(self.full_context),
+                "atomic_requirement": atomic,
+                "effective_visual_references": list(self.visual_reference),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        )
 
     def compact_spec(self) -> str:
+        if self.is_abbreviated():
+            description = self.description
+            if len(description) > 1_800:
+                description = (
+                    description[:1_300]
+                    + "\n[... bounded preview; original available through read_requirement_spec ...]\n"
+                    + description[-500:]
+                )
+            lines = [f"[{self.req_id}] {_bounded(self.name, 500)}", description]
+            if self.dependencies:
+                lines.append("Depends on: " + ", ".join(self.dependencies[:8]))
+            lines.append(f"Scenarios: {len(self.scenarios)} (read full details before editing)")
+            for scenario in self.scenarios[:5]:
+                lines.append("Scenario: " + _bounded(scenario.get("name") or scenario.get("id") or "scenario", 120))
+            if self.visual_reference:
+                lines.append("Visual references: " + ", ".join(
+                    _bounded(value, 160) for value in self.visual_reference[:5]
+                ))
+            lines.append(
+                "[ABBREVIATED: call read_requirement_spec for this requirement ID "
+                "until complete=true before editing; omitted text may contain mandatory behavior.]"
+            )
+            return "\n".join(lines)
         lines = [f"[{_bounded(self.req_id, 160)}] {_bounded(self.name, 500)}".rstrip()]
         if self.description:
             lines.append(_bounded(self.description, 6000))
@@ -74,7 +163,7 @@ class RequirementNode:
                     if content:
                         lines.append(f"  {keyword} {content}".rstrip())
                 elif str(step).strip():
-                    lines.append(f"  {str(step).strip()}")
+                    lines.append(f"  {_bounded(step, 1200)}")
         if self.visual_reference:
             lines.append(
                 "Visual references: " + ", ".join(self.visual_reference[:50])

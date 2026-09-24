@@ -19,7 +19,8 @@ from factory26_harness.model import (
     OpenAIChatClient,
     _retry_after_seconds,
 )
-from factory26_harness.requirements import RequirementNode
+from factory26_harness.requirements import RequirementNode, flatten_atomic
+from factory26_harness.qualifier import _contextual_nodes
 from factory26_harness.trace import ProductionTrace
 from factory26_harness.workspace_tools import WorkspaceTools
 
@@ -135,6 +136,92 @@ class _StatusHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_abbreviated_requirement_is_read_through_final_page_before_edit(self) -> None:
+        class PagingModel:
+            def __init__(self) -> None:
+                self.turn = 0
+                self.next_start = 0
+                self.complete_spec = False
+                self.chunks: list[str] = []
+                self.wrote = False
+                self.validated = False
+
+            def complete(self, messages, schemas):
+                self.turn += 1
+                self.assert_schema = any(
+                    item.get("function", {}).get("name") == "read_requirement_spec"
+                    for item in schemas
+                )
+                if self.turn > 1 and not self.complete_spec:
+                    pages = [json.loads(message["content"]) for message in messages
+                             if message.get("role") == "tool"
+                             and '"requirement_id": "R-LONG"' in str(message.get("content") or "")]
+                    if pages:
+                        page = pages[-1]
+                        if page["content"] not in self.chunks:
+                            self.chunks.append(page["content"])
+                        self.next_start = page["next_start_char"]
+                        self.complete_spec = page["complete"]
+                if not self.complete_spec:
+                    name = "read_requirement_spec"
+                    arguments = {"requirement_id": "R-LONG", "start_char": self.next_start}
+                elif not self.wrote:
+                    name = "write_file"
+                    arguments = {"path": "frontend/src/long-spec.js", "content": "export const ready = true;\n"}
+                    self.wrote = True
+                elif not self.validated:
+                    name = "run_validation"
+                    arguments = {"scope": "quick"}
+                    self.validated = True
+                else:
+                    name = ""
+                    arguments = {}
+                calls = (({
+                    "id": f"long-{self.turn}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(arguments)},
+                },) if name else ())
+                content = "AUDIT PASS: full requirement read" if not calls else ""
+                return SimpleNamespace(
+                    tool_calls=calls,
+                    raw_message={"role": "assistant", "content": content, **({"tool_calls": calls} if calls else {})},
+                    content=content,
+                )
+
+        tree = {
+            "id": "ROOT", "type": "FOLDER", "name": "Parent",
+            "description": "P" * 1_500 + "PARENT_END",
+            "children": [{
+                "id": "R-LONG", "type": "ATOMIC", "name": "Long condition",
+                "description": "D" * 7_000 + "ATOMIC_END",
+                "scenarios": [{"steps": [{"keyword": "Then", "content": "S" * 1_300 + "STEP_END"}]}],
+            }],
+        }
+        node = _contextual_nodes(tree, flatten_atomic(tree))[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for component, scripts in (
+                ("frontend", {"build": DUMMY_BUILD}),
+                ("backend", {"start": 'node -e ""'}),
+            ):
+                folder = root / component
+                folder.mkdir()
+                (folder / "package.json").write_text(
+                    json.dumps({"name": component, "private": True, "scripts": scripts}),
+                    encoding="utf-8",
+                )
+            trace = ProductionTrace(root / ".arc/trace.jsonl")
+            model = PagingModel()
+            result = CodingAgent(model, WorkspaceTools(root, trace, 3930), trace, max_turns=8).implement([node])
+            self.assertTrue(result.completed)
+            self.assertTrue(model.assert_schema)
+            self.assertIn("PARENT_END", "".join(model.chunks))
+            self.assertIn("ATOMIC_END", "".join(model.chunks))
+            self.assertIn("STEP_END", "".join(model.chunks))
+            self.assertTrue((root / "frontend/src/long-spec.js").is_file())
+            rows = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
+            self.assertGreaterEqual(sum(row["event"] == "tool_call" and row["payload"].get("tool") == "read_requirement_spec" for row in rows), 2)
+
     def test_validation_followed_by_edit_in_same_turn_waits_for_latest_revision_audit(self) -> None:
         class ValidateThenEditModel:
             def __init__(self) -> None:

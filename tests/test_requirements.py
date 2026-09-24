@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from factory26_harness.qualifier import _contextual_nodes
 from factory26_harness.requirements import (
     MAX_TASK_OUTLINE_CHARS,
     batches,
@@ -15,6 +16,46 @@ from factory26_harness.requirements import (
 
 
 class RequirementCompilerTests(unittest.TestCase):
+    def test_abbreviated_requirement_retains_full_atomic_and_parent_details(self) -> None:
+        tree = {
+            "id": "ROOT",
+            "name": "Parent",
+            "type": "FOLDER",
+            "description": "P" * 1_500 + "PARENT_END",
+            "children": [{
+                "id": "R-LONG",
+                "type": "ATOMIC",
+                "description": "D" * 21_000 + "ATOMIC_END",
+                "scenarios": [{"steps": [{"keyword": "Then", "content": "S" * 1_300 + "STEP_END"}]}],
+            }],
+        }
+        node = _contextual_nodes(tree, flatten_atomic(tree))[0]
+        compact = node.compact_spec()
+        self.assertNotIn("PARENT_END", compact)
+        self.assertNotIn("ATOMIC_END", compact)
+        self.assertNotIn("STEP_END", compact)
+        self.assertTrue(node.is_abbreviated())
+        self.assertIn("read_requirement_spec", compact)
+        complete = node.full_spec_document()
+        self.assertIn("PARENT_END", complete)
+        self.assertIn("ATOMIC_END", complete)
+        self.assertIn("STEP_END", complete)
+
+    def test_many_short_scenarios_use_a_bounded_preview_without_losing_detail(self) -> None:
+        node = flatten_atomic({
+            "id": "ROOT", "type": "FOLDER", "children": [{
+                "id": "R-MANY", "type": "ATOMIC", "description": "Several workflows",
+                "scenarios": [
+                    {"name": f"flow-{index}", "steps": [{"keyword": "Then", "content": "S" * 500}]}
+                    for index in range(30)
+                ],
+            }],
+        })[0]
+        self.assertTrue(node.is_abbreviated())
+        self.assertLess(len(node.compact_spec()), 4_000)
+        self.assertNotIn("flow-29", node.compact_spec())
+        self.assertIn("flow-29", node.full_spec_document())
+
     def test_whole_task_outline_is_bounded_and_excludes_requirement_bodies(self) -> None:
         tree = {
             "id": "ROOT",

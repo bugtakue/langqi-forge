@@ -32,6 +32,59 @@ DUMMY_BUILD = (
 
 
 class ToolAndTraceTests(unittest.TestCase):
+    def test_abbreviated_requirement_must_be_read_in_order_before_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "frontend").mkdir()
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3927)
+            specification = "PREFIX\n" + "S" * 8_000 + "\nCRITICAL_TAIL"
+            tools.register_requirement_specs({"R-LONG": specification})
+            self.assertIn("read_requirement_spec", [
+                schema["function"]["name"] for schema in tools.schemas()
+            ])
+            premature = json.loads(tools.execute("write_file", {
+                "path": "frontend/feature.js", "content": "premature",
+            }))
+            self.assertFalse(premature["ok"])
+            self.assertIn("R-LONG", premature["error"])
+            chunks = []
+            start = 0
+            while True:
+                page = json.loads(tools.execute("read_requirement_spec", {
+                    "requirement_id": "R-LONG", "start_char": start,
+                }))
+                self.assertTrue(page["ok"])
+                chunks.append(page["content"])
+                if page["complete"]:
+                    break
+                start = page["next_start_char"]
+            self.assertEqual("".join(chunks), specification)
+            self.assertTrue(tools.requirement_specs_complete)
+            allowed = json.loads(tools.execute("write_file", {
+                "path": "frontend/feature.js", "content": "ready",
+            }))
+            self.assertTrue(allowed["ok"])
+
+    def test_requirement_pages_remain_complete_when_json_escaping_expands_content(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3931)
+            specification = "\u0001" * 5_000
+            tools.register_requirement_specs({"R-ESCAPED": specification})
+            chunks: list[str] = []
+            start = 0
+            while True:
+                page = json.loads(tools.execute("read_requirement_spec", {
+                    "requirement_id": "R-ESCAPED", "start_char": start,
+                }))
+                self.assertTrue(page["ok"])
+                self.assertNotIn("truncated", page)
+                chunks.append(page["content"])
+                if page["complete"]:
+                    break
+                start = page["next_start_char"]
+            self.assertEqual("".join(chunks), specification)
+
     def test_safe_validation_environment_has_private_home_without_model_key(self) -> None:
         with patch.dict(
             os.environ,

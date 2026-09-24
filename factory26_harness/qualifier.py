@@ -107,19 +107,27 @@ def _contextual_nodes(
 ) -> list[RequirementNode]:
     """Carry folder context into prompts without encoding any task-specific logic."""
     contexts: dict[str, list[str]] = {}
+    full_contexts: dict[str, tuple[str, ...]] = {}
+    context_abbreviations: dict[str, bool] = {}
     inherited_references: dict[str, tuple[str, ...]] = {}
-    stack: list[tuple[dict[str, Any], list[str], tuple[str, ...]]] = [
-        (tree, [], ())
+    stack: list[tuple[dict[str, Any], list[str], tuple[str, ...], tuple[str, ...], bool]] = [
+        (tree, [], (), (), False)
     ]
     while stack:
-        raw, inherited, parent_references = stack.pop()
+        raw, inherited, full_inherited, parent_references, parent_abbreviated = stack.pop()
         children = raw.get("children") or []
         context = inherited
+        full_context = full_inherited
+        context_abbreviated = parent_abbreviated
         references = parent_references
         if children:
-            name = str(raw.get("name") or "").strip()[:200]
-            description = str(raw.get("description") or "").strip()[:1200]
-            context = inherited + [" — ".join(value for value in (name, description) if value)]
+            full_name = str(raw.get("name") or "").strip()
+            full_description = str(raw.get("description") or "").strip()
+            context = inherited + [" — ".join(value for value in (full_name[:200], full_description[:1200]) if value)]
+            full_context = full_inherited + (" — ".join(value for value in (full_name, full_description) if value),)
+            context_abbreviated = (
+                parent_abbreviated or len(full_name) > 200 or len(full_description) > 1200
+            )
             raw_references = raw.get("visual_reference") or []
             if not isinstance(raw_references, list):
                 raise ValueError("folder visual_reference must be an array")
@@ -139,10 +147,12 @@ def _contextual_nodes(
             identifier = str(raw.get("id") or raw.get("req_id") or "").strip()
             if identifier:
                 contexts[identifier] = context
+                full_contexts[identifier] = full_context
+                context_abbreviations[identifier] = context_abbreviated
                 inherited_references[identifier] = references
         if isinstance(children, list):
             stack.extend(
-                (child, context, references)
+                (child, context, full_context, references, context_abbreviated)
                 for child in reversed(children)
                 if isinstance(child, dict)
             )
@@ -160,6 +170,8 @@ def _contextual_nodes(
                     )
                 )
             ),
+            full_context=full_contexts.get(node.req_id, ()),
+            context_abbreviated=context_abbreviations.get(node.req_id, False),
         )
         for node in nodes
     ]
