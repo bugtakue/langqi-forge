@@ -15,14 +15,18 @@ from factory26_harness.trace import verify_trace_rows
 class ScriptedModel:
     """Protocol fixture only; not evidence of real model ability or GUI quality."""
 
-    def __init__(self, trace) -> None:
+    def __init__(self, trace, *, planned_turns: int | None = None) -> None:
         self.trace = trace
+        self.planned_turns = planned_turns
         self.request_count = 0
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
 
     def gateway_evidence(self) -> dict[str, str]:
         return {"provenance": "scripted-test-fixture", "model": "fixture"}
+
+    def budget_evidence(self) -> dict[str, int | None]:
+        return {"planned_turns": self.planned_turns, "max_requests": 64}
 
     def complete(self, messages, tools) -> ModelReply:
         self.request_count += 1
@@ -126,6 +130,7 @@ children:
             self.assertEqual(report["status"], "local-contract-passed")
             self.assertEqual(report["implemented_requirements"], ["REQ-1"])
             self.assertGreaterEqual(report["model_requests"], 4)
+            self.assertEqual(report["model_budget"]["planned_turns"], 60)
             self.assertIn("<h1>Example</h1>", (output / "frontend/src/app.js").read_text())
             rows = [
                 json.loads(line)

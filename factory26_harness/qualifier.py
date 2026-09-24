@@ -188,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         source = _source_identity()
         tree = load_requirement_tree(requirement_dir)
         nodes = _contextual_nodes(tree, flatten_atomic(tree))
+        groups = batches(nodes, args.batch_size)
         requirement_sha = requirement_source_sha256(requirement_dir)
         report.update(
             source=source,
@@ -216,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
                 "requirement_sha256": requirement_sha,
                 "batches": [
                     [node.req_id for node in group]
-                    for group in batches(nodes, args.batch_size)
+                    for group in groups
                 ],
                 "route": "model-generated-implementation",
                 "task_specific_prebuilt_code": False,
@@ -232,10 +233,14 @@ def main(argv: list[str] | None = None) -> int:
         if not all(check.passed for check in initial_checks):
             raise RuntimeError("generic scaffold failed its own build/start checks")
 
-        model = OpenAIChatClient(trace)
+        model = OpenAIChatClient(
+            trace,
+            planned_turns=(len(groups) + args.repair_rounds) * args.max_agent_turns,
+        )
         trace.record(
             "model_gateway_selected",
             gateway=model.gateway_evidence(),
+            budget=model.budget_evidence(),
             key_present=True,
         )
         trace.record(
@@ -260,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
                 "visual_gateway_unavailable",
                 reason="incomplete VISUAL_API_KEY/VISUAL_BASE_URL/VISUAL_MODEL configuration",
             )
-        for index, group in enumerate(batches(nodes, args.batch_size), 1):
+        for index, group in enumerate(groups, 1):
             requirement_ids = [node.req_id for node in group]
             active_batch_ids = requirement_ids
             if arc_runtime is not None:
@@ -376,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
         report["duration_seconds"] = round(time.monotonic() - started, 3)
         if model is not None:
             report["model"] = model.gateway_evidence()
+            report["model_budget"] = model.budget_evidence()
             report["model_requests"] = model.request_count
             report["prompt_tokens"] = model.total_prompt_tokens
             report["completion_tokens"] = model.total_completion_tokens

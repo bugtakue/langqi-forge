@@ -43,3 +43,9 @@
 - 使用上述精确 ZIP，在本机旧版 Runner 基础镜像 + 当前 `local_runner.py` 包装上执行自建协议夹具，运行目录为 `../factory26-local-simulation/runs/qualifier-sdk-gui-20260924/`。Runner 从 PyPI 镜像安装 `arcbench-runtime==0.1.0` 成功，随后 Agent 完成 4 次夹具模型接口请求，`container_exit_code=0`，Playwright `1/1`，`score=null`、Token 成本为 `null`。
 - 该运行产生 `.arc/runner-events.jsonl` 共 42 行（含 Runner 自身事件），其中 SDK 明确记录 `running → REQ-1 implementing → REQ-1 implemented → completed`；`.arc/traceability/requirements.json` 包含 `ROOT` 和 `REQ-1`，`node_states.json` 的 `REQ-1` 为 `IMPLEMENTED`；生成项目 Git 历史有通用基线和第 1 批实现两个提交。独立 `.arc/production-trace.jsonl` 为 27 行，哈希链校验有效。
 - SDK 的 `completed` 仅指智能体本地构建/启动合同完成；它没有给 `REQ-1` 发送 `test_passed`，真实 GUI 判断交给平台。夹具 1/1 不是 BookStack/Keep 或正式赛成绩；当前镜像也不是已核实的最新主办方基础镜像。正式账号登录、项目上传与提交均未做。
+
+## 公开任务规模与模型预算核对
+
+- 对本地模拟包现有需求树实际解析：BookStack 为 34 条原子需求、默认 9 批；Keep 为 32 条、默认 8 批。两项合计 17 批。旧的固定 64 次请求、12 万输入 Token 安全上限可能在完成所有批次前耗尽，不能据协议夹具的 4 次请求推断真实任务可完赛。
+- 新版按「实际批次数 + 最多修复轮数」乘每阶段允许回合数设置全局请求安全上限，并同步放大累计 Token 安全上限；本地公开任务在默认参数下相当于每道分别有 220/200 个允许模型回合（含各自最多 2 轮修复），不是要求模型实际用满。显式环境变量上限仍优先，以防预算失控。模型响应若刚好触发累计 Token 上限，该次已产生的用量仍计入报告及脱敏轨迹。
+- 这只是修复可完成性和计量准确性，**不是对真实模型成本、两个任务通过率或晋级概率的验证**；真实模型 Key/练习券仍未在本地环境可用，且当前 Runner 镜像未核实为最新。

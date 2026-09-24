@@ -18,7 +18,7 @@
 4. 每次模型响应可提出多个工具调用。批次必须有实际源码修改且最后一次修改通过 quick 校验（含不执行生成源码的 JavaScript 语法检查，以及清空旧 `dist` 后必须重新产出非空 `index.html`），随后进入 `ACCEPTANCE_AUDIT_PROMPT` 逐条审查；审计若再改动，必须重新校验。
 5. 全部批次结束后独立执行结构、包策略、交互策略、前端构建、后端启动/健康检查。失败时最多运行配置的修复轮次。局部检查通过不等于 GUI 行为通过。
 
-默认每批 4 条原子需求、最多 20 个模型回合、最多 2 个最终修复轮。运行时可在安全范围内通过 CLI 调整，真实 Token/成本由模型服务和主办方计量为准。每批会在轨迹中保留 `agent_session_started`、`model_request`、`model_response`、`tool_call`、`tool_result`、`agent_acceptance_audit_requested`、`implementation_batch_finished` 等事件。
+默认每批 4 条原子需求、最多 20 个模型回合、最多 2 个最终修复轮。总模型请求上限按实际批次数与允许回合数计算（默认上限 600 次），累计输入/输出 Token 安全上限随之放大；`FACTORY26_MAX_MODEL_REQUESTS`、`FACTORY26_MAX_TOTAL_PROMPT_TOKENS`、`FACTORY26_MAX_TOTAL_COMPLETION_TOKENS` 可显式覆盖并会写入运行报告。这些是上限，不是预算目标或成绩承诺；真实 Token/成本由模型服务和主办方计量为准。每批会在轨迹中保留 `agent_session_started`、`model_request`、`model_response`、`tool_call`、`tool_result`、`agent_acceptance_audit_requested`、`implementation_batch_finished` 等事件。
 
 ## 工具调用与安全
 

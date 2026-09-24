@@ -98,6 +98,37 @@ class _ModelHandler(BaseHTTPRequestHandler):
 
 
 class ModelLoopTests(unittest.TestCase):
+    def test_workload_budget_scales_to_multi_batch_public_tasks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            trace = ProductionTrace(Path(directory) / "trace.jsonl")
+            credentials = {
+                "OPENAI_API_KEY": "test-secret",
+                "OPENAI_BASE_URL": "https://gateway.example.test/v1",
+                "MODEL": "mock-model",
+            }
+            with patch.dict(os.environ, credentials, clear=True):
+                client = OpenAIChatClient(trace, planned_turns=380)
+                self.assertEqual(client.budget_evidence(), {
+                    "planned_turns": 380,
+                    "max_requests": 380,
+                    "max_prompt_tokens": 2_280_000,
+                    "max_completion_tokens": 950_000,
+                })
+            with patch.dict(
+                os.environ,
+                {
+                    **credentials,
+                    "FACTORY26_MAX_MODEL_REQUESTS": "72",
+                    "FACTORY26_MAX_TOTAL_PROMPT_TOKENS": "1000",
+                    "FACTORY26_MAX_TOTAL_COMPLETION_TOKENS": "500",
+                },
+                clear=True,
+            ):
+                client = OpenAIChatClient(trace, planned_turns=380)
+                self.assertEqual(client.max_requests, 72)
+                self.assertEqual(client.max_total_prompt_tokens, 1000)
+                self.assertEqual(client.max_total_completion_tokens, 500)
+
     def test_local_token_budget_failure_is_not_retried(self) -> None:
         class FakeResponse:
             headers: dict[str, str] = {}
@@ -139,6 +170,15 @@ class ModelLoopTests(unittest.TestCase):
                     client.complete([{"role": "user", "content": "test"}], [])
             self.assertEqual(request.call_count, 1)
             self.assertEqual(client.http_attempt_count, 1)
+            self.assertEqual(client.request_count, 1)
+            self.assertEqual(client.total_prompt_tokens, 2)
+            self.assertEqual(client.total_completion_tokens, 1)
+            events = [
+                json.loads(line)["event"]
+                for line in (Path(directory) / "trace.jsonl").read_text().splitlines()
+            ]
+            self.assertIn("model_response", events)
+            self.assertIn("model_budget_exhausted", events)
 
     def test_remote_disconnect_is_retried_within_the_bounded_http_policy(self) -> None:
         class FakeResponse:

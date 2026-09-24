@@ -27,7 +27,9 @@ class ModelReply:
 
 
 class OpenAIChatClient:
-    def __init__(self, trace: ProductionTrace) -> None:
+    def __init__(self, trace: ProductionTrace, *, planned_turns: int | None = None) -> None:
+        if planned_turns is not None and planned_turns < 1:
+            raise ValueError("planned_turns must be positive")
         self.api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         self.base_url = os.environ.get("OPENAI_BASE_URL", "").strip()
         self.model = os.environ.get("MODEL", "").strip()
@@ -36,8 +38,11 @@ class OpenAIChatClient:
         self.total_completion_tokens = 0
         self.request_count = 0
         self.http_attempt_count = 0
+        self.planned_turns = planned_turns
+        default_max_requests = min(600, max(64, planned_turns or 64))
         self.max_requests = max(
-            1, int(os.environ.get("FACTORY26_MAX_MODEL_REQUESTS", "64"))
+            1,
+            int(os.environ.get("FACTORY26_MAX_MODEL_REQUESTS", str(default_max_requests))),
         )
         self.max_response_bytes = max(
             1024, int(os.environ.get("FACTORY26_MAX_MODEL_RESPONSE_BYTES", "10000000"))
@@ -46,11 +51,22 @@ class OpenAIChatClient:
             1024, int(os.environ.get("FACTORY26_MAX_MODEL_REQUEST_BYTES", "5000000"))
         )
         self.max_total_prompt_tokens = max(
-            1, int(os.environ.get("FACTORY26_MAX_TOTAL_PROMPT_TOKENS", "120000"))
+            1,
+            int(
+                os.environ.get(
+                    "FACTORY26_MAX_TOTAL_PROMPT_TOKENS",
+                    str(max(120000, self.max_requests * 6000)),
+                )
+            ),
         )
         self.max_total_completion_tokens = max(
             1,
-            int(os.environ.get("FACTORY26_MAX_TOTAL_COMPLETION_TOKENS", "100000")),
+            int(
+                os.environ.get(
+                    "FACTORY26_MAX_TOTAL_COMPLETION_TOKENS",
+                    str(max(100000, self.max_requests * 2500)),
+                )
+            ),
         )
         if not self.api_key or not self.base_url or not self.model:
             raise RuntimeError("OPENAI_API_KEY, OPENAI_BASE_URL and MODEL are required")
@@ -82,6 +98,14 @@ class OpenAIChatClient:
             "provenance": self.gateway_provenance,
             "endpoint_host": self.endpoint_host,
             "model": self.model,
+        }
+
+    def budget_evidence(self) -> dict[str, int | None]:
+        return {
+            "planned_turns": self.planned_turns,
+            "max_requests": self.max_requests,
+            "max_prompt_tokens": self.max_total_prompt_tokens,
+            "max_completion_tokens": self.max_total_completion_tokens,
         }
 
     def complete(
@@ -186,11 +210,24 @@ class OpenAIChatClient:
                 )
                 if prompt_tokens < 0 or completion_tokens < 0:
                     raise ValueError("model token usage cannot be negative")
+                response_id = str(body.get("id") or "")
+                self.total_prompt_tokens += prompt_tokens
+                self.total_completion_tokens += completion_tokens
+                self.request_count += 1
+                self.trace.record(
+                    "model_response",
+                    model=self.model,
+                    gateway=self.gateway_evidence(),
+                    response_id=response_id,
+                    message=message,
+                    usage={
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                    },
+                )
                 if (
-                    self.total_prompt_tokens + prompt_tokens
-                    > self.max_total_prompt_tokens
-                    or self.total_completion_tokens + completion_tokens
-                    > self.max_total_completion_tokens
+                    self.total_prompt_tokens > self.max_total_prompt_tokens
+                    or self.total_completion_tokens > self.max_total_completion_tokens
                 ):
                     self.trace.record(
                         "model_budget_exhausted",
@@ -202,10 +239,6 @@ class OpenAIChatClient:
                         maximum_completion_tokens=self.max_total_completion_tokens,
                     )
                     raise ModelBudgetExceeded("model token budget exceeded")
-                response_id = str(body.get("id") or "")
-                self.total_prompt_tokens += prompt_tokens
-                self.total_completion_tokens += completion_tokens
-                self.request_count += 1
                 reply = ModelReply(
                     content=str(message.get("content") or ""),
                     tool_calls=tuple(message.get("tool_calls") or ()),
@@ -213,17 +246,6 @@ class OpenAIChatClient:
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                     response_id=response_id,
-                )
-                self.trace.record(
-                    "model_response",
-                    model=self.model,
-                    gateway=self.gateway_evidence(),
-                    response_id=response_id,
-                    message=message,
-                    usage={
-                        "prompt_tokens": prompt_tokens,
-                        "completion_tokens": completion_tokens,
-                    },
                 )
                 return reply
             except (
