@@ -382,3 +382,4 @@
 - 用上述 SHA-256 `421d562...` 的精确 ZIP，经本地模拟器 `--prepare-only` 组装全新工作区 `../factory26-local-simulation/runs/qualifier-starter-eight-current-direct-20260925/`。包内清单逐文件验证通过，来源修订 `4aa256c...`。在本机缓存的当前 `arcbench-local-current:20260924`、`linux/amd64` 基础镜像里安装声明依赖，然后直接调用参赛入口及主办方参数：固定响应假模型 4 次请求、官方 SDK、`local-contract-passed`、结构/包策略/交互策略/JavaScript 语法/前端构建/后端启动 **6/6** 通过；生产轨迹 **28/28** 行哈希封印有效且无测试假 Key 明文。
 - 再在同一 amd64 镜像中对生成项目调用镜像自身 `run_submission.py::run_web_template`，其前端构建和后端启动成功；首页 HTTP 200，`/api/health` HTTP 200 且 `ready=true`。这是对**同一精确 ZIP**的生成和部署兼容性证据，但绕过了本机 Apple Silicon→amd64 QEMU 下会崩溃的 Chromium 预检，**不是**当前完整 Runner GUI、真实模型 BookStack/Keep、人民币成本或正式比赛成绩。
 - 当前提交交接和未完成字段逐项列在 `docs/SUBMISSION_HANDOFF_2026-09-25.md`；仍未登录 ARC-Bench、上传或正式提交。
+- 同一精确 ZIP 又分别经本地模拟器 `--prepare-only` 解包到 `../factory26-local-simulation/runs/qualifier-starter-eight-{bookstack,keep}-preflight-20260925/`，两项均无解包/路径错误。此步骤**没有**调用真实模型、生成产品或运行公开 GUI 测试。
