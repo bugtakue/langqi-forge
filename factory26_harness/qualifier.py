@@ -163,6 +163,26 @@ def _recent_handoff_paths(
     return list(reversed(chosen))
 
 
+def _report_arc_failure(
+    runtime: ArcRuntime | None, requirement_ids: list[str], reason: str
+) -> list[str]:
+    """Attempt the run-level failure event even if a per-node event fails."""
+
+    if runtime is None:
+        return []
+    errors: list[str] = []
+    if requirement_ids:
+        try:
+            runtime.fail_batch(requirement_ids, reason)
+        except Exception as exc:
+            errors.append(f"requirement failure event: {exc}"[:500])
+    try:
+        runtime.fail(reason)
+    except Exception as exc:
+        errors.append(f"run failure event: {exc}"[:500])
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _arguments(argv)
     if args.app_type != "web":
@@ -414,14 +434,10 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         report["status"] = "failed"
         report["error"] = str(exc)
-        if arc_runtime is not None:
-            try:
-                if active_batch_ids:
-                    arc_runtime.fail_batch(active_batch_ids, str(exc))
-                arc_runtime.fail(str(exc))
-            except Exception as sdk_exc:
-                report["arcbench_runtime_error"] = str(sdk_exc)
-        trace.record("run_failed", error=str(exc))
+        sdk_errors = _report_arc_failure(arc_runtime, active_batch_ids, str(exc))
+        if sdk_errors:
+            report["arcbench_runtime_error"] = "; ".join(sdk_errors)[:1000]
+        trace.record("run_failed", error=str(exc), arcbench_runtime_errors=sdk_errors)
         print(f"[factory26] failed: {exc}", flush=True)
         return 1
     finally:

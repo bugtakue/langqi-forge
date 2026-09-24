@@ -95,6 +95,36 @@ class ScriptedModel:
 
 
 class QualifierTests(unittest.TestCase):
+    def test_run_failure_is_reported_even_when_requirement_failure_event_raises(self) -> None:
+        class BrokenRuntime:
+            def __init__(self) -> None:
+                self.events: list[tuple[str, object]] = []
+
+            def fail_batch(self, requirement_ids, _reason) -> None:
+                self.events.append(("batch", list(requirement_ids)))
+                raise RuntimeError("state writer unavailable")
+
+            def fail(self, reason) -> None:
+                self.events.append(("run", reason))
+
+        runtime = BrokenRuntime()
+        errors = qualifier._report_arc_failure(runtime, ["REQ-1"], "commit failed")
+        self.assertEqual(runtime.events, [("batch", ["REQ-1"]), ("run", "commit failed")])
+        self.assertEqual(errors, ["requirement failure event: state writer unavailable"])
+
+    def test_both_sdk_failure_reporting_errors_are_preserved(self) -> None:
+        class BrokenRuntime:
+            def fail_batch(self, _requirement_ids, _reason) -> None:
+                raise RuntimeError("node error")
+
+            def fail(self, _reason) -> None:
+                raise RuntimeError("run error")
+
+        self.assertEqual(
+            qualifier._report_arc_failure(BrokenRuntime(), ["REQ-1"], "failed"),
+            ["requirement failure event: node error", "run failure event: run error"],
+        )
+
     def test_cross_batch_handoff_tracks_recent_generated_files(self) -> None:
         paths = qualifier._recent_handoff_paths(
             ["frontend/src/older.js", "frontend/src/app.js"],

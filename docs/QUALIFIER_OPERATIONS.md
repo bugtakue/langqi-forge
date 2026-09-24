@@ -8,7 +8,7 @@
 
 `requirements.py` 校验树、按依赖排序原子需求；`qualifier.py` 把父级模块描述并入各原子需求 Prompt，避免遗漏父级背景。空页面、空样式、健康端点及通用 HTTP/原子 JSON 存储辅助函数由 `generic_scaffold.py` 创建，业务代码只能由模型工具调用写入。
 
-`arc_runtime.py` 只调用主办方公开 `arcbench-runtime==0.1.0` SDK 的高层方法：`AgentRuntime.from_env(project_dir=...)`、运行状态、`traceability.store_requirement_tree`、需求实现状态及 `git.ensure_repo/commit`。平台事件格式和 `.arc/traceability/` 表由 SDK 生成，本参赛包不构造事件载荷。在 Runner 环境中 SDK 缺失会失败关闭。每批代码与对应需求状态一并提交，提交失败会使运行失败；通用构建/启动检查不宣称逐需求 GUI 测试通过，也不会发送 `mark_test_passed`。本地 `.arc/production-trace.jsonl` 是额外的独立审计链，不代替平台事件。
+`arc_runtime.py` 只调用主办方公开 `arcbench-runtime==0.1.0` SDK 的高层方法：`AgentRuntime.from_env(project_dir=...)`、运行状态、`traceability.store_requirement_tree`、需求实现状态及 `git.ensure_repo/commit`。平台事件格式和 `.arc/traceability/` 表由 SDK 生成，本参赛包不构造事件载荷。在 Runner 环境中 SDK 缺失会失败关闭。每批代码与对应需求状态由 SDK 一并提交；状态文件也在 Git 内，不能先提交代码、再写完成状态。提交失败会把当前需求标记为失败并使运行失败；即使某个需求级失败事件写入报错，也仍独立尝试写运行级失败事件，并在本地报告保留 SDK 报错。通用构建/启动检查不宣称逐需求 GUI 测试通过，也不会发送 `mark_test_passed`。本地 `.arc/production-trace.jsonl` 是额外的独立审计链，不代替平台事件。
 
 报告里的 `behavioral_probe_tested` 仅表示每批至少完成一次带可见文本断言的本地浏览器探针；`behavioral_gui_tested=false` 继续表示尚未取得平台独立 GUI 评测。两者不能相互替代。Runner 自带与其 Chromium 匹配的 Python Playwright，参赛包的 `requirements.txt` 不安装或覆盖该版本。
 
