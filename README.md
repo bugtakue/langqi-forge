@@ -67,6 +67,7 @@ export VISUAL_MODEL='your-vision-model'
 - `.arc/compiled-plan.json`：需求批次与来源哈希；
 - `.arc/production-trace.jsonl`：Prompt、模型、工具和迭代的脱敏哈希链；
 - `.arc/harness-report.json`：本地构建/启动结果、模型调用次数和失败原因。
+- 报告中的 `model_requests` 是成功返回的模型请求数，`model_http_attempts` 包含重试；两者不能混作真实费用。HTTP 408/425/429/5xx 最多尝试 3 次；`Retry-After` 等待上限默认 60 秒，可用 `FACTORY26_MAX_RETRY_AFTER_SECONDS` 在 0–120 秒内调整。认证等非临时错误不重试。
 - `.arc/runner-events.jsonl`、`.arc/traceability/`：由官方 SDK 写入的状态及追溯数据；工作区 Git 历史记录通用 scaffold 和生成批次。
 
 ## 打包（不上传）

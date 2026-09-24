@@ -5,6 +5,8 @@ import os
 import tempfile
 import threading
 import unittest
+from datetime import datetime, timezone
+from email.utils import format_datetime
 from http.client import RemoteDisconnected
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,7 +14,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from factory26_harness.agent import CodingAgent, _compact_tool_result
-from factory26_harness.model import ModelBudgetExceeded, OpenAIChatClient
+from factory26_harness.model import (
+    ModelBudgetExceeded,
+    OpenAIChatClient,
+    _retry_after_seconds,
+)
 from factory26_harness.requirements import RequirementNode
 from factory26_harness.trace import ProductionTrace
 from factory26_harness.workspace_tools import WorkspaceTools
@@ -97,7 +103,129 @@ class _ModelHandler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
 
+class _StatusHandler(BaseHTTPRequestHandler):
+    calls = 0
+    responses: list[tuple[int, str | None, bytes]] = []
+
+    def log_message(self, *_args) -> None:
+        return
+
+    def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
+        self.rfile.read(int(self.headers.get("content-length") or 0))
+        index = type(self).calls
+        type(self).calls += 1
+        status, retry_after, content = type(self).responses[index]
+        self.send_response(status)
+        if retry_after is not None:
+            self.send_header("Retry-After", retry_after)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
+
 class ModelLoopTests(unittest.TestCase):
+    def test_retry_after_http_date_is_interpreted_as_a_bounded_delay(self) -> None:
+        now = datetime(2026, 9, 25, 12, 0, 0, tzinfo=timezone.utc)
+        deadline = datetime(2026, 9, 25, 12, 0, 7, tzinfo=timezone.utc)
+        with patch("factory26_harness.model.datetime") as clock:
+            clock.now.return_value = now
+            delay = _retry_after_seconds(
+                {"retry-after": format_datetime(deadline, usegmt=True)}
+            )
+        self.assertEqual(delay, 7)
+
+    def _run_status_sequence(
+        self,
+        responses: list[tuple[int, str | None, bytes]],
+        *,
+        retry_cap: int = 60,
+    ) -> tuple[OpenAIChatClient, list[dict], list[int], str | None]:
+        _StatusHandler.calls = 0
+        _StatusHandler.responses = responses
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _StatusHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                trace = ProductionTrace(Path(directory) / "trace.jsonl")
+                environment = {
+                    "OPENAI_API_KEY": "test-secret",
+                    "OPENAI_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1",
+                    "MODEL": "mock-model",
+                    "FACTORY26_MAX_RETRY_AFTER_SECONDS": str(retry_cap),
+                }
+                with (
+                    patch.dict(os.environ, environment, clear=True),
+                    patch("factory26_harness.model.time.sleep") as sleep,
+                ):
+                    client = OpenAIChatClient(trace)
+                    error = None
+                    try:
+                        client.complete([{"role": "user", "content": "test"}], [])
+                    except RuntimeError as exc:
+                        error = str(exc)
+                rows = [
+                    json.loads(line)
+                    for line in trace.path.read_text(encoding="utf-8").splitlines()
+                ]
+                return client, rows, [call.args[0] for call in sleep.call_args_list], error
+        finally:
+            server.shutdown()
+            thread.join(timeout=2)
+            server.server_close()
+
+    def test_transient_http_failures_honor_retry_after_and_recover(self) -> None:
+        success = json.dumps(
+            {"choices": [{"message": {"role": "assistant", "content": "done"}}]}
+        ).encode("utf-8")
+        client, rows, sleeps, error = self._run_status_sequence(
+            [(429, "3", b"busy"), (503, None, b"unavailable"), (200, None, success)]
+        )
+        self.assertIsNone(error)
+        self.assertEqual(client.http_attempt_count, 3)
+        self.assertEqual(client.request_count, 1)
+        self.assertEqual(sleeps, [3, 2])
+        failures = [row["payload"] for row in rows if row["event"] == "model_error"]
+        self.assertEqual([row["http_status"] for row in failures], [429, 503])
+        self.assertTrue(all(row["will_retry"] for row in failures))
+
+    def test_authentication_failure_does_not_retry_or_log_provider_body(self) -> None:
+        private_body = b"invalid key: nonstandard-private-test-value"
+        client, rows, sleeps, error = self._run_status_sequence(
+            [(401, "1", private_body)]
+        )
+        self.assertEqual(error, "attempt 1: HTTP 401")
+        self.assertEqual(client.http_attempt_count, 1)
+        self.assertEqual(client.request_count, 0)
+        self.assertEqual(sleeps, [])
+        self.assertNotIn(private_body.decode("utf-8"), json.dumps(rows))
+        failure = next(row["payload"] for row in rows if row["event"] == "model_error")
+        self.assertFalse(failure["retryable"])
+        self.assertFalse(failure["will_retry"])
+
+    def test_long_retry_after_fails_closed_without_early_retry(self) -> None:
+        client, rows, sleeps, error = self._run_status_sequence(
+            [(429, "90", b"wait")], retry_cap=60
+        )
+        self.assertEqual(error, "attempt 1: HTTP 429 (Retry-After exceeds local cap)")
+        self.assertEqual(client.http_attempt_count, 1)
+        self.assertEqual(sleeps, [])
+        failure = next(row["payload"] for row in rows if row["event"] == "model_error")
+        self.assertTrue(failure["retry_after_exceeds_limit"])
+        self.assertFalse(failure["will_retry"])
+
+    def test_malformed_success_response_is_not_billed_as_a_second_request(self) -> None:
+        client, rows, sleeps, error = self._run_status_sequence(
+            [(200, None, b'{"choices":[]}')]
+        )
+        self.assertEqual(error, "invalid model response")
+        self.assertEqual(client.http_attempt_count, 1)
+        self.assertEqual(client.request_count, 0)
+        self.assertEqual(sleeps, [])
+        failure = next(row["payload"] for row in rows if row["event"] == "model_error")
+        self.assertFalse(failure["will_retry"])
+
     def test_browser_probe_tool_summary_keeps_bounded_behavioral_evidence(self) -> None:
         summary = _compact_tool_result(
             "browser_probe",
@@ -134,6 +262,7 @@ class ModelLoopTests(unittest.TestCase):
                     "max_requests": 380,
                     "max_prompt_tokens": 2_280_000,
                     "max_completion_tokens": 950_000,
+                    "max_retry_after_seconds": 60,
                 })
             with patch.dict(
                 os.environ,
@@ -259,7 +388,9 @@ class ModelLoopTests(unittest.TestCase):
             ]
             errors = [row for row in rows if row["event"] == "model_error"]
             self.assertEqual(len(errors), 1)
-            self.assertIn("closed", errors[0]["payload"]["error"])
+            self.assertEqual(
+                errors[0]["payload"]["error_type"], "RemoteDisconnected"
+            )
 
     def test_openai_tool_loop_edits_workspace_and_tracks_usage(self) -> None:
         _ModelHandler.calls = 0

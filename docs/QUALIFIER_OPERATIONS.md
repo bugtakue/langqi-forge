@@ -22,6 +22,8 @@
 
 默认每批 4 条原子需求、最多 20 个模型回合、最多 2 个最终修复轮。总模型请求上限按实际批次数与允许回合数计算（默认上限 600 次），累计输入/输出 Token 安全上限随之放大；`FACTORY26_MAX_MODEL_REQUESTS`、`FACTORY26_MAX_TOTAL_PROMPT_TOKENS`、`FACTORY26_MAX_TOTAL_COMPLETION_TOKENS` 可显式覆盖并会写入运行报告。这些是上限，不是预算目标或成绩承诺；真实 Token/成本由模型服务和主办方计量为准。每批会在轨迹中保留 `agent_session_started`、`model_request`、`model_response`、`tool_call`、`tool_result`、`agent_acceptance_audit_requested`、`implementation_batch_finished` 等事件。
 
+模型 HTTP 请求遇到 408/425/429/5xx 或连接中断时，最多尝试 3 次；有 `Retry-After` 时遵守秒数或 HTTP 日期，默认最多等待 60 秒（`FACTORY26_MAX_RETRY_AFTER_SECONDS` 可设为 0–120）。超过本地等待上限就失败关闭，不提前重复请求；401 等非临时错误和格式错误的成功响应不重试。提供商错误正文可能包含敏感信息，因此轨迹只记状态码与重试决策，不保存错误正文。报告把成功的 `model_requests` 与实际 `model_http_attempts` 分开，仍不能由此推断费用：服务端可能在失败响应前已消耗 Token，须以平台计量为准。
+
 超长会话触发上下文压缩时，检查点保留当前源码哈希、校验版本，以及浏览器探针已用次数、剩余额度、是否需要重验和最近一次断言/页面错误摘要；完整原始调用仍在独立生产轨迹中。压缩不把失败探针改写为通过。
 
 ## 工具调用与安全

@@ -376,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
             "run_completed",
             status=report["status"],
             model_requests=model.request_count,
+            model_http_attempts=getattr(model, "http_attempt_count", None),
             note="independent GUI acceptance remains the platform's responsibility",
         )
         return 0
@@ -398,6 +399,7 @@ def main(argv: list[str] | None = None) -> int:
             report["model"] = model.gateway_evidence()
             report["model_budget"] = model.budget_evidence()
             report["model_requests"] = model.request_count
+            report["model_http_attempts"] = getattr(model, "http_attempt_count", None)
             report["prompt_tokens"] = model.total_prompt_tokens
             report["completion_tokens"] = model.total_completion_tokens
         if visual_client is not None:

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -24,6 +27,27 @@ class ModelReply:
     prompt_tokens: int
     completion_tokens: int
     response_id: str
+
+
+def _retry_after_seconds(headers: Any) -> int | None:
+    value = headers.get("retry-after") if headers is not None else None
+    if value is None:
+        return None
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        try:
+            deadline = parsedate_to_datetime(str(value))
+            if deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=timezone.utc)
+            seconds = (deadline - datetime.now(timezone.utc)).total_seconds()
+            return max(0, math.ceil(seconds))
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+
+def _retryable_http_status(status: int) -> bool:
+    return status in {408, 425, 429} or 500 <= status <= 599
 
 
 class OpenAIChatClient:
@@ -50,6 +74,11 @@ class OpenAIChatClient:
         self.max_request_bytes = max(
             1024, int(os.environ.get("FACTORY26_MAX_MODEL_REQUEST_BYTES", "5000000"))
         )
+        self.max_retry_after_seconds = int(
+            os.environ.get("FACTORY26_MAX_RETRY_AFTER_SECONDS", "60")
+        )
+        if not 0 <= self.max_retry_after_seconds <= 120:
+            raise ValueError("model Retry-After cap must be between 0 and 120 seconds")
         self.max_total_prompt_tokens = max(
             1,
             int(
@@ -106,6 +135,7 @@ class OpenAIChatClient:
             "max_requests": self.max_requests,
             "max_prompt_tokens": self.max_total_prompt_tokens,
             "max_completion_tokens": self.max_total_completion_tokens,
+            "max_retry_after_seconds": self.max_retry_after_seconds,
         }
 
     def complete(
@@ -158,6 +188,7 @@ class OpenAIChatClient:
             request_policy={
                 "max_attempts": max_attempts,
                 "timeout_seconds": request_timeout,
+                "max_retry_after_seconds": self.max_retry_after_seconds,
             },
         )
         encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -165,7 +196,6 @@ class OpenAIChatClient:
             raise RuntimeError(
                 f"model request exceeds {self.max_request_bytes} byte safety limit"
             )
-        last_error = "model request failed"
         for attempt in range(1, max_attempts + 1):
             request = urllib.request.Request(
                 self.endpoint,
@@ -248,22 +278,52 @@ class OpenAIChatClient:
                     response_id=response_id,
                 )
                 return reply
-            except (
-                urllib.error.URLError,
-                urllib.error.HTTPError,
-                TimeoutError,
-                ConnectionError,
-                KeyError,
-                ValueError,
-            ) as exc:
-                detail = ""
-                if isinstance(exc, urllib.error.HTTPError):
-                    try:
-                        detail = exc.read().decode("utf-8", errors="replace")[-1000:]
-                    except OSError:
-                        detail = ""
-                last_error = f"attempt {attempt}: {exc} {detail}".strip()
-                self.trace.record("model_error", attempt=attempt, error=last_error)
-                if attempt < max_attempts:
+            except urllib.error.HTTPError as exc:
+                status = int(exc.code)
+                retry_after = _retry_after_seconds(exc.headers)
+                delay = attempt if retry_after is None else retry_after
+                retryable = _retryable_http_status(status)
+                exceeds_cap = retryable and delay > self.max_retry_after_seconds
+                will_retry = (
+                    retryable and attempt < max_attempts and not exceeds_cap
+                )
+                # Provider response bodies are untrusted and may echo credentials.
+                # Record status and retry policy, never the response body.
+                self.trace.record(
+                    "model_error",
+                    attempt=attempt,
+                    http_status=status,
+                    retryable=retryable,
+                    will_retry=will_retry,
+                    retry_delay_seconds=delay if will_retry else None,
+                    retry_after_exceeds_limit=exceeds_cap,
+                )
+                exc.close()
+                if will_retry:
+                    time.sleep(delay)
+                    continue
+                suffix = " (Retry-After exceeds local cap)" if exceeds_cap else ""
+                raise RuntimeError(f"attempt {attempt}: HTTP {status}{suffix}") from exc
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+                will_retry = attempt < max_attempts
+                error_type = type(exc).__name__
+                self.trace.record(
+                    "model_error",
+                    attempt=attempt,
+                    error_type=error_type,
+                    will_retry=will_retry,
+                    retry_delay_seconds=attempt if will_retry else None,
+                )
+                if will_retry:
                     time.sleep(attempt)
-        raise RuntimeError(last_error)
+                    continue
+                raise RuntimeError(f"attempt {attempt}: {error_type}") from exc
+            except (KeyError, TypeError, ValueError) as exc:
+                self.trace.record(
+                    "model_error",
+                    attempt=attempt,
+                    error=f"invalid model response: {type(exc).__name__}",
+                    will_retry=False,
+                )
+                raise RuntimeError("invalid model response") from exc
+        raise AssertionError("model retry loop exhausted unexpectedly")
