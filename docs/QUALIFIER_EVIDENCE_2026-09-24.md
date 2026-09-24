@@ -305,3 +305,10 @@
 - 从干净源码修订 `59bb728...` 构建的精确 ZIP 为 `dist/langqi-forge-qualifier.zip`，SHA-256 `f8c666280457e62714cd38c338b82d0e04c790700e2e4463c29cb55cc7491b9a`，17 个白名单文件，`unzip -t` 全部通过，包内来源清单与该修订一致。后续证据文档提交不进入 ZIP。
 - 使用该**精确 ZIP**、旧版 arm64 Runner 与当前本地模拟器包装，在固定响应双批长需求夹具中完整生成、部署并执行独立 Playwright：工作区 `../factory26-local-simulation/runs/qualifier-network-guard-protocol-20260925/`，`container_exit_code=0`、SDK 两项 `IMPLEMENTED`、`behavioral_probe_tested=true`、独立浏览器 **2/2**；生产轨迹 **76/76** 行哈希封印有效。模拟网关请求 14 次。Meter 用假 Key 返回 HTTP 401，`score=null`、真实模型费用未知；该 2/2 仅证明 ZIP 的协议与本地 GUI 夹具，**不是**真实百炼模型完成 BookStack/Keep 的通过率或正式赛成绩。
 - 当前仍未取得真实模型 Key 下的公开练习和人民币成本，也没有真实 x86 主机上的当前 amd64 Runner 全流程 GUI 验证。没有登录 ARC-Bench、上传 ZIP 或正式提交，相关决定仍留给队长。
+
+## 2026-09-25 视觉参考共用模型网关
+
+- 本地模拟器 `env.example` 已预填 `VISUAL_MODEL`，但 `VISUAL_API_KEY` 与 `VISUAL_BASE_URL` 默认留空；旧参赛包只有三项视觉变量均显式填写才开放参考图工具。这意味着只填编码模型 Key/网关的练习环境即使有视觉模型名，也不会看本次任务明确引用的截图。公开 BookStack/Keep 需求包含大量 `reference/` 图片，这一配置落差可能影响界面复刻，但实际得分收益仍须真实模型验证。
+- 源码提交 `9c7185015b72e9c83a53864ca9f6efbdd7b86cf8` 允许在**显式设置 `VISUAL_MODEL`**时复用已配置的 `OPENAI_API_KEY` / `OPENAI_BASE_URL`；两项完整的 `VISUAL_API_KEY` / `VISUAL_BASE_URL` 仍优先，任一仅填一半时禁止静默回退。独立视觉客户端继续只访问 HTTPS 或本机回环地址；若共用地址不符合安全限制，可选看图工具停用，主编码流程继续。参考图目录若是指向外部的符号链接则拒绝，避免把非任务文件发给视觉网关。模型是否支持该视觉模型、实际识图质量和费用没有被模拟测试证明。
+- 主机完整单测 **119 项：116 通过、3 项因浏览器环境跳过**；新增回归覆盖共享凭证实际发起的图像请求（HTTP 客户端模拟）、显式视觉网关优先、不完整配置不回退、链接目录拒绝以及主流程启用/禁用视觉工具。脱敏轨迹不含模拟密钥。由该干净源码提交构建的精确 ZIP `dist/langqi-forge-qualifier.zip` SHA-256 `dfdcb97de12be354af3964655d9a84f9fcce12737bfa51ffdcbc49ac15c4d4b6`，17 个白名单文件，`unzip -t` 通过，包内来源修订一致。
+- 该精确 ZIP 在旧版 arm64 Runner + 当前模拟器包装的固定响应双批长需求夹具运行于 `../factory26-local-simulation/runs/qualifier-visual-shared-protocol-20260925/`：传入 `VISUAL_MODEL`，共享编码网关是本机 Docker 桥接 HTTP 地址，因此视觉工具按安全策略停用；主模型协议请求 14 次、SDK 两项 `IMPLEMENTED`、`behavioral_probe_tested=true`、独立 Playwright **2/2**、生产轨迹 **77/77** 行封印有效，`container_exit_code=0`。这证明可选视觉配置失败不会拖垮现有生成链路，**不是**该 Runner 中的真实图像调用或真实百炼模型成绩。假 Key 导致 Meter HTTP 401，`score=null`、费用未知。未登录、未上传、未正式提交。
