@@ -222,6 +222,104 @@ class ModelLoopTests(unittest.TestCase):
             rows = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
             self.assertGreaterEqual(sum(row["event"] == "tool_call" and row["payload"].get("tool") == "read_requirement_spec" for row in rows), 2)
 
+    def test_compacted_long_spec_can_be_reviewed_before_audit(self) -> None:
+        class ReviewingModel:
+            def __init__(self) -> None:
+                self.turn = 0
+                self.next_start = 0
+                self.initial_complete = False
+                self.saw_compaction = False
+                self.reviewed = False
+                self.wrote = False
+                self.validated = False
+
+            def complete(self, messages, _schemas):
+                self.turn += 1
+                self.saw_compaction = self.saw_compaction or any(
+                    "Deterministic context checkpoint" in str(item.get("content") or "")
+                    for item in messages if item.get("role") == "user"
+                )
+                for item in messages:
+                    if item.get("role") != "tool":
+                        continue
+                    try:
+                        page = json.loads(item.get("content") or "{}")
+                    except ValueError:
+                        continue
+                    if page.get("requirement_id") != "R-COMPACT-SPEC" or not page.get("ok"):
+                        continue
+                    if page.get("review") and page.get("start_char") == 0:
+                        self.reviewed = True
+                    elif not page.get("review") and page["start_char"] == self.next_start:
+                        self.next_start = page["next_start_char"]
+                        self.initial_complete = page["complete"]
+                if not self.initial_complete:
+                    name = "read_requirement_spec"
+                    arguments = {"requirement_id": "R-COMPACT-SPEC", "start_char": self.next_start}
+                elif self.saw_compaction and not self.reviewed:
+                    name = "read_requirement_spec"
+                    arguments = {"requirement_id": "R-COMPACT-SPEC", "start_char": 0}
+                elif not self.wrote:
+                    name = "write_file"
+                    arguments = {"path": "frontend/src/reviewed.js", "content": "export const reviewed = true;\n"}
+                    self.wrote = True
+                elif not self.validated:
+                    name = "run_validation"
+                    arguments = {"scope": "quick"}
+                    self.validated = True
+                else:
+                    name = ""
+                    arguments = {}
+                calls = (({
+                    "id": f"compact-spec-{self.turn}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(arguments)},
+                },) if name else ())
+                content = "AUDIT PASS: abbreviated specification reviewed" if not calls else ""
+                return SimpleNamespace(
+                    tool_calls=calls,
+                    raw_message={"role": "assistant", "content": content, **({"tool_calls": calls} if calls else {})},
+                    content=content,
+                )
+
+        tree = {"id": "ROOT", "type": "FOLDER", "children": [{
+            "id": "R-COMPACT-SPEC", "type": "ATOMIC", "name": "Long condition",
+            "description": "FIRST_CONDITION " + "D" * 8_000 + " FINAL_CONDITION",
+        }]}
+        node = flatten_atomic(tree)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for component, scripts in (
+                ("frontend", {"build": DUMMY_BUILD}),
+                ("backend", {"start": 'node -e ""'}),
+            ):
+                folder = root / component
+                folder.mkdir()
+                (folder / "package.json").write_text(
+                    json.dumps({"name": component, "private": True, "scripts": scripts}),
+                    encoding="utf-8",
+                )
+            trace = ProductionTrace(root / ".arc/trace.jsonl")
+            model = ReviewingModel()
+            with patch.dict(os.environ, {"FACTORY26_AGENT_CONTEXT_CHARS": "16000"}):
+                result = CodingAgent(
+                    model, WorkspaceTools(root, trace, 3932), trace, max_turns=12
+                ).implement([node])
+            rows = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(any(row["event"] == "agent_context_compacted" for row in rows))
+            self.assertTrue(model.saw_compaction)
+            self.assertTrue(model.reviewed)
+            self.assertTrue(result.completed)
+            self.assertTrue((root / "frontend/src/reviewed.js").is_file())
+            checkpoints = [row["payload"].get("checkpoint") or {} for row in rows
+                           if row["event"] == "agent_context_compacted"]
+            self.assertTrue(any(
+                item.get("requirement_id") == "R-COMPACT-SPEC"
+                and item.get("initial_read_complete")
+                for checkpoint in checkpoints
+                for item in checkpoint.get("abbreviated_specifications") or []
+            ))
+
     def test_validation_followed_by_edit_in_same_turn_waits_for_latest_revision_audit(self) -> None:
         class ValidateThenEditModel:
             def __init__(self) -> None:

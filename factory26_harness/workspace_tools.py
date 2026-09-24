@@ -97,6 +97,22 @@ class WorkspaceTools:
             for req_id, document in self.requirement_specs.items()
         )
 
+    def requirement_spec_access_state(self) -> list[dict[str, Any]]:
+        """Compact source references for restoring context after chat compression."""
+
+        return [
+            {
+                "requirement_id": req_id,
+                "total_chars": len(document),
+                "sha256": hashlib.sha256(document.encode("utf-8")).hexdigest(),
+                "next_unread_char": self.requirement_spec_offsets.get(req_id, 0),
+                "initial_read_complete": (
+                    self.requirement_spec_offsets.get(req_id, 0) >= len(document)
+                ),
+            }
+            for req_id, document in sorted(self.requirement_specs.items())
+        ]
+
     def _require_complete_specs(self) -> None:
         unread = sorted(
             req_id for req_id, document in self.requirement_specs.items()
@@ -250,7 +266,9 @@ class WorkspaceTools:
                     "description": (
                         "Read the original public specification for one abbreviated "
                         "requirement in this batch, in sequential bounded pages. "
-                        "Continue from next_start_char until complete=true before editing."
+                        "Continue from next_start_char until complete=true before editing. "
+                        "After the first full read, any page can be reviewed again by "
+                        "start_char, including after context compression."
                     ),
                     "parameters": {
                         "type": "object",
@@ -486,9 +504,13 @@ class WorkspaceTools:
             raise ValueError("requirement is not assigned or is not abbreviated")
         start = int(arguments["start_char"])
         current = self.requirement_spec_offsets[req_id]
-        if start != current:
-            raise ValueError(f"read requirement {req_id} sequentially from character {current}")
         document = self.requirement_specs[req_id]
+        review = current >= len(document)
+        if review:
+            if not 0 <= start < len(document):
+                raise ValueError("review page start must be inside the specification")
+        elif start != current:
+            raise ValueError(f"read requirement {req_id} sequentially from character {current}")
         end = min(len(document), start + MAX_REQUIREMENT_PAGE_CHARS)
         digest = hashlib.sha256(document.encode("utf-8")).hexdigest()
         while True:
@@ -499,13 +521,15 @@ class WorkspaceTools:
                 "next_start_char": end,
                 "total_chars": len(document),
                 "complete": end == len(document),
+                "review": review,
                 "sha256": digest,
                 "content": document[start:end],
             }
             if len(json.dumps(result, ensure_ascii=False, sort_keys=True)) <= MAX_TOOL_RESULT_CHARS:
                 break
             end = start + max(1, (end - start) // 2)
-        self.requirement_spec_offsets[req_id] = end
+        if not review:
+            self.requirement_spec_offsets[req_id] = end
         return result
 
     def _tool_read_files(self, arguments: dict[str, Any]) -> dict[str, Any]:

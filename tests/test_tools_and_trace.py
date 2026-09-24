@@ -58,7 +58,20 @@ class ToolAndTraceTests(unittest.TestCase):
                 if page["complete"]:
                     break
                 start = page["next_start_char"]
+                if start == 4_000:
+                    premature_rewind = json.loads(tools.execute(
+                        "read_requirement_spec",
+                        {"requirement_id": "R-LONG", "start_char": 0},
+                    ))
+                    self.assertFalse(premature_rewind["ok"])
             self.assertEqual("".join(chunks), specification)
+            self.assertTrue(tools.requirement_specs_complete)
+            review = json.loads(tools.execute("read_requirement_spec", {
+                "requirement_id": "R-LONG", "start_char": 0,
+            }))
+            self.assertTrue(review["ok"])
+            self.assertTrue(review["review"])
+            self.assertEqual(review["content"], chunks[0])
             self.assertTrue(tools.requirement_specs_complete)
             allowed = json.loads(tools.execute("write_file", {
                 "path": "frontend/feature.js", "content": "ready",
