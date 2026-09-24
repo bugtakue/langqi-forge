@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 class Handler(BaseHTTPRequestHandler):
     calls = 0
+    exercise_browser = False
 
     def do_POST(self) -> None:
         if self.path != "/v1/chat/completions":
@@ -42,11 +43,32 @@ class Handler(BaseHTTPRequestHandler):
             arguments = {
                 "path": "frontend/src/app.js",
                 "old": "// The coding agent implements the requested application here.",
-                "new": 'document.querySelector("#app").innerHTML = "<h1>Example</h1>";',
+                "new": (
+                    'document.querySelector("#app").innerHTML = '
+                    '"<h1>Example</h1><button type=\\"button\\">Try</button>'
+                    '<p id=\\"status\\"></p>";\n'
+                    'document.querySelector("button").addEventListener("click", () => {\n'
+                    '  document.querySelector("#status").textContent = "Clicked";\n'
+                    '});'
+                    if self.exercise_browser
+                    else 'document.querySelector("#app").innerHTML = "<h1>Example</h1>";'
+                ),
             }
         elif last_tool == "replace_text":
             name = "run_validation"
             arguments = {"scope": "quick"}
+        elif last_tool == "run_validation" and self.exercise_browser:
+            name = "browser_probe"
+            arguments = {
+                "steps": [
+                    {
+                        "action": "click",
+                        "role": "button",
+                        "name": "Try",
+                        "expect_text": ["Clicked"],
+                    }
+                ]
+            }
         else:
             name = ""
             arguments = {}
@@ -92,7 +114,9 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=19786)
+    parser.add_argument("--exercise-browser", action="store_true")
     args = parser.parse_args()
+    Handler.exercise_browser = args.exercise_browser
     server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
     print(f"protocol fixture listening on {args.port}", flush=True)
     server.serve_forever()

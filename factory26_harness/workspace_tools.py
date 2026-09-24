@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from .browser_probe import probe_local_app
 from .checks import run_full_checks, run_quick_checks, structure_check
 from .trace import ProductionTrace
 from .visual_reference import VisualReferenceClient
@@ -56,6 +57,11 @@ class WorkspaceTools:
         self.last_validation_passed = False
         self.write_operations = 0
         self.bytes_written = 0
+        self.browser_probe_calls = 0
+        self.browser_probe_requires_recheck = False
+        self.browser_probe_verified_revision = -1
+        self.maximum_browser_probe_calls = max(
+            0, min(5, int(os.environ.get("FACTORY26_MAX_BROWSER_PROBES_PER_BATCH", "3"))))
         self.maximum_changed_files = max(
             1, int(os.environ.get("FACTORY26_MAX_CHANGED_FILES", "12"))
         )
@@ -205,6 +211,53 @@ class WorkspaceTools:
                 },
             },
         ]
+        if self.maximum_browser_probe_calls:
+            schemas.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "browser_probe",
+                        "description": (
+                            "After a passing quick validation, open only the generated local app "
+                            "in Chromium. Inspect visible text/semantic controls, then optionally "
+                            "click, fill, press, select, check, reload or navigate local paths. "
+                            "Use a short real user workflow and explicit visible-text assertions; "
+                            "this is not a hidden-test or score oracle. At most three calls per batch."
+                        ),
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "steps": {
+                                    "type": "array",
+                                    "maxItems": 8,
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "action": {
+                                                "type": "string",
+                                                "enum": ["click", "fill", "press", "select", "check", "reload", "navigate"],
+                                            },
+                                            "role": {"type": "string"},
+                                            "name": {"type": "string"},
+                                            "label": {"type": "string"},
+                                            "text": {"type": "string"},
+                                            "index": {"type": "integer", "minimum": 0, "maximum": 19},
+                                            "path": {"type": "string"},
+                                            "value": {"type": "string"},
+                                            "option_by": {"type": "string", "enum": ["label", "value"]},
+                                            "expect_text": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+                                            "expect_absent": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+                                        },
+                                        "required": ["action"],
+                                    },
+                                }
+                            },
+                            "required": ["steps"],
+                            "additionalProperties": False,
+                        },
+                    },
+                }
+            )
         if self.visual_client is not None and self.reference_paths:
             schemas.append(
                 {
@@ -271,6 +324,9 @@ class WorkspaceTools:
         self.bytes_written += byte_count
         self.last_validation_passed = False
         self.validation_scope = ""
+        if self.browser_probe_calls:
+            self.browser_probe_requires_recheck = True
+            self.browser_probe_verified_revision = -1
 
     @staticmethod
     def _atomic_write(path: Path, content: str) -> None:
@@ -546,3 +602,22 @@ class WorkspaceTools:
             ),
             "current_changes_validated": self.current_changes_validated,
         }
+
+    def _tool_browser_probe(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        if not self.maximum_browser_probe_calls:
+            raise ValueError("browser probe is disabled")
+        if self.browser_probe_calls >= self.maximum_browser_probe_calls:
+            raise ValueError("browser probe call budget exhausted for this batch")
+        if not self.current_changes_validated:
+            raise ValueError("run passing quick validation for the current revision first")
+        self.browser_probe_calls += 1
+        self.browser_probe_requires_recheck = True
+        result = probe_local_app(self.root, self.smoke_port, arguments.get("steps"))
+        if (
+            result.get("ok")
+            and result.get("behavioral_checks", 0) > 0
+            and result.get("behavioral_assertions", 0) > 0
+        ):
+            self.browser_probe_requires_recheck = False
+            self.browser_probe_verified_revision = self.change_revision
+        return result

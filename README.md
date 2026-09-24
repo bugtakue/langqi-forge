@@ -24,23 +24,25 @@ requirements.yaml
   → 创建与题目无关的可运行前后端
   → 按小批次交给 CodingAgent，通过模型工具调用读取、改写、校验源码
   → 每批通过 quick 交互策略、JavaScript 语法和新鲜构建产物校验，并作一次模型验收审计
+  → 可对本地生成应用执行有界浏览器交互与可见文本断言；失败后改码须重验
   → 全量构建、启动、健康检查；失败可限轮修复
   → 官方 SDK 记录节点状态、追溯表和 Git 提交历史
   → .arc/production-trace.jsonl + harness-report.json
   → 外部独立 GUI 评测（本智能体不自称已通过）
 ```
 
-工具仅允许读项目文件、查询文本、修改 `frontend/` / `backend/` 和运行安全校验。覆写文件需要已观察的 SHA-256，限制写入文件数和字节数；模型看不到环境密钥。生产轨迹记录 Prompt、模型请求与响应、工具参数与结果、批次、校验和人工干预点，并对敏感字段脱敏、逐行链接哈希。
+工具仅允许读项目文件、查询文本、修改 `frontend/` / `backend/`、运行安全校验，以及在本地生成应用上做有界浏览器探测。浏览器探测不能读取隐藏测试或访问外部网站；覆写文件需要已观察的 SHA-256，限制写入文件数和字节数；模型看不到环境密钥。生产轨迹记录 Prompt、模型请求与响应、工具参数与结果、批次、校验和人工干预点，并对敏感字段脱敏、逐行链接哈希。
 
 具体 Prompt、工具、循环及证据位置见 [参赛运行说明](docs/QUALIFIER_OPERATIONS.md) 和 [本地验证记录](docs/QUALIFIER_EVIDENCE_2026-09-24.md)。
 
 ## 本地运行
 
-需要 Python 3.10+、Node.js/npm、可用的 OpenAI-compatible 模型服务。**不要把密钥写入仓库或 ZIP。**
+需要 Python 3.10+、Node.js/npm、Chromium 与可用的 OpenAI-compatible 模型服务；主办方 Runner 自带浏览器，本机独立运行需安装 Playwright 浏览器。**不要把密钥写入仓库或 ZIP。**
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m playwright install chromium
 export OPENAI_API_KEY='...'
 export OPENAI_BASE_URL='https://your-gateway.example/v1'
 export MODEL='your-model'

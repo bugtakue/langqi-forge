@@ -20,6 +20,7 @@ BUNDLE_MODULES = (
     "factory26_harness/__init__.py",
     "factory26_harness/agent.py",
     "factory26_harness/arc_runtime.py",
+    "factory26_harness/browser_probe.py",
     "factory26_harness/checks.py",
     "factory26_harness/generic_scaffold.py",
     "factory26_harness/model.py",

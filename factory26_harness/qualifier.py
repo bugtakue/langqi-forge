@@ -179,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         "implemented_requirements": [],
         "failed_requirements": [],
         "checks": [],
+        "browser_probe_batches": [],
     }
     model: OpenAIChatClient | None = None
     visual_client: VisualReferenceClient | None = None
@@ -294,6 +295,14 @@ def main(argv: list[str] | None = None) -> int:
             result = CodingAgent(
                 model, tools, trace, max_turns=args.max_agent_turns
             ).implement(group)
+            probe_evidence = {
+                "batch": index,
+                "calls": tools.browser_probe_calls,
+                "behavioral_probe_verified": (
+                    tools.browser_probe_verified_revision == tools.change_revision
+                ),
+            }
+            report["browser_probe_batches"].append(probe_evidence)
             trace.record(
                 "implementation_batch_finished",
                 batch=index,
@@ -302,6 +311,7 @@ def main(argv: list[str] | None = None) -> int:
                 changed_files=result.changed_files,
                 turns=result.turns,
                 summary=result.summary,
+                browser_probe=probe_evidence,
             )
             if not result.completed:
                 report["failed_requirements"] = requirement_ids

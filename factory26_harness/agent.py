@@ -61,6 +61,11 @@ Hard rules:
   requirements and real behavior still take priority. Do not spend the visual-call budget on duplicates.
 - Call run_validation("quick") once after the last planned edit. Do not call full after a passing
   quick check; the harness performs an independent full check after the transaction commits.
+- When browser_probe is available, use it after quick validation to exercise a short
+  requirement-derived user flow with visible-text assertions and a refresh/invalid-action
+  check where relevant. Inspect the page first if the semantic control names are unknown.
+  The probe sees only your local generated app; it is not a hidden-test or score oracle.
+  If a probe fails, repair the app and re-probe the changed revision before finishing.
 The harness will not accept completion unless the latest changed revision has a passing quick/full validation.
 When complete, return a short summary of files changed and any remaining risk.
 """
@@ -76,7 +81,13 @@ Check all of these failure surfaces:
 6. Arbitrary inputs, invalid-action atomicity, unchanged last-good state, and one consistent state schema across all layers.
 7. Every scenario and every SHALL/must/contains/disabled requirement has a concrete implementation.
 
-If any gap exists, patch only that gap and run quick validation once. If none exists, return a short `AUDIT PASS` summary without tools."""
+If browser_probe is available and has not yet run, use it now on one primary user action
+with at least one explicit visible-text assertion. A no-step inspection may precede it,
+but is not behavioral evidence. If a probe fails or you change code afterward, run
+quick validation and repeat the behavioral assertion before finishing.
+
+If any gap exists, patch only that gap and run quick validation once. If none exists
+and the browser probe passed, return a short `AUDIT PASS` summary without tools."""
 
 MAX_SOURCE_SNAPSHOT_BYTES = 12_000
 
@@ -330,7 +341,11 @@ class CodingAgent:
                 final_summary = reply.content.strip()
                 changed = tuple(sorted(self.tools.changed_files - changed_before))
                 has_required_change = bool(changed) or stage == "repair"
-                if has_required_change and self.tools.current_changes_validated:
+                if (
+                    has_required_change
+                    and self.tools.current_changes_validated
+                    and not self.tools.browser_probe_requires_recheck
+                ):
                     if stage == "implementation" and not acceptance_audit_requested:
                         request_acceptance_audit(
                             changed,
@@ -348,6 +363,12 @@ class CodingAgent:
                     return AgentRun(True, final_summary, changed, turn)
                 if not has_required_change:
                     reminder = "You have not edited any file. Use the available tools and implement the requirement now."
+                elif self.tools.browser_probe_requires_recheck:
+                    reminder = (
+                        "Your browser probe is unverified for the latest revision. "
+                        "Run browser_probe with at least one semantic user action and "
+                        "one explicit visible-text assertion; fix and revalidate if it fails."
+                    )
                 else:
                     reminder = (
                         "Your latest changed revision has no passing quick/full validation. "
@@ -439,7 +460,7 @@ class CodingAgent:
                         "content": result,
                     }
                 )
-            if audit_validation_completed:
+            if audit_validation_completed and not self.tools.browser_probe_requires_recheck:
                 changed = tuple(sorted(self.tools.changed_files - changed_before))
                 final_summary = "Acceptance audit completed; the final changed revision passed validation."
                 self.trace.record(
