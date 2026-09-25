@@ -19,7 +19,10 @@ from .checks import _npm_install, _port_available, _safe_environment, _wait_for_
 from .isolation import stage_app_project
 
 
-MAX_STEPS = 8
+# Navigation + four form fields + submission can already consume eight steps.
+# Allow one complete flow (including rejection/correction and reload) without
+# forcing a second probe, which intentionally starts from an isolated seed.
+MAX_STEPS = 16
 MAX_ASSERTIONS = 4
 MAX_TEXT_CHARS = 2800
 OBSERVATION_SETTLE_SECONDS = 2.0

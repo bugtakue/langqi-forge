@@ -10,7 +10,7 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from factory26_harness.browser_probe import validate_steps
+from factory26_harness.browser_probe import MAX_STEPS, validate_steps
 from factory26_harness.regression import MAX_SUMMARY_CHARS, RegressionMemory
 from factory26_harness.trace import ProductionTrace, verify_trace_rows
 
@@ -81,7 +81,7 @@ class RegressionMemoryTests(unittest.TestCase):
             [{"action": "click", "text": "Save", "expect_text": [{"ok": True}]}],
             [{"action": "click", "text": "Save", "expect_text": "Saved"}],
             [{"action": "fill", "label": "Name", "value": "", "expect_text": ["Saved"]}],
-            self.steps() * 9,
+            self.steps() * (MAX_STEPS + 1),
         ]
         for steps in invalid:
             with self.subTest(steps=steps):
@@ -89,6 +89,21 @@ class RegressionMemoryTests(unittest.TestCase):
         self.assertEqual(self.memory.summary()["capsule_count"], 0)
         self.assertEqual(self.memory.summary()["rejected_invalid_count"], len(invalid))
         self.probe.assert_not_called()
+
+    def test_long_flow_replays_all_steps_and_keeps_final_assertion(self) -> None:
+        steps = [{"action": "fill", "label": f"Field {index}", "value": "fixture"}
+                 for index in range(9)] + [
+            {"action": "click", "role": "button", "name": "Save", "expect_text": ["Saved"]},
+            {"action": "reload", "expect_text": ["Saved"], "expect_absent": ["Error"]},
+        ]
+        self.assertTrue(self.memory.remember(["REQ-long-flow"], steps, self.manifest))
+        self.assertTrue(self.memory.check(self.root, 3991, final=True).passed)
+        replayed = self.probe.call_args.args[2]
+        self.assertEqual(replayed, validate_steps(steps))
+        self.assertEqual(len(replayed), 11)
+        self.assertEqual(replayed[-1]["expect_text"], ["Saved"])
+        self.probe.return_value = {"ok": False, "assertion_failures": [{"step": 11, "missing": ["Saved"]}]}
+        self.assertFalse(self.memory.check(self.root, 3991, final=True).passed)
 
     def test_accepts_each_interaction_and_assertions_after_reload(self) -> None:
         for action in ("click", "fill", "press", "select", "check"):

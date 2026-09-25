@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from factory26_harness.browser_probe import _probe_passed, probe_local_app, validate_steps
+from factory26_harness.browser_probe import MAX_ASSERTIONS, MAX_STEPS, _probe_passed, probe_local_app, validate_steps
 from factory26_harness.checks import frontend_build_check
 from factory26_harness.generic_scaffold import scaffold_workspace
 from factory26_harness.isolation import stage_app_project
@@ -90,7 +90,7 @@ class BrowserProbeTests(unittest.TestCase):
             [{"action": "fill", "text": "Name", "value": "Alice"}],
             [{"action": "click", "role": "button"}],
             [{"action": "evaluate", "value": "document.body.innerText"}],
-            [{"action": "reload"}] * 9,
+            [{"action": "reload"}] * (MAX_STEPS + 1),
         ):
             with self.subTest(steps=steps), self.assertRaises(ValueError):
                 validate_steps(steps)
@@ -109,6 +109,38 @@ class BrowserProbeTests(unittest.TestCase):
         )
         self.assertEqual(len(valid), 3)
         self.assertEqual(valid[1]["expect_text"], ["Saved: Alice"])
+
+    def test_extended_flow_keeps_rejection_correction_and_reload_assertions(self) -> None:
+        plan = [
+            {"action": "click", "role": "link", "name": "Workspace"},
+            {"action": "click", "role": "link", "name": "Create record"},
+            {"action": "fill", "label": "Name", "value": "Invalid name"},
+            {"action": "fill", "label": "Email", "value": "invalid"},
+            {"action": "fill", "label": "Description", "value": "A fixture"},
+            {"action": "fill", "label": "Category", "value": "Research"},
+            {"action": "check", "label": "Confirmed"},
+            {"action": "click", "role": "button", "name": "Save",
+             "expect_text": ["Email is invalid"], "expect_absent": ["Record saved"]},
+            {"action": "fill", "label": "Email", "value": "fixture@example.test"},
+            {"action": "click", "role": "button", "name": "Save",
+             "expect_text": ["Record saved"], "expect_absent": ["Email is invalid"]},
+            {"action": "reload", "expect_text": ["Invalid name", "fixture@example.test"]},
+        ]
+        result = validate_steps(plan)
+        self.assertEqual(len(result), 11)
+        self.assertEqual(result[7]["expect_text"], ["Email is invalid"])
+        self.assertEqual(result[-1]["expect_text"], plan[-1]["expect_text"])
+        self.assertEqual(len(validate_steps([{"action": "reload"}] * MAX_STEPS)), 16)
+        with self.assertRaises(ValueError):
+            validate_steps([{"action": "reload", "expect_text": ["x"] * (MAX_ASSERTIONS + 1)}])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3917)
+            schema = next(item["function"] for item in tools.schemas()
+                          if item["function"]["name"] == "browser_probe")
+            steps_schema = schema["parameters"]["properties"]["steps"]
+            self.assertEqual(steps_schema["maxItems"], MAX_STEPS)
+            self.assertEqual(steps_schema["items"]["properties"]["expect_text"]["maxItems"], MAX_ASSERTIONS)
 
     def test_probe_requires_current_validation_and_behavioral_recheck_after_edit(
         self,

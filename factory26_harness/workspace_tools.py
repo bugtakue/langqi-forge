@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .browser_probe import probe_local_app, validate_steps
+from .browser_probe import MAX_ASSERTIONS, MAX_STEPS, probe_local_app, validate_steps
 from .checks import run_full_checks, run_quick_checks, structure_check
 from .trace import ProductionTrace
 from .visual_reference import VisualReferenceClient
@@ -418,10 +418,12 @@ class WorkspaceTools:
                             "After a passing quick validation, open only the generated local app "
                             "in Chromium. Inspect visible text/semantic controls, then optionally "
                             "click, fill, press, select, check, reload or navigate local paths. "
-                            "Use a short real user workflow and explicit visible-text assertions; "
+                            f"Use up to {MAX_STEPS} actions for one complete user workflow with visible-text assertions; "
                             "this is not a hidden-test or score oracle. At most three launches per batch. "
                             "Use steps=[] to inspect controls if names are unknown. Every call starts "
-                            "from fresh seed state at /; keep the entire flow within one call. "
+                            "from fresh seed state at /; records and sessions created in earlier calls are gone. "
+                            "Keep setup, rejection/correction, success and reload "
+                            "in one call when relevant. Do not omit final assertions just to shorten the plan. "
                             "For a control step choose EXACTLY ONE: role+name, label, or text. "
                             "Never combine them, nest a locator, or use CSS selectors. "
                             "Use role+name for buttons/links; label is an input's associated label, "
@@ -439,7 +441,7 @@ class WorkspaceTools:
                             "properties": {
                                 "steps": {
                                     "type": "array",
-                                    "maxItems": 8,
+                                    "maxItems": MAX_STEPS,
                                     "items": {
                                         "type": "object",
                                         "properties": {
@@ -455,8 +457,8 @@ class WorkspaceTools:
                                             "path": {"type": "string"},
                                             "value": {"type": "string"},
                                             "option_by": {"type": "string", "enum": ["label", "value"]},
-                                            "expect_text": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
-                                            "expect_absent": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+                                            "expect_text": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_ASSERTIONS},
+                                            "expect_absent": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_ASSERTIONS},
                                         },
                                         "required": ["action"],
                                     },

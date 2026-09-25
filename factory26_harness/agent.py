@@ -733,6 +733,23 @@ class CodingAgent:
             messages.extend(retained_observations)
 
         for turn in range(1, self.max_turns + 1):
+            if (
+                self.tools.maximum_browser_probe_calls > 0
+                and self.tools.browser_probe_requires_recheck
+                and self.tools.browser_probe_calls >= self.tools.maximum_browser_probe_calls
+            ):
+                # No model response can supply the now-impossible verification.
+                # Preserve the failed gate and let the caller discard/split the
+                # private candidate instead of paying for repeated refused calls.
+                changed = tuple(sorted(self.tools.changed_files - changed_before))
+                reason = "browser probe budget exhausted while current revision is unverified"
+                self.trace.record(
+                    "agent_session_stalled", stage=stage,
+                    requirement_ids=requirement_ids, reason=reason,
+                    changed_files=changed,
+                    browser_probe_calls=self.tools.browser_probe_calls,
+                )
+                return AgentRun(False, reason, changed, turn - 1)
             current_turn_messages: list[dict[str, Any]] = []
             reply = self.model.complete(messages, tool_schemas)
             if getattr(reply, "finish_reason", "") == "length":
