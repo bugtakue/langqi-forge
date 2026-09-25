@@ -4,6 +4,10 @@
 
 ## 输入与产出
 
+### 静态 DOM 挂载检查的范围
+
+`interaction_policy_check` 保留可定位的静态风险检查，但不是 JavaScript 数据流或浏览器行为证明。2026-09-25 的本地修订补上包含一层嵌套前置参数的 append/prepend/replaceChildren 等调用识别；保留旧包装调用/返回/激活识别，未挂载节点和无可访问名称的动态输入框仍拒绝。该修订已由独立合成样例和真实 Chrome 交互交叉核验，不意味着任何正式任务已通过。所有候选仍须构建/启动与规定的行为验收，不凭正则通过宣称完整可用性。
+
 ### 推理强度候选策略（2026-09-25，本地候选，非在途 f3）
 
 `FACTORY26_DEEPSEEK_REASONING_POLICY=bounded` 为候选默认值，仅对明确列入的 DeepSeek 模型申请参数：编码 `deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-pro` 使用 `reasoning_effort=low`；视觉使用这些模型或本赛 `deepseek-v4-flash-vision-exp` 别名时申请 `thinking.type=disabled`。其他模型不增加参数；`provider-default` 可精确恢复原先不发送这些字段的请求。非法策略值在本地报错，不自动多试几种参数。

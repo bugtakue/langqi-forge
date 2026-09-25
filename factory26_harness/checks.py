@@ -57,6 +57,9 @@ CREATED_DOM_NODE_PATTERN = re.compile(
     r"\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*"
     r"document\s*\.\s*createElement\s*\(\s*([\"'])([A-Za-z0-9-]+)\2"
 )
+DOM_ATTACHMENT_CALL = (
+    r"(?:append|appendChild|prepend|replaceChildren|insertBefore|replaceWith)\s*\("
+)
 INTERACTION_SOURCE_SUFFIXES = {".html", ".js", ".jsx", ".mjs", ".ts", ".tsx"}
 NODE_CHECK_SUFFIXES = {".js", ".mjs", ".cjs"}
 IGNORED_SOURCE_PARTS = {"node_modules", "dist", "coverage", ".git", ".arc"}
@@ -261,10 +264,15 @@ def interaction_policy_check(root: Path) -> CheckResult:
                     body,
                 )
                 attached = re.search(
-                    rf"(?:append|appendChild|prepend|replaceChildren|insertBefore|"
-                    rf"replaceWith)\s*\([^;)]*\b{escaped}\b"
+                    rf"{DOM_ATTACHMENT_CALL}[^;)]*\b{escaped}\b"
                     rf"|\b{escaped}\s*\.\s*(?:click|showModal|replaceWith)\s*\("
                     rf"|\breturn\s+{escaped}\b",
+                    body,
+                ) or re.search(
+                    # Recognize nested preceding siblings without changing the
+                    # existing wrapper/return recognition. This is a bounded
+                    # syntax heuristic, not a JavaScript parser.
+                    rf"{DOM_ATTACHMENT_CALL}(?:[^;()]|\([^;()]*\))*\b{escaped}\b",
                     body,
                 )
                 if populated and not attached:
