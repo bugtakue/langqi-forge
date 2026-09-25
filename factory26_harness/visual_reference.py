@@ -200,8 +200,10 @@ class VisualReferenceClient:
 
     def can_inspect(self, relative: str) -> bool:
         try:
-            self._image(relative)
-            return True
+            _, _, digest = self._image(relative)
+            # New batches should not advertise a tool that can only fail.
+            # Exact cached images remain usable without another model call.
+            return digest in self._cache or self.calls < self.max_calls
         except (OSError, ValueError):
             return False
 

@@ -43,6 +43,70 @@ class FakeResponse:
 
 
 class VisualReferenceTests(unittest.TestCase):
+    def test_exhausted_budget_exposes_only_still_usable_cached_images(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            references = root / "task/reference"
+            references.mkdir(parents=True)
+            (references / "home.png").write_bytes(TINY_PNG)
+            (references / "other.png").write_bytes(TINY_PNG + b"\n")
+            trace = ProductionTrace(root / "trace.jsonl")
+            configuration, _ = resolve_visual_gateway({
+                "VISUAL_API_KEY": "fixture-secret",
+                "VISUAL_BASE_URL": "https://vision.example.test/v1",
+                "VISUAL_MODEL": "fixture-vision",
+            })
+            client = VisualReferenceClient(root / "task", trace, configuration)
+            client.max_calls = 1
+            self.assertTrue(client.can_inspect("reference/home.png"))
+            self.assertTrue(client.can_inspect("reference/other.png"))
+            with patch("factory26_harness.visual_reference.urllib.request.urlopen",
+                       return_value=FakeResponse()) as opener:
+                client.describe("reference/home.png")
+                self.assertEqual(client.calls, 1)
+                self.assertTrue(client.can_inspect("reference/home.png"))
+                self.assertFalse(client.can_inspect("reference/other.png"))
+                available = tuple(path for path in ("reference/home.png", "reference/other.png")
+                                  if client.can_inspect(path))
+                tools = WorkspaceTools(root / "output", trace, 3910,
+                                       visual_client=client, reference_paths=available)
+                visual = next(item["function"] for item in tools.schemas()
+                              if item["function"]["name"] == "inspect_reference")
+                self.assertEqual(visual["parameters"]["properties"]["path"]["enum"],
+                                 ["reference/home.png"])
+                self.assertTrue(client.describe("reference/home.png")["cached"])
+                opener.assert_called_once()
+            # Cached captions are content-bound, not permission to reuse an
+            # old caption after the image at the same path has changed.
+            (references / "home.png").write_bytes(TINY_PNG + b"\n")
+            self.assertFalse(client.can_inspect("reference/home.png"))
+
+    def test_exhausted_failed_visual_request_is_not_available_to_next_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "task/reference").mkdir(parents=True)
+            (root / "task/reference/home.png").write_bytes(TINY_PNG)
+            trace = ProductionTrace(root / "trace.jsonl")
+            configuration, _ = resolve_visual_gateway({
+                "VISUAL_API_KEY": "fixture-secret",
+                "VISUAL_BASE_URL": "https://vision.example.test/v1",
+                "VISUAL_MODEL": "fixture-vision",
+            })
+            client = VisualReferenceClient(root / "task", trace, configuration)
+            client.max_calls = 1
+            with patch("factory26_harness.visual_reference.urllib.request.urlopen",
+                       side_effect=TimeoutError("fixture")) as opener:
+                with self.assertRaises(RuntimeError):
+                    client.describe("reference/home.png")
+                self.assertFalse(client.can_inspect("reference/home.png"))
+                available = tuple(path for path in ("reference/home.png",)
+                                  if client.can_inspect(path))
+                tools = WorkspaceTools(root / "output", trace, 3910,
+                                       visual_client=client, reference_paths=available)
+                self.assertNotIn("inspect_reference", [item["function"]["name"]
+                                                       for item in tools.schemas()])
+                opener.assert_called_once()
+
     def _response_case(self, response_body: bytes, network_error: Exception | None = None):
         """Only local response fixtures; never call a model or expose image bytes."""
         with tempfile.TemporaryDirectory() as directory:
