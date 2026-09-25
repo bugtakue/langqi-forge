@@ -55,15 +55,28 @@ def _retryable_http_status(status: int) -> bool:
     return status in {408, 425, 429} or 500 <= status <= 599
 
 
-def _http_error_category(body: bytes) -> str:
-    """Classify a bounded provider error without ever logging its arbitrary text."""
-    try:
-        data = json.loads(body)
-        error = data.get("error", {}) if isinstance(data, dict) else {}
-        message = error.get("message", "") if isinstance(error, dict) else ""
-        lowered = str(message).lower()
-    except (ValueError, TypeError, UnicodeDecodeError):
-        return "unclassified"
+HTTP_ERROR_BODY_LIMIT = 65_536
+_ERROR_MESSAGE_PATHS = (
+    ("error", "message"), ("detail", "message"), ("message",), ("detail",), ("error",),
+)
+_ERROR_CODE_PATHS = (("error", "code"), ("error", "type"), ("code",), ("type",))
+_KNOWN_ERROR_CODES = {
+    "context_length_exceeded": "context_limit",
+    "invalid_api_key": "authentication",
+    "authentication_error": "authentication",
+    "insufficient_quota": "quota_or_capacity",
+    "rate_limit_exceeded": "rate_limit",
+    "rate_limit_error": "rate_limit",
+    "unsupported_parameter": "unsupported_parameter",
+    "model_not_found": "model_unavailable",
+    "overloaded_error": "upstream_capacity",
+    "timeout": "upstream_timeout",
+    "content_filter": "content_rejected",
+}
+
+
+def _error_message_category(message: str) -> str:
+    lowered = message.lower()
     if "reasoning_content" in lowered:
         return "reasoning_protocol"
     if "tool_call" in lowered or "tool call" in lowered:
@@ -75,6 +88,68 @@ def _http_error_category(body: bytes) -> str:
     if "quota" in lowered or "insufficient" in lowered:
         return "quota_or_capacity"
     return "unclassified"
+
+
+def _error_path_text(data: dict[str, Any], path: tuple[str, ...]) -> str | None:
+    value: Any = data
+    for key in path:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _error_signals(data: dict[str, Any]) -> tuple[list[str], list[str]]:
+    sources: list[str] = []
+    categories: set[str] = set()
+    for path in _ERROR_MESSAGE_PATHS + _ERROR_CODE_PATHS:
+        value = _error_path_text(data, path)
+        if value is None:
+            continue
+        # Path names and classification outputs are fixed local enums. Never
+        # return arbitrary provider keys, codes, messages, headers or hashes.
+        sources.append(".".join(path))
+        category = (
+            _error_message_category(value) if path in _ERROR_MESSAGE_PATHS
+            else _KNOWN_ERROR_CODES.get(value.lower(), "unclassified")
+        )
+        if category != "unclassified":
+            categories.add(category)
+    return sources, sorted(categories)
+
+
+def _http_error_diagnostics(body: bytes) -> dict[str, Any]:
+    """Observe error shape without persisting untrusted response content.
+
+    This is diagnostic only: hints never authorize a retry or change budgets.
+    A truncated body is deliberately not parsed into a confident category.
+    """
+    result: dict[str, Any] = {
+        "error_category": "unclassified", "error_categories": [],
+        "error_sources": [], "error_body_bytes_observed": min(len(body), HTTP_ERROR_BODY_LIMIT + 1),
+        "error_body_truncated": len(body) > HTTP_ERROR_BODY_LIMIT,
+        "error_body_format": "empty" if not body else "non_json",
+    }
+    if result["error_body_truncated"]:
+        result["error_body_format"] = "truncated"
+        return result
+    try:
+        data = json.loads(body)
+    except (ValueError, TypeError, UnicodeDecodeError, RecursionError):
+        return result
+    result["error_body_format"] = "json_object" if isinstance(data, dict) else "other_json"
+    if not isinstance(data, dict):
+        return result
+    sources, categories = _error_signals(data)
+    result["error_sources"] = sources
+    result["error_categories"] = categories
+    if categories:
+        result["error_category"] = categories[0] if len(categories) == 1 else "ambiguous"
+    return result
+
+
+def _http_error_category(body: bytes) -> str:
+    return _http_error_diagnostics(body)["error_category"]
 
 
 def deepseek_reasoning_options(model: str, *, visual: bool = False) -> dict[str, Any]:
@@ -338,9 +413,10 @@ class OpenAIChatClient:
             except urllib.error.HTTPError as exc:
                 status = int(exc.code)
                 try:
-                    error_category = _http_error_category(exc.read(65536))
+                    error_diagnostics = _http_error_diagnostics(exc.read(HTTP_ERROR_BODY_LIMIT + 1))
                 except (OSError, ValueError):
-                    error_category = "unclassified"
+                    error_diagnostics = {"error_category": "unclassified", "error_body_format": "read_failed"}
+                error_category = error_diagnostics["error_category"]
                 retry_after = _retry_after_seconds(exc.headers)
                 delay = attempt if retry_after is None else retry_after
                 retryable = _retryable_http_status(status)
@@ -354,7 +430,7 @@ class OpenAIChatClient:
                     "model_error",
                     attempt=attempt,
                     http_status=status,
-                    error_category=error_category,
+                    **error_diagnostics,
                     retryable=retryable,
                     will_retry=will_retry,
                     retry_delay_seconds=delay if will_retry else None,

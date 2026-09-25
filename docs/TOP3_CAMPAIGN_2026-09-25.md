@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**后续本地候选新增安全错误诊断，已完成验证，尚未封包/上传**：在845386c完整流程/语义归属候选上，补上固定detail/message包装与已知code分类，保留未知/冲突/截断状态，不保留网关正文、不重试400、不增预算。8项新测试；最终全套277项/274通过/3环境跳过（63.280秒）。旧400根因仍未知，不能称已修复。12:55 UTC正式任务历史明确fa7仍在进行中，继续等该运行结算。见`diagnostics/gateway-error-shape-2026-09-25.md`。
+
 **最新正式状态：fa7 已结束生成，仍在官方评分。** 29m35s现场Stage2完成/Stage3 Evaluation in progress。封印轨迹830行已完整归档核验：4/47原子需求，133编码返回/134 HTTP尝试，报告2,806,647总Token，最后一次HTTP400（未分类）安全熔断；无官方新GUI成绩/人民币结算。最后两个请求离线未发现孤立tool或未响应tool call，但不足以确定400原因。详见`diagnostics/fa7-generation-final-evidence.md`；不取消、不并行、不混用旧快照成绩。
 
 **最新本地候选已封包，未上传**：干净源码`845386c48aaf627991c0ed653c74a27631046637` → `dist/langqi-forge-semantic-scope.zip`，20文件/185,577字节，SHA-256 `b7dbca3ad53f3d6df04b51b695539d063155c71594c27b4473f8cac33b9dcf46`。在5620102的16步/耗尽及时失败之上，增加一层语义owner定位和独立局部反馈断言；真实Chrome合成夹具确认同名链接可区分、无关Saved不能证明表单成功、重名owner明确拒绝。全套269项/266通过/3环境跳过，64.650秒。独立解包`/private/tmp/factory26-semantic-scope.wvhtau`核验逐文件成员/大小/哈希/合同、真实导入位置及scope参数回转，ZIP CRC通过。原模型/启动预算、私有种子与验收门不变，未推送GitHub、未修改当前fa7。见`diagnostics/semantic-scope-2026-09-25.md`。
