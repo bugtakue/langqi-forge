@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**fb84f4e最终生成轨迹1070行已封印核验，官方仍在评分。** 465e25b12c29：1405.956秒、169成功/169HTTP/0错误重试、输入3613767/输出88492、内部4/47、3条最终保存流程重放通过。169请求真实thinking=disabled，无effort，返回无非空reasoning_content；中位响应4.175秒，但失败尝试消耗69.31%输入。详见`diagnostics/nonthinking-final-evidence-2026-09-26.md`。不是完整质量改善证明，不扩大预算；等待本项正式分数/费用后再同快照Sheet，目标active。
+
 **fb84f4e已结束生成并进入官方评分，内部4项，169响应后输入预算耗尽。** 北京时间02:41:30刷新、25m04s，465e25b12c29的seq754文件浏览额外晋升；seq1065 token budget exceeded熔断，seq1068三条最终保存流程重放通过，seq1070 local-contract-partial。Stage2已完成/Stage3 Evaluation in progress；尚未核验官方成绩、成本和最终封印包，不开并行Sheet、不加预算。
 
 本轮独立检查生成期副本：公开入口/筛选/README刷新可用，但合成账号登录后刷新丢身份，源码将session.userId交给username解析器；SSH切换后aria-selected也未更新。10个非数据源码与原包一致，本地服务/页已关闭；详见`diagnostics/nonthinking-partial-ui-2026-09-26.md`。不手改业务应用、不把局部自验当完整质量，下一步读取最终封印轨迹及正式分数再定后续版本。
