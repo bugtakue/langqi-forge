@@ -1,12 +1,12 @@
 # Langqi Forge · Factory26 初赛候选
 
-> 当前目标：同一参赛快照完成两题并进入正式综合榜前三，尚未达到。2026-09-25 19:03 UTC（北京时间26日03:03）核验正式赛/全部任务/全部模型：**c3887cd Pro综合第10/26，17/200、6.55分、¥25.0273**。最新fb84f4e非思考对照的GitHub为1/100、0.51分、¥11.3882，明显弱于旧版GitHub的11/100；同一快照[Sheet运行ede08b8e87bd](https://arc-bench.com/runs/ede08b8e87bd)正在串行评测，没有新综合成绩。不把提速、自报实现或本地测试当作质量改善。精确源码/账单/封印证据见[本轮记录](docs/diagnostics/nonthinking-final-evidence-2026-09-26.md)，接续见[前三持续台账](docs/TOP3_CAMPAIGN_2026-09-25.md)。
+> 当前目标：同一参赛快照完成两题并进入正式综合榜前三，尚未达到。2026-09-25 19:43 UTC附近（北京时间26日03:43）刷新正式赛/全部任务/全部模型：**c3887cd Pro综合第10/26，17/200、6.55分、¥25.0273**。fb84f4e非思考对照已完成两题，仅5/200、1.59分、¥18.9586，质量退步。新快照8f30652已保存并串行启动[GitHub运行a2b7ba164c06](https://arc-bench.com/runs/a2b7ba164c06)，暂无新成绩，Sheet未启动。精确版本与启动证据见[新运行记录](docs/diagnostics/completion-control-official-run-2026-09-26.md)，接续见[前三持续台账](docs/TOP3_CAMPAIGN_2026-09-25.md)。
 
 琅岐岛民的 ARC-Bench 软件生成智能体。本分支采用**通用、模型驱动**的正式参赛路径：读取比赛提供的需求，生成可部署的前后端，留下可核验的生产轨迹。它不是循济产品本体。
 
 当前正式版包含“行为回归胶囊”：将当前版本成功执行的操作流程固化，后续批次抽查、修复后及最终验收全量重放已存流程，保护旧功能免于被新改动破坏。正常回放不增加大模型调用；未覆盖的流程仍明确未知。详见[运行合同](docs/QUALIFIER_OPERATIONS.md)。
 
-主分支本地候选与已上传fb84f4e不同：包含[完整源码保留](docs/diagnostics/complete-source-retention-2026-09-26.md)、[失败现场回传](docs/diagnostics/probe-failure-scene-2026-09-26.md)、[控件状态断言](docs/diagnostics/control-state-assertions-2026-09-26.md)及[参赛入口启用的冻结代码收尾](docs/diagnostics/completion-entry-policy-2026-09-26.md)。库默认关闭、Runner明确设置优先；编码策略仍bounded。355项本地回归中352通过/3环境跳过，尚未以这些后续改动取得正式新成绩。Sheet已结束生成，675行[封印证据](docs/diagnostics/nonthinking-sheet-final-evidence-2026-09-26.md)核验通过，官方评分仍在进行。
+当前上传快照8f30652包含[完整源码保留](docs/diagnostics/complete-source-retention-2026-09-26.md)、[失败现场回传](docs/diagnostics/probe-failure-scene-2026-09-26.md)、[控件状态断言](docs/diagnostics/control-state-assertions-2026-09-26.md)及[参赛入口启用的冻结代码收尾](docs/diagnostics/completion-entry-policy-2026-09-26.md)。库默认关闭、Runner明确设置优先；编码策略仍bounded。355项本地回归中352通过/3环境跳过，独立解包50项通过；尚未以这些改动取得正式新成绩。旧fb84f4e Sheet的675行[封印证据与官方4/100](docs/diagnostics/nonthinking-sheet-final-evidence-2026-09-26.md)已核验，不能把内部7/24当官方通过率。
 
 ## 历史版本说明（不是当前运行状态）
 

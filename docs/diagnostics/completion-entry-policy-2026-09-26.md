@@ -24,4 +24,8 @@ fb84f4e的GitHub完整生成轨迹中，有一批修复后已quick通过却耗�
 - ZIP SHA `645f9935a02cd872dfa582bcd5bcfbf33e0a9e581e4c0f47b561c48539a28e39`，合同SHA `7fc744f0a1a2108b96a36f9f415818f5d440dacfee501e0a97232333c05a2510`。
 - 独立解包`/private/tmp/factory26-completion-control.Ivsvzl`，精确白名单/CRC/逐文件字节/哈希/整个manifest重算与所有Python AST通过。
 - 实际从解包目录加载runtime，50项控件/失败现场/语义/收尾/上下文协议/入口测试通过（0.205秒）。没有用工作树runtime替代ZIP检验，没有个人Key/模型调用。
-- 未上传；当前Sheet仍原fb84f4e。此包替代e0e5e0e默认关闭收尾包，后续只在当前运行终态后串行测试。准备和封包不等于线上通过。
+- 封包时未上传，后续保存及正式启动状态以下节为准。准备和封包不等于线上通过。
+
+## 后续上传与正式启动
+
+2026-09-25 19:38:38平台保存`Langqi Forge 8f30652 - verified completion`（History16，页面时间未标时区），精确沿用上述ZIP，上传前再次核对SHA与干净工作树。旧fb84f4e Sheet正式终态后，串行启动GitHub [a2b7ba164c06](https://arc-bench.com/runs/a2b7ba164c06)，没有并行Sheet、重复启动或取消其他任务。预检/依赖安装通过且首个模型调用与read_files成功；官方成绩仍未知。平台stdout是精简事件，不以未显示开关字段推断入口失效；实际会话开关仍待完整封印轨迹核验。详见completion-control-official-run-2026-09-26.md。

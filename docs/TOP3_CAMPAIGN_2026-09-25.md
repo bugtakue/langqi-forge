@@ -10,6 +10,12 @@
 
 ## 当前证据快照
 
+**当前唯一正式活任务：8f30652 / [a2b7ba164c06](https://arc-bench.com/runs/a2b7ba164c06)。** 旧fb84f4e双项全部终态后，保存`Langqi Forge 8f30652 - verified completion`，History16、页面19:38:38；Python/赛事网关/比赛额度，编码Pro、视觉Flash-vision-exp，运行前余额￥422.68。GitHub单题只点击一次；3m36s现场预检/依赖安装完成、Stage2生成/Stage3 pending。19:39:22 UTC首个模型响应3.182秒、输入11640/输出111，read_files成功；第二请求在途，无已观察代码写入/晋升/新成绩。Sheet未启动，不取消/重开/并行。精确ZIP及启动证据见`diagnostics/completion-control-official-run-2026-09-26.md`。本轮为旧双题正式结算与新候选上传、真实启动进展；等待正常外部运行不是阻塞。
+
+**19:37 UTC附近fb84f4e正式双项结算：5/200、1.59分、￥18.9586。** Sheet ede08b8e87bd为4/100、2.93分、Features4.2%、17m10s、2.596M Token、￥7.5704；GitHub为1/100、0.51分、￥11.3882。该非思考候选没有超过旧版，不因提速而晋升。19:43 UTC附近刷新正式综合榜仍c3887cd第10/26、17/200、6.55、￥25.0273；第三名29.17分/29.5%/￥24.9800。8f包含多项通用修订且恢复bounded，后续比较不是单变量因果识别。详见`diagnostics/nonthinking-sheet-final-evidence-2026-09-26.md`。
+
+### 历史证据快照（按记录倒序，不作当前操作依据）
+
 **下一候选已封存，未上传：8f306526796b95ad5b9233c98c02b05338a1c642。** `dist/langqi-forge-completion-control.zip`，21成员/194348字节，ZIP SHA 645f9935a02cd872dfa582bcd5bcfbf33e0a9e581e4c0f47b561c48539a28e39，合同7fc744f0a1a2108b96a36f9f415818f5d440dacfee501e0a97232333c05a2510。全量355项352通过/3跳过，独立解包实际runtime50项通过。包含完整源码保留、失败现场回传、控件状态断言及main入口开启的冻结收尾，编码仍bounded；下一次评测是整包候选比较，不声称单变量因果归因。详情`diagnostics/completion-entry-policy-2026-09-26.md`。等待ede08b8e87bd正式终态，不另开、取消或修改当前运行。
 
 **Sheet生成完成、675行封印证据核验通过；当前仍官方评分。** 2026-09-25 19:30 UTC现场ede08b8e87bd/29m39s：Stage2完成、Stage3进行，未取消/并行。fb84f4e内部7/24、1027.751秒、110响应/0错误、输入2529646/输出62948、4条保存流程最终重放通过；不是官方7分或7场景。未晋升尝试消耗74.82%输入，最后一批当前版本构建/行为通过但恰好回合耗尽，欠最终审计；不能把全部失败归于这一原因。详见`diagnostics/nonthinking-sheet-final-evidence-2026-09-26.md`。同次刷新正式综合仍旧c388第10、6.55、8.5%、￥25.0273。
