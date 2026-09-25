@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**最新8f现场6m04s：第二请求正常返回，第三请求在途。** 北京时间03:45:18刷新同一a2b7ba164c06；request2为217.534秒、输入14295/输出17054，list_files两次成功，seq24上下文122431→47384字符并保留8/8完整源码文件，seq26 request3在途。无已观察写入/晋升/新官方成绩，仍Stage2。不能把长请求误判超时、或将正常调用当作提分；不重开、不并行，继续等待同一任务。
+
 **当前唯一正式活任务：8f30652 / [a2b7ba164c06](https://arc-bench.com/runs/a2b7ba164c06)。** 旧fb84f4e双项全部终态后，保存`Langqi Forge 8f30652 - verified completion`，History16、页面19:38:38；Python/赛事网关/比赛额度，编码Pro、视觉Flash-vision-exp，运行前余额￥422.68。GitHub单题只点击一次；3m36s现场预检/依赖安装完成、Stage2生成/Stage3 pending。19:39:22 UTC首个模型响应3.182秒、输入11640/输出111，read_files成功；第二请求在途，无已观察代码写入/晋升/新成绩。Sheet未启动，不取消/重开/并行。精确ZIP及启动证据见`diagnostics/completion-control-official-run-2026-09-26.md`。本轮为旧双题正式结算与新候选上传、真实启动进展；等待正常外部运行不是阻塞。
 
 **19:37 UTC附近fb84f4e正式双项结算：5/200、1.59分、￥18.9586。** Sheet ede08b8e87bd为4/100、2.93分、Features4.2%、17m10s、2.596M Token、￥7.5704；GitHub为1/100、0.51分、￥11.3882。该非思考候选没有超过旧版，不因提速而晋升。19:43 UTC附近刷新正式综合榜仍c3887cd第10/26、17/200、6.55、￥25.0273；第三名29.17分/29.5%/￥24.9800。8f包含多项通用修订且恢复bounded，后续比较不是单变量因果识别。详见`diagnostics/nonthinking-sheet-final-evidence-2026-09-26.md`。
