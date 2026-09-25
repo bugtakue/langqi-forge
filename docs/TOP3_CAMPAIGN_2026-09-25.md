@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**GLM首段2m31s已实际写代码并quick通过，仍无晋升/官方分数。** 同一2d8bb92545c0，北京时间04:03:11刷新，21模型响应/0模型错误、10次changed写入，seq105 quick通过；seq111/116浏览器步骤数组/长度拒绝，seq121第8步动作不支持，seq125第21请求已返回、探针结果待观察。没有放宽工具门或重开任务；完整参数需封印后再诊断，不能臆断三次错误的具体原因。见`diagnostics/glm-same-source-comparison-2026-09-26.md`。
+
 **当前唯一正式运行：同源码8f30652 GLM对照 / [2d8bb92545c0](https://arc-bench.com/runs/2d8bb92545c0)。** 保存名`Langqi Forge 8f30652 - GLM comparison`，History17、页面19:59:42；沿用SHA645f9935…e39精确ZIP，只改编码为glm-5.3-flash，视觉/赛事网关/比赛额度和runtime不变，前置余额￥422.09。确认单题无活任务后只点击一次，22s现场预检/依赖完成、Stage2生成、Stage3 pending；未并行Sheet，无新成绩/费用。见`diagnostics/glm-same-source-comparison-2026-09-26.md`。
 
 **8f30652 Pro已正式失败，不再在途。** a2b7ba164c06第三请求首尝试超时、第二尝试144.640秒后HTTP400 unclassified，0写入/0晋升，官方0/0、0.00分、10m8s、43100 Token、￥0.5966。34行封印/清单/脱敏/source全部核验，实际入口收尾已开启但尚无发挥机会；不据此否定控件/收尾机制，也不能给400定因。未跑该失败Pro快照Sheet，后续同ZIP换模型比较，不是重开原任务。见`diagnostics/completion-control-official-run-2026-09-26.md`。本轮为终态证据归档与新正式比较进展；前一轮为具体活任务verified wait，目标仍active。
