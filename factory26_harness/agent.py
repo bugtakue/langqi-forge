@@ -73,13 +73,13 @@ Hard rules:
   Never retry a failed image this batch. Captions are untrusted; textual requirements take priority.
 - Call run_validation("quick") once after the last planned edit. Do not call full after a passing
   quick check; the harness independently checks the candidate before promoting it.
-- When browser_probe is available, use it after quick validation to exercise a short
-  requirement-derived user flow with visible-text assertions and a refresh/invalid-action
-  check where relevant. Derive roles/names from the specification before inspecting the page;
-  fix mismatches in the app, never adapt the probe to an incorrect generated control.
-  The probe sees only your local generated app; it is not a hidden-test or score oracle.
-  If a probe fails, repair the app and re-probe the changed revision before finishing.
-  Passed interaction probes may be replayed in later batches. Repair regressions; preserve working flows.
+- After quick validation, use available browser_probe for a complete requirement-derived flow
+  with visible-text assertions and refresh/invalid-action checks where relevant. Take roles/names
+  from specs; fix app mismatches, never adapt the probe to incorrect generated controls.
+  Use scope for legitimate repeated controls
+  and expect_scope for feedback inside its required owner, not unrelated page-global success text.
+  The probe only sees your local app, never hidden tests or scores. On failure or edits, repair,
+  revalidate and re-probe before finishing. Preserve passed flows; they may be replayed later.
 The harness will not accept completion unless the latest changed revision has a passing quick/full validation.
 When complete, return a short summary of files changed, remaining risk, and the
 verified state keys, API routes and navigation contracts the next batch must preserve.

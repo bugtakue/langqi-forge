@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .browser_probe import MAX_ASSERTIONS, MAX_STEPS, probe_local_app, validate_steps
+from .browser_probe import MAX_ASSERTIONS, MAX_STEPS, SCOPE_ROLES, probe_local_app, validate_steps
 from .checks import run_full_checks, run_quick_checks, structure_check
 from .trace import ProductionTrace
 from .visual_reference import VisualReferenceClient
@@ -435,6 +435,12 @@ class WorkspaceTools:
                             "Take specified roles/names/assertions from requirements, not generated controls. "
                             "Repair app mismatches; never relax a locator to pass. Omit index to enforce "
                             "a unique match; specify it only for intentionally repeated items."
+                            ' For legitimate duplicate controls use scope:{"role":"main"} or '
+                            'a named semantic owner such as {"role":"dialog","name":"Settings"}. '
+                            "The scope and target must each be unique. Assertions remain page-wide unless "
+                            "expect_scope is explicitly supplied; use it to verify feedback inside its owning "
+                            "form, dialog, region or row. scope locates the action, expect_scope locates "
+                            "the feedback after the action, so a closing dialog needs a different feedback owner."
                         ),
                         "parameters": {
                             "type": "object",
@@ -454,6 +460,22 @@ class WorkspaceTools:
                                             "label": {"type": "string", "description": "Exact associated form-control label. Excludes role/text."},
                                             "text": {"type": "string", "description": "Exact visible text for click/press only. Excludes role/label."},
                                             "index": {"type": "integer", "minimum": 0, "maximum": 19, "description": "Optional explicit repeated-item position. Omit for strict unique matching."},
+                                            **{
+                                                key: {
+                                                    "type": "object",
+                                                    "description": description,
+                                                    "properties": {
+                                                        "role": {"type": "string", "enum": list(SCOPE_ROLES)},
+                                                        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+                                                    },
+                                                    "required": ["role"],
+                                                    "additionalProperties": False,
+                                                }
+                                                for key, description in (
+                                                    ("scope", "Unique visible semantic owner of the control, not CSS. Control actions only."),
+                                                    ("expect_scope", "Unique visible semantic owner of post-action assertions, including after reload. Missing/ambiguous owner fails."),
+                                                )
+                                            },
                                             "path": {"type": "string"},
                                             "value": {"type": "string"},
                                             "option_by": {"type": "string", "enum": ["label", "value"]},

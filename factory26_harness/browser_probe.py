@@ -27,6 +27,11 @@ MAX_ASSERTIONS = 4
 MAX_TEXT_CHARS = 2800
 OBSERVATION_SETTLE_SECONDS = 2.0
 ALLOWED_ACTIONS = {"click", "fill", "press", "select", "check", "reload", "navigate"}
+SCOPE_ROLES = (
+    "main", "banner", "navigation", "complementary", "contentinfo", "region",
+    "form", "dialog", "alertdialog", "group", "row", "grid", "tabpanel",
+    "list", "listitem", "article",
+)
 
 
 def _probe_passed(
@@ -61,6 +66,35 @@ def _local_path(value: Any) -> str:
     return path
 
 
+def _validated_scope(value: Any) -> dict[str, str]:
+    if (
+        not isinstance(value, dict)
+        or set(value) - {"role", "name"}
+        or not isinstance(value.get("role"), str)
+        or value["role"] not in SCOPE_ROLES
+    ):
+        raise ValueError("browser scope must be a semantic container role with optional exact name")
+    result = {"role": value["role"]}
+    if "name" in value:
+        if not isinstance(value["name"], str):
+            raise ValueError("browser scope name must be a string")
+        result["name"] = _bounded_text(value["name"])
+    return result
+
+
+def _step_scopes(raw: dict[str, Any], action: str) -> dict[str, Any]:
+    scopes: dict[str, Any] = {}
+    if "scope" in raw:
+        if action in {"navigate", "reload"}:
+            raise ValueError("scope is for a control action; use expect_scope for assertions after navigation")
+        scopes["scope"] = _validated_scope(raw["scope"])
+    if "expect_scope" in raw:
+        if not (raw.get("expect_text") or raw.get("expect_absent")):
+            raise ValueError("expect_scope requires at least one text assertion")
+        scopes["expect_scope"] = _validated_scope(raw["expect_scope"])
+    return scopes
+
+
 def validate_steps(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list) or len(value) > MAX_STEPS:
         raise ValueError(f"browser steps must be an array of at most {MAX_STEPS} actions")
@@ -69,7 +103,7 @@ def validate_steps(value: Any) -> list[dict[str, Any]]:
         if not isinstance(raw, dict) or str(raw.get("action") or "") not in ALLOWED_ACTIONS:
             raise ValueError(f"browser step {index} has an unsupported action")
         action = str(raw["action"])
-        step: dict[str, Any] = {"action": action}
+        step: dict[str, Any] = {"action": action, **_step_scopes(raw, action)}
         if action == "navigate":
             step["path"] = _local_path(raw.get("path"))
         elif action != "reload":
@@ -110,7 +144,28 @@ def validate_steps(value: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _scope_target(page: Any, scope: dict[str, str]) -> Any:
+    options: dict[str, Any] = {"exact": True}
+    if "name" in scope:
+        options["name"] = scope["name"]
+    return page.get_by_role(scope["role"], **options)
+
+
+def _visible_scope_target(page: Any, scope: dict[str, str], timeout: int) -> Any:
+    owner = _scope_target(page, scope)
+    owner.wait_for(state="visible", timeout=timeout)
+    if owner.count() != 1:
+        raise RuntimeError("browser scope must match exactly one visible semantic container")
+    return owner
+
+
+def _action_owner(page: Any, step: dict[str, Any]) -> Any:
+    # Container uniqueness is independent of whether only one child matches.
+    return _visible_scope_target(page, step["scope"], 5000) if "scope" in step else page
+
+
 def _locator(page: Any, step: dict[str, Any]) -> Any:
+    page = _action_owner(page, step)
     if "role" in step:
         selection = page.get_by_role(step["role"], name=step["name"], exact=True)
     elif "label" in step:
@@ -136,10 +191,28 @@ def _controls(page: Any) -> list[dict[str, str]]:
     )
 
 
-def _page_observation(page: Any, *, expected: list[str], absent: list[str]) -> dict[str, Any]:
+def _assertion_source(
+    page: Any, body: str, expect_scope: dict[str, str] | None,
+) -> tuple[str, dict[str, Any]]:
+    if expect_scope is None:
+        return body, {}
+    owner = _visible_scope_target(page, expect_scope, 4000)
+    owner_text = owner.inner_text(timeout=4000)
+    return owner_text, {
+        "assertion_scope": dict(expect_scope),
+        "assertion_text": owner_text[:MAX_TEXT_CHARS],
+        "assertion_text_truncated": len(owner_text) > MAX_TEXT_CHARS,
+    }
+
+
+def _page_observation(
+    page: Any, *, expected: list[str], absent: list[str],
+    expect_scope: dict[str, str] | None = None,
+) -> dict[str, Any]:
     body = page.locator("body").inner_text(timeout=4000)
-    missing = [item for item in expected if item not in body]
-    unexpected = [item for item in absent if item in body]
+    owner_text, scope_evidence = _assertion_source(page, body, expect_scope)
+    missing = [item for item in expected if item not in owner_text]
+    unexpected = [item for item in absent if item in owner_text]
     current = urlsplit(page.url)
     return {
         "path": current.path + (f"?{current.query}" if current.query else ""),
@@ -148,6 +221,7 @@ def _page_observation(page: Any, *, expected: list[str], absent: list[str]) -> d
         "missing_text": missing,
         "unexpected_text": unexpected,
         "controls": _controls(page),
+        **scope_evidence,
     }
 
 
@@ -157,12 +231,15 @@ def _settled_observation(
     expected: list[str],
     absent: list[str],
     require_visible_text: bool = False,
+    expect_scope: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Wait briefly for async DOM updates before judging a local user action."""
 
     deadline = time.monotonic() + OBSERVATION_SETTLE_SECONDS
     while True:
-        observed = _page_observation(page, expected=expected, absent=absent)
+        observed = _page_observation(
+            page, expected=expected, absent=absent, expect_scope=expect_scope,
+        )
         if (
             not observed["missing_text"]
             and not observed["unexpected_text"]
@@ -298,6 +375,7 @@ def _probe_isolated_app(root: Path, port: int, validated: list[dict[str, Any]]) 
                         page,
                         expected=step["expect_text"],
                         absent=step["expect_absent"],
+                        expect_scope=step.get("expect_scope"),
                     )
                     observations.append({"action": step["action"], **observed})
                 context.close()

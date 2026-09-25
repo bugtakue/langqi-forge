@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Scoped feedback diagnostic fixture</title>
+<style>body{font:18px system-ui;margin:2rem;max-width:48rem}header,main,section,form{padding:1rem;border:1px solid #888;margin:1rem 0}button,input{font:inherit;padding:.4rem}</style>
+<header><a href="#header-choice">Sign in</a><p role="status">Saved</p></header>
+<main>
+  <h1>Scoped feedback diagnostic fixture</h1>
+  <a href="#main-choice">Sign in</a>
+  <form aria-label="Edit record" onsubmit="event.preventDefault()">
+    <label>Name <input name="record-name"></label>
+    <button type="button" id="save">Save</button>
+    <p role="status" id="form-status">Pending</p>
+  </form>
+  <section aria-label="Record"><h2>Record</h2><p id="record">No saved record</p></section>
+  <section aria-label="Repeated owner"><button type="button">Inspect first</button></section>
+  <section aria-label="Repeated owner"><button type="button">Inspect second</button></section>
+</main>
+<script>
+const form = document.querySelector('form');
+const status = document.querySelector('#form-status');
+const record = document.querySelector('#record');
+const input = form.querySelector('input');
+const previous = localStorage.getItem('factory26-scoped-feedback-fixture');
+if (previous) { input.value = previous; status.textContent = 'Saved'; record.textContent = previous; }
+document.querySelector('#save').addEventListener('click', () => {
+  if (!input.value.trim()) { status.textContent = 'Name required'; return; }
+  localStorage.setItem('factory26-scoped-feedback-fixture', input.value.trim());
+  status.textContent = 'Saved'; record.textContent = input.value.trim();
+});
+</script>
+</html>
