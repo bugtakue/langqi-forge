@@ -5,7 +5,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from factory26_harness.agent import SYSTEM_PROMPT
+from factory26_harness.agent import (
+    ACCEPTANCE_AUDIT_PROMPT,
+    COMPACT_ACCEPTANCE_AUDIT_PROMPT,
+    SYSTEM_PROMPT,
+)
 from factory26_harness.browser_probe import _locator, validate_steps
 from factory26_harness.trace import ProductionTrace
 from factory26_harness.workspace_tools import WorkspaceTools
@@ -59,6 +63,29 @@ class ProbeSemanticsTests(unittest.TestCase):
     def test_prompt_prioritizes_specified_roles_over_generated_controls(self):
         self.assertIn("a link must be an anchor with href", SYSTEM_PROMPT)
         self.assertIn("never adapt the probe", SYSTEM_PROMPT)
+
+    def test_all_prompt_forms_preserve_entry_flow_contract(self):
+        # A prompt-delivery check, not proof that the model obeys it or that a
+        # generated application meets the public navigation requirements.
+        for prompt in (
+            SYSTEM_PROMPT, ACCEPTANCE_AUDIT_PROMPT, COMPACT_ACCEPTANCE_AUDIT_PROMPT
+        ):
+            with self.subTest(prompt=prompt[:40]):
+                self.assertIn("actual landing page", prompt)
+                self.assertIn("visible controls", prompt)
+                self.assertIn("direct-entry", prompt)
+                self.assertIn("cannot replace", prompt)
+
+    def test_entry_guidance_does_not_disable_legitimate_direct_entry_checks(self):
+        # Required deep-link, reload and denied-access scenarios remain possible;
+        # this change must not turn guidance into a blanket navigate prohibition.
+        steps = [
+            {"action": "navigate", "path": "/#/records/example"},
+            {"action": "reload", "expect_text": ["Example record"]},
+        ]
+        checked = validate_steps(steps)
+        self.assertEqual(checked[0]["path"], "/#/records/example")
+        self.assertEqual(checked[1]["action"], "reload")
 
 
 if __name__ == "__main__":
