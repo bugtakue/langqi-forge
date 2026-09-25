@@ -67,3 +67,9 @@
 首次提示词改稿曾使 8,000 字符压缩回归超限；已压缩提示词而非放宽该测试。下一次官方验证只跑一个 GitHub 任务，不并行 Sheet，不把单元测试计数当作官方通过率。
 
 最终本地回归：`.venv/bin/python -m unittest discover -s tests -q -b`，153 项 / 150 通过 / 3 环境跳过，54.335 秒；`git diff --check` 通过。平台余额读取为 ￥496.92，精确单次费用未在该页面显示，不以余额的两位小数倒推四位精度账单。
+
+随后从快照历史读取到 `4f394fa6ab49` 的精确计量：329,770 Token，0.6943 CNY，0/0 GUI 测试；不是 100 个场景都已执行后失败。
+
+修复包源码 `1b3419dfca0575a47d403d776d22d7ad94b76021`，`dist/langqi-forge-efficient.zip`，17 个白名单文件 / 68,220 字节，SHA-256 `a4924bee57ba4110a2e26e8608372ee2b199031131c21c2293bf45509e808b53`。ARC-Bench 已保存为 `Langqi Forge 1b3419d - efficient protocol`，页面保存时间 `2026/9/25 06:29:00`（未标时区）；继续使用原模型、视觉模型和平台临时 Key，不使用个人 Key。
+
+新 GitHub 单题运行：https://arc-bench.com/runs/28500c67cb7d ，已通过平台环境预检、完成依赖安装并进入代理生成，尚无得分；仅启动一次，Sheet 未启动。
