@@ -116,6 +116,29 @@ class CompactionProtocolTests(unittest.TestCase):
                     pending.add(call["id"])
         self.assertFalse(pending, f"unanswered tool calls: {pending}")
 
+    def test_dense_rolling_context_reserves_current_turn_checkpoint(self):
+        self._source("frontend/large.js", "// " + "source detail " * 3500 + "\n")
+        first = _call("first-dense", "read_file", path="frontend/large.js", start_char=0)
+        read = _call("fresh-dense", "read_file", path="frontend/large.js", start_char=8000)
+        scripted = _ScriptedReplies([
+            _reply([first], content="prior discussion " * 3000),
+            _reply([read], content="C" * 350),
+        ])
+        agent = CodingAgent(scripted, self.tools, self.trace, max_turns=3)
+        agent.maximum_context_characters = DEFAULT_CONTEXT_CHARS
+        with self.assertRaises(_NextRequestCaptured):
+            agent._run("Exact assigned task data: " + "P" * 65_000,
+                       stage="implementation", requirement_ids=[])
+        request = scripted.requests[-1]
+        reminders = [m["content"] for m in request if m.get("role") == "user"
+                     and m.get("content", "").startswith("Turn-budget checkpoint:")]
+        self.assertEqual(len(reminders), 1)
+        self.assertIn("1 model turns remain", reminders[0])
+        self.assertIn("Stop broad inspection", reminders[0])
+        self.assertLessEqual(_context_characters(request), DEFAULT_CONTEXT_CHARS)
+        self.assertFalse(self._events("turn_budget_checkpoint_omitted"))
+        self._assert_delivered(scripted, [read], "opaque provider continuation")
+
     def _force_acceptance_compaction(self, messages):
         call = _call("validate", "run_validation", scope="quick")
         predicted = _result_message("validate", {

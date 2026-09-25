@@ -654,6 +654,7 @@ class CodingAgent:
         read_memory = ReadPageMemory(self.tools)
         unread_source_pages: dict[str, dict[str, Any]] = {}
         tool_schemas = self.tools.schemas()
+        context_target = self.maximum_context_characters
         valid_tool_names = {
             str(item.get("function", {}).get("name") or "") for item in tool_schemas
         }
@@ -685,7 +686,7 @@ class CodingAgent:
                 }
 
             acceptance_audit_message = audit_message(snapshot)
-            if _context_characters(messages + [acceptance_audit_message]) > self.maximum_context_characters:
+            if _context_characters(messages + [acceptance_audit_message]) > context_target:
                 before_characters = _context_characters(messages)
                 # A read immediately before validation has not yet reached the
                 # model. Keep it with its matching call, just as rolling
@@ -716,16 +717,16 @@ class CodingAgent:
                 }]
                 retained_specs, retained_spec_ids = _retained_specifications(
                     self.tools,
-                    self.maximum_context_characters
+                    context_target
                     - _context_characters(messages + [audit_message("")] + retained_observations) - 4_000,
                     in_initial_prompt=self._initial_prefill_ids,
                 )
                 if retained_specs is not None:
                     messages.append(retained_specs)
-                if _context_characters(messages + [audit_message("")] + retained_observations) > self.maximum_context_characters - 400:
+                if _context_characters(messages + [audit_message("")] + retained_observations) > context_target - 400:
                     audit_instruction = COMPACT_ACCEPTANCE_AUDIT_PROMPT
                 fixed_characters = _context_characters(messages + [audit_message("")] + retained_observations)
-                target_characters = self.maximum_context_characters - 400
+                target_characters = context_target - 400
                 snapshot_budget = min(
                     # Compaction removed the earlier complete source turns.
                     # Reuse the rolling source allowance inside the unchanged
@@ -1025,8 +1026,25 @@ class CodingAgent:
                 acceptance_audit_requested = False
                 acceptance_audit_message = None
                 acceptance_audit_revision = None
+            remaining_turns = self.max_turns - turn
+            turn_reminder = None
+            if 0 < remaining_turns <= 6:
+                turn_reminder = {
+                    "role": "user",
+                    "content": (
+                        f"Turn-budget checkpoint: {remaining_turns} model turns remain. "
+                        + _turn_budget_instruction(self.tools)
+                        + " Do not call full unless a quick check failed and you repaired it."
+                    ),
+                }
+            # Reserve control space before optional snapshots fill the context.
+            # Fresh observations and matching provider/tool fields still take
+            # precedence; an unavoidable soft overflow must not erase evidence.
+            context_target = self.maximum_context_characters - (
+                _context_characters([turn_reminder]) if turn_reminder else 0
+            )
             context_before = _context_characters(messages)
-            if context_before > self.maximum_context_characters:
+            if context_before > context_target:
                 checkpoint = {
                     "changed_files": sorted(self.tools.changed_files),
                     "change_revision": self.tools.change_revision,
@@ -1101,7 +1119,7 @@ class CodingAgent:
                 fresh_observations = _fresh_observation_messages(recent_messages)
                 retained_specs, retained_spec_ids = _retained_specifications(
                     self.tools,
-                    self.maximum_context_characters
+                    context_target
                     - _context_characters(fixed_messages + fresh_observations) - 4_000,
                     in_initial_prompt=self._initial_prefill_ids,
                 )
@@ -1111,7 +1129,7 @@ class CodingAgent:
                     fresh_observations, maximum_bytes=MAX_ROLLING_SOURCE_SNAPSHOT_BYTES // 2,
                     fits=lambda message: _context_characters(
                         fixed_messages + [message] + fresh_observations
-                    ) <= self.maximum_context_characters - 800,
+                    ) <= context_target - 800,
                 )
                 if read_memory_message is not None:
                     fixed_messages.append(read_memory_message)
@@ -1121,7 +1139,7 @@ class CodingAgent:
                     MAX_ROLLING_SOURCE_SNAPSHOT_BYTES - read_memory_bytes,
                     max(
                         0,
-                        self.maximum_context_characters
+                        context_target
                         - _context_characters(fixed_messages + fresh_observations)
                         - 800,
                     ),
@@ -1149,7 +1167,7 @@ class CodingAgent:
                     self.tools.root, snapshot_paths, maximum_bytes=snapshot_budget,
                     fits=lambda source: _context_characters(
                         with_source(source) + fresh_observations
-                    ) <= self.maximum_context_characters,
+                    ) <= context_target,
                 )
                 compacted_messages = (
                     with_source(source_snapshot) if source_snapshot_manifest else fixed_messages
@@ -1157,7 +1175,7 @@ class CodingAgent:
                 with_recent_turn = compacted_messages + recent_messages
                 retained_current_turn = (
                     _context_characters(with_recent_turn)
-                    <= self.maximum_context_characters
+                    <= context_target
                 )
                 messages = (
                     with_recent_turn if retained_current_turn
@@ -1227,19 +1245,9 @@ class CodingAgent:
                         changed,
                         turn,
                     )
-            remaining_turns = self.max_turns - turn
-            if remaining_turns <= 6:
-                instruction = _turn_budget_instruction(self.tools)
-                reminder = {
-                    "role": "user",
-                    "content": (
-                        f"Turn-budget checkpoint: {remaining_turns} model turns remain. "
-                        + instruction
-                        + " Do not call full unless a quick check failed and you repaired it."
-                    ),
-                }
-                if _context_characters(messages + [reminder]) <= self.maximum_context_characters:
-                    messages.append(reminder)
+            if turn_reminder is not None:
+                if _context_characters(messages + [turn_reminder]) <= self.maximum_context_characters:
+                    messages.append(turn_reminder)
                 else:
                     self.trace.record(
                         "turn_budget_checkpoint_omitted",
