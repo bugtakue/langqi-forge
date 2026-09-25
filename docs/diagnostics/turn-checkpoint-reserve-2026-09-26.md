@@ -22,3 +22,17 @@
 - 无真实模型调用、无上传、未更改在途c3887cd/Pro Sheet40f69fc30bd3。是否提升完成率/正式分数待同快照双题验证。
 
 现场46m39s仍Stage2/Stage3 pending；request78前两次240.151/240.135秒超时后seq553第三次尝试。未取消或重开。
+
+## 候选封包（未上传）
+
+- 干净源码`d9c86b4819e132dd8f37d4c859b837b6a1de149a`。
+- `dist/langqi-forge-turn-checkpoint.zip`，21成员/190319字节，SHA `de73d844501606960e9ab449dcf69fcfbd2a4165b549335e0f268b53172260cc`。
+- 合同SHA `42f3b29b14ce799840765a3566f6f0a8b81b2d10108592c313b1c1b08172c965`。
+- 独立解包`/private/tmp/factory26-turn-checkpoint.iHsKLO`；精确成员集合、20个runtime文件逐项SHA/大小、合同SHA、CRC及Python AST通过。从解包目录实际导入agent并重新校验清单，28项压缩/收尾进度/浏览器预算/探针语义/新流程重验测试全部通过（0.110秒）。
+- 包含b5652fc及之前候选修订，替代旧entry-flow ZIP作为最新待测包；无推送/上传/额外模型调用。
+
+## Sheet已进入官方评分
+
+同一40f69fc30bd3在49m34s现场明确Generation agent finished successfully与Evaluation in progress。seq554 request78第三次240.090秒超时，seq555—557批次失败并打开模型调用熔断；seq559—560最后两条存储回归通过；seq562 local-contract-partial、77个成功模型响应。内部7项不等于官方测试数。
+
+50m06s文件页只看到临时`.factory26-evidence-u0elvy4r.zip`，还不能称最终证据已封印。未读取该临时包、未下载评分期应用数据；下一步正常UI获取最终包，只读生成封印的三成员，不读取评分期间的业务数据。尚无Sheet最终分数/费用/新综合名次，不并行新评测。

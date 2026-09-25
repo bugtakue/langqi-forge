@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**Sheet已结束生成、正在官方评分；收尾提醒候选d9c86b4已独立封包验证，未上传。** 同一40f69fc30bd3在49m34s明确Stage2完成/Stage3 in progress；request78第三次240.090秒超时，seq557熔断、seq560两条最终回归通过、seq562 local-contract-partial/77响应，内部7项。50m06s只有临时evidence ZIP，尚未核验最终证据。最新候选`dist/langqi-forge-turn-checkpoint.zip`（21成员/190319字节，SHA de73d844501606960e9ab449dcf69fcfbd2a4165b549335e0f268b53172260cc），源码d9c86b4819e132dd8f37d4c859b837b6a1de149a；独立解包28项检查通过，替代b565旧候选。详见`diagnostics/turn-checkpoint-reserve-2026-09-26.md`。目标未完成，无新官方成绩/费用/综合排名，不并行、不重启。
+
 **收尾提醒空间预留修订已通过全量回归，尚未封包/上传。** 已封印GitHub轨迹12个省略事件中9个后续同批请求确实没有提醒，另3个末回合不计有效损失。新离线反例旧版0提醒，修订后当前提醒/完整新观察/工具配对同时保留且≤96K；318项/315通过/3环境跳过（63.317秒），不增预算或放宽门禁。详见`diagnostics/turn-checkpoint-reserve-2026-09-26.md`。现有b5652fc ZIP不含本修订，下一步干净源码重新封包；正式40f69fc30bd3仍c3887cd，46m39s request78第三次尝试，无Sheet成绩或综合排名变化证据。
 
 **Sheet内部累计7项；首批独立操作通过，第三批出现纯读取循环，未正式评分。** 同一40f69fc30bd3的seq245第二批3项已提交（20回合/1探针）；36m39s仍Stage2/Stage3 pending，latest request78/seq549。第三批首次20回合仅26次read_file、1次read_files、3次read_requirement_spec，0写入/探针；拆分单项虽有修改仍未收尾。等最终封印轨迹定因。中途首批应用实测新建/刷新、空名拒绝/重命名、复杂CSV导入/刷新及坏CSV不留半成品通过，详见`diagnostics/pro-partial-sheet-review-2026-09-26.md`。本地服务已停；不修改/重启正式应用、不新增并行评测，候选仍b5652fc，目标未完成。
