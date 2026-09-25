@@ -12,9 +12,11 @@
 
 **最新正式状态：fa7 已结束生成，仍在官方评分。** 29m35s现场Stage2完成/Stage3 Evaluation in progress。封印轨迹830行已完整归档核验：4/47原子需求，133编码返回/134 HTTP尝试，报告2,806,647总Token，最后一次HTTP400（未分类）安全熔断；无官方新GUI成绩/人民币结算。最后两个请求离线未发现孤立tool或未响应tool call，但不足以确定400原因。详见`diagnostics/fa7-generation-final-evidence.md`；不取消、不并行、不混用旧快照成绩。
 
-**后续本地候选已完成验证，尚未封包/上传**：在5620102的16步/耗尽及时失败之上，增加一层语义owner定位和独立局部反馈断言；真实Chrome合成夹具确认同名链接可区分、无关Saved不能证明表单成功、重名owner明确拒绝。全套269项/266通过/3环境跳过，64.650秒。原模型/启动预算、私有种子与验收门不变，未修改当前fa7。见`diagnostics/semantic-scope-2026-09-25.md`。
+**最新本地候选已封包，未上传**：干净源码`845386c48aaf627991c0ed653c74a27631046637` → `dist/langqi-forge-semantic-scope.zip`，20文件/185,577字节，SHA-256 `b7dbca3ad53f3d6df04b51b695539d063155c71594c27b4473f8cac33b9dcf46`。在5620102的16步/耗尽及时失败之上，增加一层语义owner定位和独立局部反馈断言；真实Chrome合成夹具确认同名链接可区分、无关Saved不能证明表单成功、重名owner明确拒绝。全套269项/266通过/3环境跳过，64.650秒。独立解包`/private/tmp/factory26-semantic-scope.wvhtau`核验逐文件成员/大小/哈希/合同、真实导入位置及scope参数回转，ZIP CRC通过。原模型/启动预算、私有种子与验收门不变，未推送GitHub、未修改当前fa7。见`diagnostics/semantic-scope-2026-09-25.md`。
 
-**最新本地包（未上传）**：干净提交`56201029336a5a317e1a763e9309f52e4e041554`，`dist/langqi-forge-complete-flows.zip`，20文件/184,410字节，SHA-256 `d474813d2b37812c3572551f1afe4fcfb3a0eef4c7942305ed11f89fa32e0887`。完整流程16步及无法重验时及时失败；全套257项/254通过/3环境跳过，62.936秒。独立解包`/var/folders/tq/9bg2q_2d3m94_m54kvqd88br0000gn/T/factory26-complete-flows-bundle.2knjktky`，ZIP完整性、19runtime文件逐项哈希/大小/成员与16步参数协议通过。未推送GitHub、未上传、未另开评测。
+**结束前现场34m30s**：同一fa7 Stage3仍Evaluation in progress。一次reload短暂跳回competition，不作终止判断；重新打开精确运行URL，确认同ID/版本、Stage2完成且Stage3仍活跃。qualifierTaskPage已保留；下轮继续该handle，不重启或并行。最后HTTP400只能确认未分类，原文按隐私规则未保留；下一轮先审查安全可观测性，不对400盲重试。
+
+**此前本地包（未上传，已由上方候选替代）**：干净提交`56201029336a5a317e1a763e9309f52e4e041554`，`dist/langqi-forge-complete-flows.zip`，20文件/184,410字节，SHA-256 `d474813d2b37812c3572551f1afe4fcfb3a0eef4c7942305ed11f89fa32e0887`。完整流程16步及无法重验时及时失败；全套257项/254通过/3环境跳过，62.936秒。独立解包`/var/folders/tq/9bg2q_2d3m94_m54kvqd88br0000gn/T/factory26-complete-flows-bundle.2knjktky`，ZIP完整性、19runtime文件逐项哈希/大小/成员与16步参数协议通过。未推送GitHub、未上传、未另开评测。
 
 **最新现场12m48s**：当前同一fa7仍Stage2。注册单项也在seq237用满20轮失败；直接证据为seq230首页两个同名Sign in链接导致strict-mode拒绝，seq235下一次计划又超过旧8步上限。登录及依赖身份的后续项已按原策略阻断；独立REQ-2-1-1正执行，最新request53/seq311，quick（含新作用域门）已过，11个观察文件在压缩快照完整保留。尚无任何已晋升批次或官方新GUI结果；完整轨迹仍待终态，不把这批quick通过当成功。当前版本不能热升级成5620102。
 
