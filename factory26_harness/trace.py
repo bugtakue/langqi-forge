@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import tempfile
 import threading
 import time
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +59,9 @@ _SECRET_TEXT_PATTERNS = (
     ),
 )
 MAX_TRACE_STRING_CHARS = 100_000
+EVIDENCE_ARCHIVE_NAME = "factory26-evidence.zip"
+MAX_EXPORT_TRACE_BYTES = 512_000_000
+MAX_EXPORT_ROW_BYTES = 8_000_000
 
 # ARC-Bench's project download omits .arc/. Mirror only operational evidence,
 # never prompts, source bodies, model responses or request arguments, to stdout.
@@ -345,3 +351,91 @@ class ProductionTrace:
                     except (BrokenPipeError, OSError):
                         # Console delivery must not change the persisted run outcome.
                         self.stdout_progress = False
+
+    def export_evidence(self, report: dict[str, Any]) -> dict[str, Any]:
+        """Export existing redacted evidence, not reconstructed model activity.
+
+        The platform omits .arc from project downloads. Keep this archive at the
+        output root, outside frontend/dist and the model's writable app trees.
+        Hold the trace lock through verification and copying so its head agrees.
+        """
+        with self._lock:
+            root = self.path.parent.parent
+            target = root / EVIDENCE_ARCHIVE_NAME
+            if self.path.parent.is_symlink() or self.path.is_symlink():
+                raise RuntimeError("evidence export requires a regular trace path")
+            if target.exists() or target.is_symlink():
+                raise RuntimeError("evidence archive already exists")
+            redacted_report = _redact(report)
+            if find_unredacted_secrets(redacted_report):
+                raise RuntimeError("evidence report failed redaction verification")
+            report_bytes = _canonical(redacted_report) + b"\n"
+            with tempfile.NamedTemporaryFile(
+                dir=root, prefix=".factory26-evidence-", suffix=".zip", delete=False,
+            ) as handle:
+                temporary = Path(handle.name)
+            try:
+                with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
+                    with archive.open("production-trace.jsonl", "w") as destination:
+                        metadata = _inspect_export_trace(self.path, destination)
+                    if metadata["rows"] != self._sequence or metadata["head"] != self._previous_hash:
+                        raise RuntimeError("evidence trace no longer matches the writer checkpoint")
+                    manifest = {
+                        "schema": "langqi-forge-evidence-v1",
+                        "trace": metadata,
+                        "report_sha256": hashlib.sha256(report_bytes).hexdigest(),
+                        "run_id": redacted_report.get("run_id"),
+                        "status": redacted_report.get("status"),
+                        "source": redacted_report.get("source"),
+                        "independent_gui_evaluation_included": False,
+                        "note": "Exact sealed trace snapshot; operational evidence is not an official score.",
+                    }
+                    archive.writestr("harness-report.json", report_bytes)
+                    archive.writestr("evidence-manifest.json", _canonical(manifest) + b"\n")
+                archive_digest = hashlib.sha256()
+                with temporary.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(65_536), b""):
+                        archive_digest.update(chunk)
+                archive_hash = archive_digest.hexdigest()
+                size = temporary.stat().st_size
+                # Atomic create-if-absent: unlike replace(), a concurrent
+                # exporter cannot overwrite an archive created after preflight.
+                os.link(temporary, target, follow_symlinks=False)
+            finally:
+                temporary.unlink(missing_ok=True)
+            return {
+                "status": "exported", "path": EVIDENCE_ARCHIVE_NAME,
+                "sha256": archive_hash, "bytes": size, "trace": metadata,
+            }
+
+
+def _inspect_export_trace(path: Path, destination: Any) -> dict[str, Any]:
+    """Verify bounded rows in a stream; never load the entire long run in RAM."""
+    previous = "GENESIS"
+    count = size = 0
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while line := handle.readline(MAX_EXPORT_ROW_BYTES + 1):
+            size += len(line)
+            if len(line) > MAX_EXPORT_ROW_BYTES or size > MAX_EXPORT_TRACE_BYTES:
+                raise RuntimeError("evidence trace exceeds export limits")
+            row = json.loads(line)
+            count += 1
+            if not isinstance(row, dict) or (
+                row.get("sequence") != count
+                or row.get("trace_version") != 2
+                or row.get("previous_hash") != previous
+            ):
+                raise RuntimeError("evidence trace sequence or chain is invalid")
+            candidate = {key: value for key, value in row.items() if key != "hash"}
+            expected = hashlib.sha256(_canonical(candidate)).hexdigest()
+            if row.get("hash") != expected or find_unredacted_secrets(row):
+                raise RuntimeError("evidence trace integrity or redaction is invalid")
+            previous = expected
+            digest.update(line)
+            # Copy exactly the bytes just verified, never reopen the mutable
+            # source later. A failure leaves only the private temporary archive.
+            destination.write(line)
+    if not count:
+        raise RuntimeError("cannot export an empty trace")
+    return {"rows": count, "bytes": size, "sha256": digest.hexdigest(), "head": previous}

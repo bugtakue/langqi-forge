@@ -1,6 +1,6 @@
 # Langqi Forge · Factory26 初赛候选
 
-> 最新状态（2026-09-25）：`15242ed` 的 [GitHub 复测](https://arc-bench.com/runs/4f394fa6ab49)已结束，26m46s / 0 分；代码写出并通过 quick 构建后因网关 HTTP 400 终止。下一版修复模型续接字段丢失，增加安全错误分类，并按规格长度拆批、减少无效读图。最新本地 153 项测试 / 150 通过 / 3 环境跳过，不代表官方通过率。精确复现、成本边界与后续运行见[改进记录](docs/IMPROVEMENT_REVIEW_2026-09-25.md)。
+> 当前目标（2026-09-25）：以同一参赛快照完成两题并进入正式综合榜前三，尚未达到。`1b3419d` 的 [GitHub 运行](https://arc-bench.com/runs/28500c67cb7d)仍在生成阶段，已晋升注册与登录两项，其中登录有本地行为探针通过记录，但整题尚无官方 GUI 得分。下一候选已修订需求保留和工具提示；另补运行结束后的脱敏证据导出，供项目下载遗漏 `.arc` 时取回真实轨迹。实时接续依据见[前三持续台账](docs/TOP3_CAMPAIGN_2026-09-25.md)，历史成本与失败记录见[改进记录](docs/IMPROVEMENT_REVIEW_2026-09-25.md)。本地测试不代表官方通过率。
 
 琅岐岛民的 ARC-Bench 软件生成智能体。本分支采用**通用、模型驱动**的正式参赛路径：读取比赛提供的需求，生成可部署的前后端，留下可核验的生产轨迹。它不是循济产品本体。
 
@@ -80,6 +80,7 @@ export VISUAL_BASE_URL='https://your-vision-gateway.example/v1'
 - `.arc/compiled-plan.json`：需求批次与来源哈希；
 - `.arc/production-trace.jsonl`：Prompt、模型、工具和迭代的脱敏哈希链；
 - `.arc/harness-report.json`：本地构建/启动结果、模型调用次数和失败原因。
+- `factory26-evidence.zip`：运行结束后导出的脱敏原轨迹、报告与哈希清单，位于输出根目录而非网页静态目录；成功/失败运行均导出。平台下载包含性仍须正式运行后核验，不能据本地合同测试宣称旧轨迹已取回。
 - `local-contract-partial` 表示至少一批需求已实现、本地应用可构建启动，但报告列出的需求仍失败；它仅允许独立 GUI 测试获得可能的部分通过数，不是整题完成或官方分数。
 - 报告中的 `model_requests` 是成功返回的模型请求数，`model_http_attempts` 包含重试；两者不能混作真实费用。HTTP 408/425/429/5xx 最多尝试 3 次；`Retry-After` 等待上限默认 60 秒，可用 `FACTORY26_MAX_RETRY_AFTER_SECONDS` 在 0–120 秒内调整。认证等非临时错误不重试。
 - `.arc/runner-events.jsonl`、`.arc/traceability/`：由官方 SDK 写入的状态及追溯数据；工作区 Git 历史记录通用 scaffold 和生成批次。

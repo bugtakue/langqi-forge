@@ -1197,6 +1197,8 @@ children:
             )
             self.assertEqual(status, 0, report)
             self.assertEqual(report["status"], "local-contract-passed")
+            self.assertEqual(report["evidence_export"]["status"], "exported")
+            self.assertTrue((output / report["evidence_export"]["path"]).is_file())
             self.assertEqual(len(report["initial_checks"]), 6)
             self.assertTrue(all(item["passed"] for item in report["initial_checks"]))
             self.assertEqual(report["implemented_requirements"], ["REQ-1"])
@@ -1249,8 +1251,26 @@ children:
                 (output / ".arc" / "harness-report.json").read_text()
             )
             self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["evidence_export"]["status"], "exported")
+            self.assertTrue((output / report["evidence_export"]["path"]).is_file())
             self.assertEqual(report["implemented_requirements"], [])
             self.assertNotIn("Example", (output / "frontend/src/app.js").read_text())
+
+    def test_evidence_export_failure_does_not_discard_a_working_application(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = self._requirement_dir(root)
+            output = root / "output"
+            with patch.object(qualifier, "OpenAIChatClient", ScriptedModel), patch.object(
+                qualifier.ProductionTrace, "export_evidence",
+                side_effect=OSError("private error text must not be echoed"),
+            ):
+                status = qualifier.main([str(requirement_dir), "--output-dir", str(output)])
+            report = json.loads((output / ".arc/harness-report.json").read_text())
+            self.assertEqual(status, 0)
+            self.assertEqual(report["status"], "local-contract-passed")
+            self.assertEqual(report["evidence_export"], {"status": "failed", "error_type": "OSError"})
+            self.assertFalse((output / "factory26-evidence.zip").exists())
 
     def test_preexisting_output_is_rejected_before_model_or_file_changes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

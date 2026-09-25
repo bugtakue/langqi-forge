@@ -951,7 +951,16 @@ def main(argv: list[str] | None = None) -> int:
             report["visual_requests"] = visual_client.calls
             report["visual_prompt_tokens"] = visual_client.prompt_tokens
             report["visual_completion_tokens"] = visual_client.completion_tokens
+        try:
+            report["evidence_export"] = trace.export_evidence(report)
+        except Exception as exc:
+            # Evidence delivery failure must be visible, but must not discard a
+            # working application or masquerade as a successful export.
+            report["evidence_export"] = {
+                "status": "failed", "error_type": type(exc).__name__,
+            }
         _write_json(output_dir / ".arc" / "harness-report.json", report)
+        print("[factory26:evidence] " + json.dumps(report["evidence_export"], sort_keys=True), flush=True)
         print(
             f"[factory26] {report['status']}; model_requests={report.get('model_requests', 0)}",
             flush=True,
