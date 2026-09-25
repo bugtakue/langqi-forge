@@ -338,18 +338,18 @@ class WorkspaceTools:
                 "type": "function",
                 "function": {
                     "name": "write_file",
-                    "description": "Create or fully replace one UTF-8 source file under frontend/ or backend/.",
+                    "description": "Create or fully replace one frontend/ or backend/ UTF-8 file. Supply expected_sha256 before content.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "path": {"type": "string"},
-                            "content": {"type": "string"},
                             "expected_sha256": {
                                 "type": "string",
-                                "description": "Required when replacing an existing file; obtain it from read_file.",
+                                "description": "Latest observed read/write SHA for existing files; empty string only for a new file. Never omit.",
                             },
+                            "content": {"type": "string"},
                         },
-                        "required": ["path", "content"],
+                        "required": ["path", "expected_sha256", "content"],
                     },
                 },
             },

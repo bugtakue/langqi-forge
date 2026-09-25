@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**67m39s现场与最小工具合同修订。** Pro request72第三尝试101.243秒正常返回，但seq540完整文件写入因遗漏expected_sha256被拒；组织组尚未晋升，最新request81/seq591，仍内部3/47、Stage2/Stage3 pending。当前本地仅把已有哈希要求同步到write_file的required字段并放在content之前，新文件使用空字符串，运行时覆盖保护不变。旧schema回归先失败、新schema通过，最终全量315项/312通过/3环境跳过，64.853秒；待重新封包，b49aee2旧ZIP不含此次修订。见`diagnostics/write-precondition-contract-2026-09-25.md`。不把本地测试当作官方增分，不热改、取消、重开或并行。
+
 **最新现场53m47s：Pro退出/改密未晋升，进入组织批次，内部仍3/47。** seq503在20回合后completed=false/committed=false；此前静态/构建通过，但seq494浏览器实际失败（第11步断言缺失、null.textContent页面错误），不把失败简化为回合不足。seq504开始REQ-2-1-1/REQ-2-1-2/REQ-2-2-1，最新request72/seq533。同一359dd7e72ca7仍Stage2/Stage3 pending，无新官方成绩或人民币费用；71个可见编码响应报告输入1,541,010/输出150,458，不是最终总账。待测包仍b49aee2，本轮只补确切失败证据，不改runtime、不重开、不并行。详情见`diagnostics/pro-comparison-2026-09-25.md`。
 
 **最新现场45m26s：Pro恢复账号单项已晋升，内部3/47。** seq362记录9回合/1次行为探针/committed=true；seq365开始退出与改密，最新request56/seq418于15:24:27 UTC发出。仍同一359dd7e72ca7、Stage2/Stage3 pending，无官方新成绩/人民币费用。43m10s可见51个编码响应累计输入1,088,373/输出110,750，不含后续与视觉，不把超时未知用量当0。上轮为独立检查进展，本轮为确切活任务核验等待和新增晋升证据；未改runtime或重新封包，不重开、不并行，待测包仍b49aee2。
