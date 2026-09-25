@@ -48,6 +48,26 @@ def _batch_content_budgets(lengths: list[int], total_budget: int) -> list[int]:
     return budgets
 
 
+def _compact_browser_execution_error(value: Any, text_limit: int) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    step = value.get("step")
+    return {"execution_error": {
+        "step": max(0, min(step, 1_000_000_000)) if type(step) is int else 0,
+        **{key: value[key][:text_limit] if isinstance(value.get(key), str) else ""
+           for key in ("type", "message")},
+    }}
+
+
+def _compact_failure_scene_flags(value: dict[str, Any], text_limit: int) -> dict[str, Any]:
+    flags = {}
+    if value.get("observation_only") is True:
+        flags["observation_only"] = True
+    if isinstance(value.get("snapshot_unavailable"), str):
+        flags["snapshot_unavailable"] = value["snapshot_unavailable"][:text_limit]
+    return flags
+
+
 def _compact_browser_result(result: dict[str, Any], original_chars: int) -> str:
     """Keep probe diagnostics and the latest state within the serialized limit."""
 
@@ -85,10 +105,12 @@ def _compact_browser_result(result: dict[str, Any], original_chars: int) -> str:
         }
         if "error" in result:
             summary["error"] = text(result["error"])
+        summary.update(_compact_browser_execution_error(result.get("execution_error"), text_limit))
         if isinstance(latest, dict):
             visible_text = text(latest.get("visible_text"), min(2800, text_limit * 6))
             summary["observations"] = [{
                 "action": text(latest.get("action")),
+                **_compact_failure_scene_flags(latest, text_limit),
                 "path": text(latest.get("path")),
                 "visible_text": visible_text,
                 "visible_text_truncated": (

@@ -294,6 +294,41 @@ def _stop_server(process: subprocess.Popen[Any]) -> None:
             pass
 
 
+def _same_probe_origin(page: Any, base_url: str) -> bool:
+    current, allowed = urlsplit(page.url), urlsplit(base_url)
+    return (current.scheme, current.netloc) == (allowed.scheme, allowed.netloc)
+
+
+def _observe_probe_step(
+    page: Any, step: dict[str, Any], base_url: str,
+) -> dict[str, Any]:
+    """Return a failed action's local scene without retrying or validating it."""
+    try:
+        _perform(page, step, base_url)
+        if not _same_probe_origin(page, base_url):
+            raise RuntimeError("browser left the local generated application")
+        return _settled_observation(
+            page, expected=step["expect_text"], absent=step["expect_absent"],
+            expect_scope=step.get("expect_scope"),
+        )
+    except Exception as exc:
+        failed: dict[str, Any] = {
+            "execution_error": {"type": type(exc).__name__, "message": str(exc)[:1000]},
+            "observation_only": True,
+            "missing_text": [], "unexpected_text": [],
+        }
+        # Never inspect another origin, replay the failed action, or reuse a
+        # failing assertion scope. This scene is diagnostic, not a passed test.
+        try:
+            if _same_probe_origin(page, base_url):
+                failed.update(_page_observation(page, expected=[], absent=[]))
+            else:
+                failed["snapshot_unavailable"] = "outside the generated app origin"
+        except Exception as snapshot_exc:
+            failed["snapshot_unavailable"] = type(snapshot_exc).__name__
+        return failed
+
+
 def probe_local_app(root: Path, port: int, steps: list[dict[str, Any]]) -> dict[str, Any]:
     """Exercise an isolated copy so self-tests cannot consume evaluator seed data."""
 
@@ -345,6 +380,8 @@ def _probe_isolated_app(root: Path, port: int, validated: list[dict[str, Any]]) 
         blocked_hosts: set[str] = set()
         page_errors: list[str] = []
         observations: list[dict[str, Any]] = []
+        execution_error = None
+        completed_steps = 0
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
             try:
@@ -373,18 +410,13 @@ def _probe_isolated_app(root: Path, port: int, validated: list[dict[str, Any]]) 
                     page, expected=[], absent=[], require_visible_text=True
                 )
                 observations.append({"action": "open", **initial})
-                for step in validated:
-                    _perform(page, step, base_url)
-                    current = urlsplit(page.url)
-                    if current.hostname != "127.0.0.1" or current.port != port:
-                        raise RuntimeError("browser left the local generated application")
-                    observed = _settled_observation(
-                        page,
-                        expected=step["expect_text"],
-                        absent=step["expect_absent"],
-                        expect_scope=step.get("expect_scope"),
-                    )
+                for index, step in enumerate(validated, 1):
+                    observed = _observe_probe_step(page, step, base_url)
                     observations.append({"action": step["action"], **observed})
+                    if observed.get("execution_error"):
+                        execution_error = {"step": index, **observed["execution_error"]}
+                        break
+                    completed_steps += 1
                 context.close()
             finally:
                 browser.close()
@@ -396,15 +428,17 @@ def _probe_isolated_app(root: Path, port: int, validated: list[dict[str, Any]]) 
         if not initial["visible_text"].strip():
             assertion_failures.append({"step": 0, "missing": ["visible application text"], "unexpected": []})
         return {
-            "ok": _probe_passed(assertion_failures, page_errors, blocked_hosts),
+            "ok": execution_error is None and _probe_passed(assertion_failures, page_errors, blocked_hosts),
+            "execution_error": execution_error,
             "observations": observations,
             "assertion_failures": assertion_failures,
             "page_errors": page_errors[:10],
             "blocked_external_hosts": sorted(blocked_hosts)[:10],
-            "behavioral_checks": len(validated),
+            "behavioral_checks": completed_steps,
+            "attempted_behavioral_checks": completed_steps + int(execution_error is not None),
             "behavioral_assertions": sum(
                 len(step["expect_text"]) + len(step["expect_absent"])
-                for step in validated
+                for step in validated[:completed_steps]
             ),
         }
     finally:
