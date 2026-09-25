@@ -32,3 +32,9 @@
 本候选合并完整源码保留、失败现场回传、控件状态断言及入口显式启用的冻结收尾，并使用bounded编码策略。不是相对fb84f4e的单变量实验，不能把未来变化全部归因于某一个机制。
 
 2026-09-25 19:43 UTC附近刷新正式Hackathon/全部任务/全部模型：旧c3887cd仍第10/26、17/200（8.5%）、6.55分、￥25.0273。前三分别55.27、36.34、29.17分；第三名29.5%、￥24.9800。新8f运行暂无官方分数/费用，不把单任务名次或本地回归当目标完成。Goal保持active。
+
+## 8m31s活任务核验
+
+北京时间03:47:25刷新同一stdout：19:46:59 UTC seq27为request3首尝试240.122秒TimeoutError；19:47:00 seq28为原策略第二尝试，最多3次不变。该任务仍Stage2、Stage3 pending，不因一次请求失败判整任务终止；无手工重开/取消/并行，也没有已观察到的代码写入、需求晋升或新成绩。
+
+只读核查agent.py：压缩保留messages[:2]，初始预装完整需求不会再列入retained_specification_ids，故seq24空列表本身不是丢需求证据。重新执行test_prefilled_specifications、test_retained_specifications、test_compaction_protocol共18项，0.100秒全通过；这是协议核查，不是实际生成质量或控件浏览器测试。未修改运行时。本轮按confirmed-live句柄核验等待，非阻塞；下一步仍读取同一a2b7ba164c06。
