@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**最新待测包（未上传）**：干净源码`21eee98508f206dd179c05da822357d2867f204a` → `dist/langqi-forge-range-contract.zip`，20文件/187,229字节，SHA `d33dc663deeee314e9dfe068d9928238b590abde046119a90440791cf13a783d`。独立解包`/private/tmp/factory26-range-contract.5zIJS1`核验19runtime精确成员/哈希/大小、ZIP CRC、真实导入路径及范围完整/400行截断行为；合同SHA `8f6d0f4740dfc4bcb8b5686e9bbf24823be3352563e22fee52d7416f82afc30d`。包括阶段提示/事务/hash/范围四项，替代此前af7待测包；未推送、未上传、未新增评测。下方“未封包”保留为本轮较早时点，不是下一轮操作依据。
+
 **最新：12cc147已结束生成、进入Stage3官方评分。** 13:49:57 UTC导出完整封印证据，5/47内部原子需求、169编码响应/169HTTP尝试、报告3,878,545 Token，因输入预算3,600,000门在最后响应后触发而停止；不是余额耗尽或HTTP400。完整1136行链、清单、CRC与脱敏核验通过，精确归档见`diagnostics/12cc-generation-final-evidence.md`。尚无本轮官方GUI成绩/人民币费用/新综合排名，Sheet未运行，不并行、不取消。
 
 **本回合实质改进：源码范围分义，尚未封包上传。** 22次线上显式范围完整返回仍content_truncated=true，工具旧说明要求继续读；新增requested_range_complete区分请求范围与文件后文，保持实际正文、SHA、读写/完整需求/验收门不变。七项新测试，聚焦77通过、全量295项中292通过/3环境跳过（63.740秒）。完整轨迹另证实seq544的合法`/#/signin`误拒正是af7修订范围。当前本地包含阶段收尾/事务/hash/范围四项，不把旧af7包当成包含最新范围修订；必须重新封包。详情见`diagnostics/source-range-contract-2026-09-25.md`。

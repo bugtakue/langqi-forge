@@ -31,3 +31,5 @@
 - `git diff --check` 通过。
 
 没有新增真实模型调用，没有把夹具测试当正式成绩；减少多少读取、是否提高GUI通过率和人民币效率须由后续同版本正式评测验证。
+
+已从干净提交`21eee98508f206dd179c05da822357d2867f204a`封包：`dist/langqi-forge-range-contract.zip`，20文件/187,229字节，SHA `d33dc663deeee314e9dfe068d9928238b590abde046119a90440791cf13a783d`。独立解包与真实导入、全部19runtime哈希/大小、精确成员/CRC和范围分义冒烟通过，合同SHA `8f6d0f4740dfc4bcb8b5686e9bbf24823be3352563e22fee52d7416f82afc30d`。未上传；当前官方12cc147仍评分中。
