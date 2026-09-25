@@ -13,7 +13,7 @@ from .model import OpenAIChatClient
 from .requirements import RequirementNode
 from .trace import ProductionTrace
 from .visual_reference import referenced_images
-from .workspace_tools import WorkspaceTools
+from .workspace_tools import WorkspaceTools, _batch_content_budgets
 
 SYSTEM_PROMPT = """You are the implementation worker inside a scored ARC-Bench harness.
 Your job is to EDIT the provided frontend/ and backend/ so the assigned requirements work end to end.
@@ -113,6 +113,7 @@ the relevant missing source before making a claim it cannot support. Do not use
 COMPACT_ACCEPTANCE_AUDIT_PROMPT = """Audit requirements against validated source: UI action, backend validation, atomic persistence, immediate/refresh state, accessible copy, local feedback and invalid/terminal transitions. If browser_probe is available, exercise a high-risk assigned action with a visible-text assertion; inspection alone is not evidence. Read missing source when relevant. Fix gaps, revalidate and re-probe edits; otherwise reply `AUDIT PASS:` with unverified behavior and a state/API/navigation handoff. Never claim a missing requirement is complete."""
 
 MAX_SOURCE_SNAPSHOT_BYTES = 12_000
+MAX_ROLLING_SOURCE_SNAPSHOT_BYTES = 36_000
 MAX_SOURCE_SNAPSHOT_FILES = 24
 
 STARTER_SOURCE_PATHS = (
@@ -309,11 +310,10 @@ def _source_snapshot(
         sources.append((relative, raw, hashlib.sha256(raw).hexdigest()))
     sections: list[str] = []
     manifest: list[dict[str, Any]] = []
-    for index, (relative, raw, digest) in enumerate(sources):
-        # Reserve an equal share for every remaining file so one large source
-        # cannot hide all later files from the acceptance audit.
-        available_per_file = remaining // (len(sources) - index)
-        included = min(len(raw), available_per_file)
+    budgets = _batch_content_budgets([len(raw) for _, raw, _ in sources], remaining)
+    for (relative, raw, digest), included in zip(sources, budgets):
+        # Keep small files whole, sharing their unused capacity among larger
+        # files. Path order must not waste budget or needlessly omit a middle.
         truncated = included < len(raw)
         if not truncated:
             excerpt = raw.decode("utf-8", errors="replace")
@@ -344,7 +344,6 @@ def _source_snapshot(
                 "truncated": truncated,
             }
         )
-        remaining -= included
     if omitted_paths:
         shown = ", ".join(omitted_paths[:8])
         remainder = f" and {len(omitted_paths) - 8} more" if len(omitted_paths) > 8 else ""
@@ -922,7 +921,7 @@ class CodingAgent:
                 # Optional source snapshots must not displace observations that
                 # have not yet been sent to the model even once.
                 snapshot_budget = min(
-                    MAX_SOURCE_SNAPSHOT_BYTES,
+                    MAX_ROLLING_SOURCE_SNAPSHOT_BYTES,
                     max(
                         0,
                         self.maximum_context_characters
@@ -981,6 +980,9 @@ class CodingAgent:
                     fresh_observation_messages=len(fresh_observations),
                     soft_limit_exceeded=_context_characters(messages) > self.maximum_context_characters,
                     source_snapshot=source_snapshot_manifest,
+                    source_snapshot_bytes=sum(row["included_bytes"] for row in source_snapshot_manifest),
+                    source_snapshot_files=len(source_snapshot_manifest),
+                    source_snapshot_complete_files=sum(not row["truncated"] for row in source_snapshot_manifest),
                     retained_specification_ids=retained_spec_ids,
                 )
             if (

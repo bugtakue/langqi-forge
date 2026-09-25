@@ -82,6 +82,7 @@ _PROGRESS_FIELDS = {
     "before_characters", "after_characters", "retained_current_turn",
     "fresh_observation_messages", "soft_limit_exceeded",
     "retained_specification_ids",
+    "source_snapshot_bytes", "source_snapshot_files", "source_snapshot_complete_files",
 }
 
 

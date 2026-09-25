@@ -455,6 +455,33 @@ class ModelLoopTests(unittest.TestCase):
             self.assertIn("canonical", snapshot)
             self.assertIn("read_file", snapshot)
 
+    def test_source_snapshot_redistributes_unused_small_file_capacity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            samples = {"backend/large.mjs": "B" * 11_000,
+                       "backend/tiny.mjs": "b" * 50,
+                       "frontend/src/app.js": "F" * 14_000,
+                       "frontend/src/tiny.js": "f" * 50}
+            for relative, content in samples.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            for order in (list(samples), list(reversed(samples))):
+                with self.subTest(order=order):
+                    snapshot, manifest = _source_snapshot(root, order, maximum_bytes=30_000)
+                    self.assertFalse(any(item["truncated"] for item in manifest))
+                    self.assertEqual(sum(item["included_bytes"] for item in manifest), 25_100)
+                    for content in samples.values():
+                        self.assertIn(content, snapshot)
+                    _, tight = _source_snapshot(root, order, maximum_bytes=12_000)
+                    self.assertEqual(sum(item["included_bytes"] for item in tight), 12_000)
+                    self.assertTrue(all(item["included_bytes"] > 0 for item in tight))
+                    self.assertEqual(
+                        {item["path"]: item["included_bytes"] for item in tight},
+                        {"backend/large.mjs": 5_950, "backend/tiny.mjs": 50,
+                         "frontend/src/app.js": 5_950, "frontend/src/tiny.js": 50},
+                    )
+
     def test_audit_snapshot_lists_omitted_files_when_budget_is_tiny(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1416,9 +1443,11 @@ class ModelLoopTests(unittest.TestCase):
             def __init__(self) -> None:
                 self.turn = 0
                 self.saw_current_source = False
+                self.context_sizes: list[int] = []
 
             def complete(self, messages, _tools):
                 self.turn += 1
+                self.context_sizes.append(len(json.dumps(messages, ensure_ascii=False)))
                 self.saw_current_source = self.saw_current_source or any(
                     message.get("role") == "user"
                     and "<untrusted_current_sources>" in message.get("content", "")
@@ -1434,7 +1463,7 @@ class ModelLoopTests(unittest.TestCase):
                             "function": {
                                 "name": "write_file",
                                 "arguments": json.dumps(
-                                    {"path": path, "content": "x" * 5_000}
+                                    {"path": path, "content": "x" * 60_000}
                                 ),
                             },
                         },
@@ -1490,7 +1519,7 @@ class ModelLoopTests(unittest.TestCase):
             )
             trace = ProductionTrace(root / ".arc" / "trace.jsonl")
             model = RetentionModel()
-            with patch.dict(os.environ, {"FACTORY26_AGENT_CONTEXT_CHARS": "16000"}):
+            with patch.dict(os.environ, {"FACTORY26_AGENT_CONTEXT_CHARS": "96000"}):
                 result = CodingAgent(
                     model, WorkspaceTools(root, trace, 3924), trace, max_turns=4
                 ).implement(
@@ -1508,6 +1537,7 @@ class ModelLoopTests(unittest.TestCase):
                 )
             self.assertTrue(result.completed)
             self.assertTrue(model.saw_current_source)
+            self.assertLessEqual(max(model.context_sizes), 96_000)
             rows = [
                 json.loads(line)
                 for line in trace.path.read_text(encoding="utf-8").splitlines()
@@ -1515,6 +1545,17 @@ class ModelLoopTests(unittest.TestCase):
             compacted = [
                 row for row in rows if row["event"] == "agent_context_compacted"
             ]
+            self.assertEqual(
+                max(sum(item["included_bytes"] for item in row["payload"]["source_snapshot"])
+                    for row in compacted),
+                36_000,
+            )
+            audits = [row for row in rows if row["event"] == "agent_acceptance_audit_requested"]
+            self.assertTrue(audits)
+            self.assertTrue(all(
+                sum(item["included_bytes"] for item in row["payload"]["snapshot"]) <= 12_000
+                for row in audits
+            ))
             self.assertTrue(
                 any(
                     any(
