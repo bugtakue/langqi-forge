@@ -21,3 +21,12 @@
 ## 版本边界
 
 本地a31cfa9 ZIP不包含本次提示。正式运行仍是c3887cd：GitHub已结算11/100，Sheet仍40f69fc30bd3，不受这次本地编辑影响。下一次参赛须重新从干净源码封包，并记录新源码与ZIP身份，不能把旧包改名冒充新包。
+
+## 已封包，未上传
+
+- 干净源码：`b5652fcd0809a56d35d93047fb8a4ea408280a43`。
+- ZIP：`dist/langqi-forge-entry-flow.zip`，21成员、190,187字节；SHA `fc36f558587274669c8bd0112b99108d03f1f329141cb57f703f28cc9ee7f0f9`。
+- 包内合同SHA：`cf029f1dacbc14a0521283d9da7b3c665e5ae1dfa6b86ff6f3337acbbe3ca0d3`。
+- 独立解包：`/private/tmp/factory26-entry-flow.DfHiIT`；精确20个runtime成员及清单、大小、逐文件SHA、合同SHA、ZIP CRC、Python语法通过。
+- 从该解包目录真实导入agent（排除源码根目录导入），26项入口/压缩/本地导航/写入前置条件/候选新流程重验检查通过，耗时0.070秒。仅离线协议与合同测试，无新增远端模型调用。
+- 此包包含a31cfa9及更早候选修订，替代其作为最新待测包；不代表正式评分已改善。源码没有推送，ZIP没有上传，当前Sheet未取消、重开或并行。
