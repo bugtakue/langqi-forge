@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**最新现场14m43s：12cc147内部已晋升2/47，非官方GUI成绩。** 注册单项seq239：19回合、1次实际探针、behavioral_probe_verified=true、committed=true；其间seq222/227的计划超过步数/断言数上限被拒，未偷放宽规则。登录单项seq290：8回合、2次探针、同样已验证并晋升，真实改动backend/server.mjs。seq287/288重放已收集注册胶囊通过，seq292保存第二条胶囊；这只覆盖已收集流程，非注册/登录所有情形。当前已进入恢复账号/退出/改密码三项，最新request47/seq311于13:20:51 UTC发出。仍是 https://arc-bench.com/runs/1844901550a1 ，Stage2 / Stage3 pending；无新官方分数、人民币费用或排名，不新增评测。当前回合取得新晋升/回归证据并核验同一活运行，没有额外runtime修改；此前候选包保持未上传。
+
 **12cc147首批失败已取得新证据**：13:15:27/36 UTC的seq112/118两次browser_probe返回ok=true；13:16:00之前第三次seq127在step5缺少`Invalid credentials`，无page_errors，整批未晋升。seq129正确触发“探针耗尽且当前版本未验证”停止，seq130标明17回合、3次探针、committed=false；seq131拆批，seq132开始单项注册，最新可见request19/seq141于13:16:03发出。不能用前两次通过抵消后来失败，也不能从stdout推定第三个探针具体输入或错误属于应用还是操作计划；完整轨迹待生成结束。fa7留存公开登录规格确实要求这一精确通用错误文本，不是任意追加要求。上一回合为本地修复进展，本回合为新正式失败证据、候选制品核验及对同一活任务的等待。
 
 **本地候选包已就绪，未上传**：干净源码`eedc8f53f7140bc98b13ad9a579eedeb0054e5f0` → `dist/langqi-forge-phase-guidance.zip`，20文件/186,643字节，SHA-256 `2e72d77311575c1f71f8cf6074c5e8817fb4f8b484d3380b196d683e4e3119a8`。独立解包`/private/tmp/factory26-phase-guidance.v8qWWX`核验成员/逐文件哈希和大小/合同/真实导入位置及五种提示状态，ZIP CRC通过。源码未推送；目前不上传、不并行、不改变12cc147的身份。详情见`diagnostics/turn-budget-guidance-2026-09-25.md`。下方“未打包”仅是之前时点。
