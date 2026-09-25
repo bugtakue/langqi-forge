@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**最新现场85m55s（北京时间2026-09-26 00:05）：组织浏览单项已晋升，内部4/47。** seq755浏览器探针通过，seq760—761两个旧行为胶囊全部重放通过，seq762完整检查通过，seq763在15回合/1探针后committed=true；seq765保存第三个胶囊。seq766开始组织/团队创建REQ-2-1-2、REQ-2-2-1，最新request107/seq793。同一Pro仍Stage2/Stage3 pending，无新官方成绩/费用/综合排名。106个可见编码响应累计输入2,363,938/输出248,053，仅为报告用量。本轮取得新增晋升证据、没有叠加runtime或另起评测，待测包仍a31cfa9。详见`diagnostics/pro-comparison-2026-09-25.md`。
+
 **最新现场77m52s：Pro组织原组20回合没有代码落地、没有浏览器验收，已自动拆分。** seq658 changed_files=[]、completed=false、committed=false、probe calls=0；seq659拆分，seq660开始组织浏览REQ-2-1-1，最新request91/seq676。仍内部3/47、同一359dd7e72ca7、Stage2/Stage3 pending，无官方新分数/费用；不根据源码快照一个字段误判整个上下文可见内容。约15:55 UTC正式综合榜全部任务/模型再次确认第19/24、旧Flash0分，第三名29.17；本轮为新失败证据与确切在途核验，不追加runtime改动/上传/评测。最新待测包仍a31cfa9，见下方精确身份及`diagnostics/pro-comparison-2026-09-25.md`。
 
 **最新待测包已封装并独立验收，未上传。** 源码`a31cfa9c8b513e7524cb0e2afe0dd3777449d610` → `dist/langqi-forge-write-precondition.zip`，21成员/190,209字节，SHA `c80dd890bc64d8534ac02443488e79d46ab8a473d1745130fa38f1ae99620be0`，合同SHA `4b4cdf57a4027cc3a9b34e83a3372bf1947ccbd4722cc033a06bec82eebf6ac7`。独立解包实际模块的15项相关测试通过，精确成员/哈希/CRC/语法均通过；全量315项/312通过/3环境跳过。该包含新流程重验、验收源码容量和本次写入schema，替代b49aee2待测包。正式Pro仍同一c3887cd，70m03s现场request84/seq615、组织批次在途、内部3/47、Stage2/Stage3 pending，无新官方成绩/费用；不重开、不并行、不将本地合同测试当提分。
