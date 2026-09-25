@@ -1,6 +1,6 @@
 # Langqi Forge · Factory26 初赛候选
 
-> 当前目标：同一参赛快照完成两题并进入正式综合榜前三，尚未达到。2026-09-25 19:43 UTC附近（北京时间26日03:43）刷新正式赛/全部任务/全部模型：**c3887cd Pro综合第10/26，17/200、6.55分、¥25.0273**。fb84f4e非思考对照已完成两题，仅5/200、1.59分、¥18.9586，质量退步。新快照8f30652已保存并串行启动[GitHub运行a2b7ba164c06](https://arc-bench.com/runs/a2b7ba164c06)，暂无新成绩，Sheet未启动。精确版本与启动证据见[新运行记录](docs/diagnostics/completion-control-official-run-2026-09-26.md)，接续见[前三持续台账](docs/TOP3_CAMPAIGN_2026-09-25.md)。
+> 当前目标：同一参赛快照完成两题并进入正式综合榜前三，尚未达到。最近一次2026-09-25 19:43 UTC附近（北京时间26日03:43）刷新正式赛/全部任务/全部模型：**c3887cd Pro综合第10/26，17/200、6.55分、¥25.0273**。fb84f4e非思考对照仅5/200、1.59分、¥18.9586，质量退步；8f30652 Pro在生成期HTTP400失败、0/0、¥0.5966，[封印已核验](docs/diagnostics/completion-control-official-run-2026-09-26.md)。现保持同一ZIP，仅换编码模型GLM并串行启动[2d8bb92545c0](https://arc-bench.com/runs/2d8bb92545c0)，尚无新成绩、Sheet未启动。见[同源码模型对照](docs/diagnostics/glm-same-source-comparison-2026-09-26.md)及[前三持续台账](docs/TOP3_CAMPAIGN_2026-09-25.md)。
 
 琅岐岛民的 ARC-Bench 软件生成智能体。本分支采用**通用、模型驱动**的正式参赛路径：读取比赛提供的需求，生成可部署的前后端，留下可核验的生产轨迹。它不是循济产品本体。
 

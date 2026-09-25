@@ -10,6 +10,12 @@
 
 ## 当前证据快照
 
+**当前唯一正式运行：同源码8f30652 GLM对照 / [2d8bb92545c0](https://arc-bench.com/runs/2d8bb92545c0)。** 保存名`Langqi Forge 8f30652 - GLM comparison`，History17、页面19:59:42；沿用SHA645f9935…e39精确ZIP，只改编码为glm-5.3-flash，视觉/赛事网关/比赛额度和runtime不变，前置余额￥422.09。确认单题无活任务后只点击一次，22s现场预检/依赖完成、Stage2生成、Stage3 pending；未并行Sheet，无新成绩/费用。见`diagnostics/glm-same-source-comparison-2026-09-26.md`。
+
+**8f30652 Pro已正式失败，不再在途。** a2b7ba164c06第三请求首尝试超时、第二尝试144.640秒后HTTP400 unclassified，0写入/0晋升，官方0/0、0.00分、10m8s、43100 Token、￥0.5966。34行封印/清单/脱敏/source全部核验，实际入口收尾已开启但尚无发挥机会；不据此否定控件/收尾机制，也不能给400定因。未跑该失败Pro快照Sheet，后续同ZIP换模型比较，不是重开原任务。见`diagnostics/completion-control-official-run-2026-09-26.md`。本轮为终态证据归档与新正式比较进展；前一轮为具体活任务verified wait，目标仍active。
+
+以下8m31s等为Pro失败前的历史观察，不作当前运行依据。
+
 **最新8f现场8m31s：第三请求首尝试超时，原策略第二尝试在途。** 北京时间03:47:25刷新同一a2b7ba164c06；19:46:59 UTC seq27记录240.122秒TimeoutError，19:47:00 seq28按原最多3尝试继续request3。仍Stage2、无已观察写入/晋升/新官方成绩；没有人工重开、取消或并行。此前request2正常217.534秒并完成源码压缩，不能与本次超时混淆。已重新核对原需求固定在最初消息且跨压缩保留，18项预装/保留/压缩协议回归全部通过；不将日志空retained_specification_ids误判为丢需求。本Goal回合为确切活任务的verified wait；上一回合为正式结算/上传进展，非阻塞。
 
 **当前唯一正式活任务：8f30652 / [a2b7ba164c06](https://arc-bench.com/runs/a2b7ba164c06)。** 旧fb84f4e双项全部终态后，保存`Langqi Forge 8f30652 - verified completion`，History16、页面19:38:38；Python/赛事网关/比赛额度，编码Pro、视觉Flash-vision-exp，运行前余额￥422.68。GitHub单题只点击一次；3m36s现场预检/依赖安装完成、Stage2生成/Stage3 pending。19:39:22 UTC首个模型响应3.182秒、输入11640/输出111，read_files成功；第二请求在途，无已观察代码写入/晋升/新成绩。Sheet未启动，不取消/重开/并行。精确ZIP及启动证据见`diagnostics/completion-control-official-run-2026-09-26.md`。本轮为旧双题正式结算与新候选上传、真实启动进展；等待正常外部运行不是阻塞。

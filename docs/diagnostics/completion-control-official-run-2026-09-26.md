@@ -1,5 +1,31 @@
 # 8f30652 正式串行运行
 
+## 正式终态：Pro通道未完成生成
+
+2026-09-25 19:49:25 UTC生成失败；同一运行出现View leaderboard、无暂停/取消，History16精确卡片结算：**0.00分、test pass 0/0、10m8s、43100 Token、￥0.5966**。0/0表示未进入GUI评测，不改成0/100。比赛余额￥422.09，Sheet未运行；不继续该失败Pro快照的Sheet。
+
+req3首尝试240.122秒超时，第二尝试144.640秒后HTTP400、安全分类unclassified、JSON对象256字节，随后按既有不可重试错误熔断。没有业务源码写入、浏览器探针、需求晋升或回归胶囊。无法从安全类别确定400根因，不声称网关忽略参数，也不判控件/收尾改动无效，因为失败发生在它们有机会发挥作用之前。
+
+### 完整生成证据
+
+正常下载`/Users/zerongliu/Downloads/a2b7ba164c06-template.zip`并归档`dist/official-evidence/a2b7ba164c06/project-final-generation.zip`。只分析内层生成证据，未检查外层应用或测试内容。
+
+- 外层42成员/3376646字节，SHA `080f346a5d14d23c7142a3147a545750e97e696d8263210b7fb0e583875afb78`。
+- 内层`template/factory26-evidence.zip`75075字节，SHA `2335afe25cc82267fc217a4bae0b1a32850ddd0478ccf424ff87a051f1b1ab2f`，精确三个证据成员。
+- trace34行/302581字节，SHA `0ed30e13c38d0a819546676065137ab259d4e4f5baa8acb0b19f0b2cf865652e`，链头`ee79db5796d1ffc2046a7f17f0c69ffe20d104e4fe89fc874873e7e4396ca8fc`。
+- report SHA `5d254bcbc267f9f36ca5bf7d56d06d7c874a5d141a0f19446c23fb789a31c287`，run_id `9a88e9cd-16f1-49da-a5c1-13501d785cd5`。
+- CRC、34行连续v2链、行序、逐行/报告脱敏、清单字节数/哈希/行数/头、精确source/run_id/status一致性通过；源码与下方上传身份完全相同。
+- 607.880秒、2成功响应/4HTTP尝试、可观测输入25935/输出17165、视觉0、运行内人工干预0。未知超时用量不自行算零，以平台￥0.5966为正式开销。
+- 三个请求均`reasoning_effort=low`、`max_tokens=8192`，未发送thinking字段；实际会话`completion_tail_enabled=true`已在封印确认。开启不等于已使用收尾窗口；本次没有候选进入收尾。
+
+### 后续对照边界
+
+保持相同ZIP与所有提示、预算、门禁，拟只将编码模型换为榜单已有完成记录的`glm-5.3-flash`；视觉仍Flash-vision-exp。不会热改或重跑此失败任务，也不读对手私有作品。既有模型适配对GLM不注入DeepSeek专属reasoning字段，这属于模型身份切换的预定行为，不是运行中临时降级。
+
+后续19:59:42已保存同源码GLM对照，启动[2d8bb92545c0](https://arc-bench.com/runs/2d8bb92545c0)。保存/启动详情和当前状态见glm-same-source-comparison-2026-09-26.md；本记录下方Pro早期在途观察均为历史。
+
+复核[DeepSeek思考模式文档](https://api-docs.deepseek.com/guides/thinking_mode/)及[Chat Completions参数](https://api-docs.deepseek.com/api/create-chat-completion/)可确认low为合法配置；该官方协议不能证明ARC-Bench代理透传或400的原因。只有未来正式运行能说明另一通道的表现，不承诺切换即提分。
+
 ## 精确制品与保存身份
 
 - 源码：`8f306526796b95ad5b9233c98c02b05338a1c642`，运行时冻结不热改。
