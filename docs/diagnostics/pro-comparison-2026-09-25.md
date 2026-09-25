@@ -76,3 +76,11 @@ seq362确认REQ-1-1-3 completed=true，9回合、1次行为探针、committed=tr
 2026/9/25 23:33:03本地时间刷新后，seq503确认退出/改密组20回合用尽、completed=false、committed=false，内部仍3/47。可见seq467静态/构建检查通过；seq469验收压缩86,697→51,077字符，seq475—484重复读取前后端。seq489浏览器导航被本地路径规则拒绝，具体参数仍待封印轨迹；seq494实际浏览器探针失败，含第11步断言缺失和页面错误`Cannot set properties of null (setting 'textContent')`。之后seq499仅见读文件，没有成功重验；不能把失败归结为单纯回合不足，也不能把静态检查当功能可用。
 
 seq504开始组织批次REQ-2-1-1/REQ-2-1-2/REQ-2-2-1，最新request72/seq533。Stage2仍在运行、Stage3 pending，没有新官方成绩/费用/综合名次。71个可见编码响应报告输入1,541,010/输出150,458 Token，仅为这一时点的已报告编码用量。当前运行不热改、不取消、不重复启动或并行Sheet；已有b49aee2待测候选，本轮不叠加未经结果验证的runtime改动。终态后优先读取封印证据，区分路径参数错误、真实DOM生命周期缺陷与验收重读开销，再决定最小下一步。
+
+## 77m52s更新：组织原批次没有落地代码，已拆分
+
+seq658确认REQ-2-1-1/REQ-2-1-2/REQ-2-2-1原组20回合耗尽，changed_files=[]、completed=false、committed=false、浏览器调用0。request72超时恢复后的漏哈希写入seq540已在`write-precondition-contract-2026-09-25.md`记录；不能只根据后续反复读取，就断言一次schema修订能解决整批失败。seq634源码快照一度0字节、seq642仅202字节，而当前回合观察及部分已读规格仍保留；须等完整封印轨迹检查整个下一次请求，不能把单个source_snapshot_bytes当成全部可见源码。
+
+seq659拆为组织浏览REQ-2-1-1与组织/团队创建REQ-2-1-2、REQ-2-2-1；seq660开始前者，最新request91/seq676。现场仍同一359dd7e72ca7、Stage2/Stage3 pending、内部3/47，没有官方新成绩或最终费用。本轮只取得新失败与拆分证据，未新增runtime改动或评测；最新待测包为已独立验收的a31cfa9写入合同包，不再是b49aee2。
+
+约15:55 UTC重新核验正式综合榜（Agentic Software Factory Hackathon / 全部任务 / 全部模型）：24项，本队bugtakue仍第19，旧Flash条目0.00分、0.0%、¥2.3829、提交时间05:22:11；不是本次Pro结果。前三仍55.27/36.34/29.17，模型、通过率和开销与前次记录一致。只读公开榜单，无他人私有作品访问，临时榜单页已关闭。
