@@ -509,10 +509,14 @@ class CodingAgent:
             str(item.get("function", {}).get("name") or "") for item in tool_schemas
         }
 
-        def request_acceptance_audit(changed: tuple[str, ...], *, trigger: str) -> None:
+        def request_acceptance_audit(
+            changed: tuple[str, ...], *, trigger: str,
+            new_observations: list[dict[str, Any]] | None = None,
+        ) -> None:
             nonlocal acceptance_audit_requested, acceptance_audit_message, acceptance_audit_revision, messages
             snapshot, snapshot_manifest = _source_snapshot(self.tools.root, changed)
             audit_instruction = ACCEPTANCE_AUDIT_PROMPT
+            retained_observations: list[dict[str, Any]] = []
             if self.tools.requirement_specs:
                 audit_instruction += (
                     "\nSome current-batch requirements were abbreviated in the initial prompt. "
@@ -535,6 +539,10 @@ class CodingAgent:
             acceptance_audit_message = audit_message(snapshot)
             if _context_characters(messages + [acceptance_audit_message]) > self.maximum_context_characters:
                 before_characters = _context_characters(messages)
+                # A read immediately before validation has not yet reached the
+                # model. Keep it with its matching call, just as rolling
+                # compaction does, even if it requires a one-turn soft overflow.
+                retained_observations = list(new_observations or [])
                 checkpoint = {
                     "changed_files": list(changed),
                     "change_revision": self.tools.change_revision,
@@ -561,13 +569,13 @@ class CodingAgent:
                 retained_specs, retained_spec_ids = _retained_specifications(
                     self.tools,
                     self.maximum_context_characters
-                    - _context_characters(messages + [audit_message("")]) - 4_000,
+                    - _context_characters(messages + [audit_message("")] + retained_observations) - 4_000,
                 )
                 if retained_specs is not None:
                     messages.append(retained_specs)
-                if _context_characters(messages + [audit_message("")]) > self.maximum_context_characters - 400:
+                if _context_characters(messages + [audit_message("")] + retained_observations) > self.maximum_context_characters - 400:
                     audit_instruction = COMPACT_ACCEPTANCE_AUDIT_PROMPT
-                fixed_characters = _context_characters(messages + [audit_message("")])
+                fixed_characters = _context_characters(messages + [audit_message("")] + retained_observations)
                 target_characters = self.maximum_context_characters - 400
                 snapshot_budget = min(
                     MAX_SOURCE_SNAPSHOT_BYTES,
@@ -579,7 +587,7 @@ class CodingAgent:
                     )
                     acceptance_audit_message = audit_message(snapshot)
                     if (
-                        _context_characters(messages + [acceptance_audit_message])
+                        _context_characters(messages + [acceptance_audit_message] + retained_observations)
                         <= target_characters
                         or snapshot_budget == 0
                     ):
@@ -591,9 +599,14 @@ class CodingAgent:
                     requirement_ids=requirement_ids,
                     reason="acceptance_audit_context_limit",
                     before_characters=before_characters,
-                    after_characters=_context_characters(messages + [acceptance_audit_message]),
+                    after_characters=_context_characters(messages + [acceptance_audit_message] + retained_observations),
                     source_snapshot=snapshot_manifest,
                     retained_specification_ids=retained_spec_ids,
+                    fresh_observation_messages=len(retained_observations),
+                    soft_limit_exceeded=(
+                        _context_characters(messages + [acceptance_audit_message] + retained_observations)
+                        > self.maximum_context_characters
+                    ),
                 )
             acceptance_audit_requested = True
             acceptance_audit_revision = self.tools.change_revision
@@ -607,9 +620,10 @@ class CodingAgent:
                 snapshot=snapshot_manifest,
             )
             messages.append(acceptance_audit_message)
+            messages.extend(retained_observations)
 
         for turn in range(1, self.max_turns + 1):
-            turn_message_start = len(messages)
+            current_turn_messages: list[dict[str, Any]] = []
             reply = self.model.complete(messages, tool_schemas)
             if getattr(reply, "finish_reason", "") == "length":
                 consecutive_truncated_outputs += 1
@@ -645,7 +659,9 @@ class CodingAgent:
                 })
                 continue
             consecutive_truncated_outputs = 0
-            messages.append(_assistant_message(reply.raw_message))
+            assistant_message = _assistant_message(reply.raw_message)
+            messages.append(assistant_message)
+            current_turn_messages.append(assistant_message)
             if not reply.tool_calls:
                 final_summary = reply.content.strip()
                 changed = tuple(sorted(self.tools.changed_files - changed_before))
@@ -813,13 +829,13 @@ class CodingAgent:
                     compact_results.append(
                         {"tool": name, "ok": False, "error": "non-JSON tool result"}
                     )
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": str(call.get("id") or name),
-                        "content": result,
-                    }
-                )
+                tool_message = {
+                    "role": "tool",
+                    "tool_call_id": str(call.get("id") or name),
+                    "content": result,
+                }
+                messages.append(tool_message)
+                current_turn_messages.append(tool_message)
             if (
                 acceptance_audit_revision is not None
                 and self.tools.change_revision != acceptance_audit_revision
@@ -909,7 +925,9 @@ class CodingAgent:
                 fixed_messages = messages[:2] + [no_snapshot_message]
                 if compact_audit_message is not None:
                     fixed_messages.append(compact_audit_message)
-                recent_messages = messages[turn_message_start:]
+                # Audit invalidation may remove an earlier message. Tracking
+                # this turn directly avoids stale indices and orphan results.
+                recent_messages = current_turn_messages
                 fresh_observations = _fresh_observation_messages(recent_messages)
                 retained_specs, retained_spec_ids = _retained_specifications(
                     self.tools,
@@ -994,6 +1012,7 @@ class CodingAgent:
                 request_acceptance_audit(
                     changed,
                     trigger="first_passing_implementation_validation",
+                    new_observations=_fresh_observation_messages(current_turn_messages),
                 )
             if recognized_tool:
                 invalid_tool_turns = 0
