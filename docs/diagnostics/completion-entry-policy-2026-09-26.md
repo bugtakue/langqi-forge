@@ -17,3 +17,11 @@ fb84f4e的GitHub完整生成轨迹中，有一批修复后已quick通过却耗�
 ## 验证
 
 4项入口测试覆盖入口默认开启/库默认关闭、显式关闭、显式开启、非法覆盖失败关闭；原收尾边界夹具另外验证trace实际开关。与控件状态等28项聚焦回归通过。冻结完整回归355项，352通过/3既有环境跳过，63.973秒；git diff --check通过。未调用真实模型/浏览器，不能代替正式提分结果。
+
+## 干净封包与独立解包
+
+- 干净源码`8f306526796b95ad5b9233c98c02b05338a1c642`，包`dist/langqi-forge-completion-control.zip`，21成员/194348字节。
+- ZIP SHA `645f9935a02cd872dfa582bcd5bcfbf33e0a9e581e4c0f47b561c48539a28e39`，合同SHA `7fc744f0a1a2108b96a36f9f415818f5d440dacfee501e0a97232333c05a2510`。
+- 独立解包`/private/tmp/factory26-completion-control.Ivsvzl`，精确白名单/CRC/逐文件字节/哈希/整个manifest重算与所有Python AST通过。
+- 实际从解包目录加载runtime，50项控件/失败现场/语义/收尾/上下文协议/入口测试通过（0.205秒）。没有用工作树runtime替代ZIP检验，没有个人Key/模型调用。
+- 未上传；当前Sheet仍原fb84f4e。此包替代e0e5e0e默认关闭收尾包，后续只在当前运行终态后串行测试。准备和封包不等于线上通过。
