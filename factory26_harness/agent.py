@@ -665,8 +665,10 @@ class CodingAgent:
             if not reply.tool_calls:
                 final_summary = reply.content.strip()
                 changed = tuple(sorted(self.tools.changed_files - changed_before))
+                # Models may echo the prompt's opening inline-code backtick.
+                # Only tolerate that single prefix; all acceptance gates remain.
                 if stage == "implementation" and re.match(
-                    r"^AUDIT BLOCKED(?:\s|:|$)", final_summary
+                    r"^`?AUDIT BLOCKED(?:\s|:|$)", final_summary
                 ):
                     self.trace.record(
                         "agent_session_stalled",
@@ -691,7 +693,7 @@ class CodingAgent:
                         )
                         continue
                     if stage != "implementation" or re.match(
-                        r"^AUDIT PASS(?:\s|:|$)", final_summary
+                        r"^`?AUDIT PASS(?:\s|:|$)", final_summary
                     ):
                         self.trace.record(
                             "agent_session_completed",
