@@ -10,7 +10,15 @@
 
 ## 当前证据快照
 
-**最新已封装候选（未上传）**：干净源码 `fa7cb15216bbab616f359cf3f19878393f2c5d6a` → `dist/langqi-forge-context-fit.zip`，20文件、183,986字节，SHA-256 `632c40087686331d160d5728b0592955486f54ebad7f2be40ca8069af44b9206`。包含62ed93e的预装/离线作用域检查与本轮预览去重/源码容量适配。解包至`/var/folders/tq/9bg2q_2d3m94_m54kvqd88br0000gn/T/factory26-context-bundle.yw75bkzd`，逐文件大小/哈希/清单成员/ZIP完整性、独立目录导入及预装协议校验通过。没有推送GitHub、上传或新开评测；下述62ed与8ca包仅历史候选。
+**当前唯一正式活任务： https://arc-bench.com/runs/9cd0d7fea546 ，Langqi Forge fa7cb15 - source memory，GitHub。** 12:14 UTC在b7终态且单题页明确“当前没有正在进行的任务运行”后，保存新快照（页面12:14:33、History=10），再只点击一次单题“运行最新提交”。已核验fa7身份、新运行ID、环境预检与依赖安装完成、Stage2启动。编码deepseek-v4-flash、视觉deepseek-v4-flash-vision-exp，使用比赛额度，无个人Key；没有点击双题批量启动、没有并行Sheet。新运行费用尚未结算，不视为零。
+
+12:16 UTC首段stdout：首批REQ-1-1-1/REQ-1-1-2已开始，首两次编码调用2.671/2.788秒返回、8文件read_files成功、两次引用图工具ok=true，第三请求发出。尚无批次晋升或官方得分，不把正常调用当作功能完成。运行页tab741295060（qualifierTaskPage）已markHandoff保留；旧nextCandidatePage只是榜单，不应继续轮询旧b7。
+
+**刚取得的b7正式成绩**：3/100、3.0%、2.06分、Features 0.0%、￥7.9050、3.975M Token、平台显示56m44s；比f3的7/100、￥2.4931退步。余额￥476.79。完整封印生成报告内部5/47不是GUI成绩，暂不补跑b7 Sheet。12:14 UTC正式综合全任务/全模型榜bugtakue第15、0分（旧b958双题）；前三VOLO-AI55.27、Iris36.34、尻名山掌管排水渠过弯的神29.17。详细账单/归档见`diagnostics/b7-generation-final-evidence.md`。
+
+**本轮离线复盘**：16个实际发送的b7压缩点用新适配器保留的源码字节中位增加81.1%，请求均不超过96,000字符；但两个大文件仍未完整保留，不保证消除反复阅读或提升分数。复盘使用脱敏请求及生成SHA严格匹配的源代码，0模型调用。脚本仅开发诊断、不在提交包内；本轮没有修改参赛runtime，上传包仍精确fa7。
+
+**上传前封包记录（现已上传，状态以上方为准）**：干净源码 `fa7cb15216bbab616f359cf3f19878393f2c5d6a` → `dist/langqi-forge-context-fit.zip`，20文件、183,986字节，SHA-256 `632c40087686331d160d5728b0592955486f54ebad7f2be40ca8069af44b9206`。包含62ed93e的预装/离线作用域检查与本轮预览去重/源码容量适配。解包至`/var/folders/tq/9bg2q_2d3m94_m54kvqd88br0000gn/T/factory26-context-bundle.yw75bkzd`，逐文件大小/哈希/清单成员/ZIP完整性、独立目录导入及预装协议校验通过。源码尚未推送GitHub；下述62ed与8ca包仅历史候选。
 
 **结束前现场72m34s**：同一b7 Stage2完成、Stage3仍Evaluation in progress，无官方新分数/人民币费用。页面已保留接续；不取消、不并行Sheet。下一步先取得这次最终GUI成绩和费用，再决定同快照Sheet或新候选的串行试验；最终目标仍要求同快照双题综合前三。
 
