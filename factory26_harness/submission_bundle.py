@@ -28,6 +28,7 @@ BUNDLE_MODULES = (
     "factory26_harness/qualifier.py",
     "factory26_harness/regression.py",
     "factory26_harness/requirements.py",
+    "factory26_harness/source_memory.py",
     "factory26_harness/submission_bundle.py",
     "factory26_harness/trace.py",
     "factory26_harness/visual_reference.py",

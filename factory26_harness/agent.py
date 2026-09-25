@@ -11,6 +11,7 @@ from typing import Any
 
 from .model import OpenAIChatClient
 from .requirements import RequirementNode
+from .source_memory import ReadPageMemory
 from .trace import ProductionTrace
 from .visual_reference import referenced_images
 from .workspace_tools import WorkspaceTools, _batch_content_budgets
@@ -644,6 +645,7 @@ class CodingAgent:
         acceptance_audit_revision: int | None = None
         observed_files: set[str] = set()
         observed_sha256: dict[str, str] = {}
+        read_memory = ReadPageMemory(self.tools)
         unread_source_pages: dict[str, dict[str, Any]] = {}
         tool_schemas = self.tools.schemas()
         valid_tool_names = {
@@ -930,6 +932,7 @@ class CodingAgent:
                 result = self.tools.execute(name, arguments)
                 try:
                     result_payload = json.loads(result)
+                    read_memory.observe(name, result_payload)
                     successful_tool = successful_tool or bool(result_payload.get("ok"))
                     compact_results.append(_compact_tool_result(name, result_payload))
                     result_path = str(result_payload.get("path") or "")
@@ -1094,10 +1097,18 @@ class CodingAgent:
                 )
                 if retained_specs is not None:
                     fixed_messages.append(retained_specs)
+                read_memory_message, read_memory_manifest, read_memory_bytes = read_memory.retain(
+                    fresh_observations, maximum_bytes=MAX_ROLLING_SOURCE_SNAPSHOT_BYTES // 2,
+                    fits=lambda message: _context_characters(
+                        fixed_messages + [message] + fresh_observations
+                    ) <= self.maximum_context_characters - 800,
+                )
+                if read_memory_message is not None:
+                    fixed_messages.append(read_memory_message)
                 # Optional source snapshots must not displace observations that
                 # have not yet been sent to the model even once.
                 snapshot_budget = min(
-                    MAX_ROLLING_SOURCE_SNAPSHOT_BYTES,
+                    MAX_ROLLING_SOURCE_SNAPSHOT_BYTES - read_memory_bytes,
                     max(
                         0,
                         self.maximum_context_characters
@@ -1120,6 +1131,8 @@ class CodingAgent:
                         compacted_messages.append(compact_audit_message)
                     if retained_specs is not None:
                         compacted_messages.append(retained_specs)
+                    if read_memory_message is not None:
+                        compacted_messages.append(read_memory_message)
                     return compacted_messages
 
                 source_snapshot, source_snapshot_manifest = _fit_source_snapshot(
@@ -1155,6 +1168,8 @@ class CodingAgent:
                     source_snapshot_files=len(source_snapshot_manifest),
                     source_snapshot_complete_files=sum(not row["truncated"] for row in source_snapshot_manifest),
                     retained_specification_ids=retained_spec_ids,
+                    retained_source_pages=read_memory_manifest,
+                    retained_source_page_bytes=read_memory_bytes,
                 )
             if (
                 implementation_validation_completed
