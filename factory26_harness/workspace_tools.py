@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .browser_probe import MAX_ASSERTIONS, MAX_STEPS, SCOPE_ROLES, probe_local_app, validate_steps
+from .browser_probe import MAX_ASSERTIONS, MAX_STEPS, SCOPE_ROLES, control_expectation_schema, probe_local_app, validate_steps
 from .checks import run_full_checks, run_quick_checks, structure_check
 from .trace import ProductionTrace
 from .visual_reference import VisualReferenceClient
@@ -473,6 +473,10 @@ class WorkspaceTools:
                             "expect_scope is explicitly supplied; use it to verify feedback inside its owning "
                             "form, dialog, region or row. scope locates the action, expect_scope locates "
                             "the feedback after the action, so a closing dialog needs a different feedback owner."
+                            ' Use expect_controls for specified value/selected/checked/disabled state, e.g. '
+                            '[{"role":"tab","name":"Details","property":"selected","equals":true}]. '
+                            'For value use a string equals; for other properties use a Boolean. '
+                            'Each assertion has its own optional scope; targets must be unique and visible.'
                         ),
                         "parameters": {
                             "type": "object",
@@ -513,6 +517,7 @@ class WorkspaceTools:
                                             "option_by": {"type": "string", "enum": ["label", "value"]},
                                             "expect_text": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_ASSERTIONS},
                                             "expect_absent": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_ASSERTIONS},
+                                            "expect_controls": control_expectation_schema(),
                                         },
                                         "required": ["action"],
                                     },

@@ -66,8 +66,9 @@ class ProbeFailureSceneTests(unittest.TestCase):
         self.assertEqual(result["execution_error"], {"type": "TimeoutError", "message": "x" * 1000})
         self.assertEqual(result["snapshot_unavailable"], "RuntimeError")
 
-    def _run_fixture(self, outcomes):
-        steps = validate_steps([{"action": "reload", "expect_text": [f"state-{i}"]} for i in range(3)])
+    def _run_fixture(self, outcomes, steps=None):
+        steps = steps if steps is not None else validate_steps([
+            {"action": "reload", "expect_text": [f"state-{i}"]} for i in range(3)])
         with contextlib.ExitStack() as stack:
             stack.enter_context(patch("factory26_harness.browser_probe._npm_install", return_value=(0, "", 0)))
             stack.enter_context(patch("factory26_harness.browser_probe.subprocess.Popen"))

@@ -6,6 +6,7 @@ remote URL. The browser can contact only this run's loopback application.
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
@@ -32,6 +33,62 @@ SCOPE_ROLES = (
     "form", "dialog", "alertdialog", "group", "row", "grid", "tabpanel",
     "list", "listitem", "article",
 )
+CONTROL_PROPERTIES = ("value", "selected", "checked", "disabled")
+
+
+def control_expectation_schema() -> dict[str, Any]:
+    return {
+        "type": "array", "maxItems": MAX_ASSERTIONS,
+        "description": "Post-action state assertions. Use one exact role+name or label; optional unique scope. No CSS/JS.",
+        "items": {
+            "type": "object", "additionalProperties": False,
+            "required": ["property", "equals"],
+            "properties": {
+                "role": {"type": "string", "maxLength": 40},
+                "name": {"type": "string", "maxLength": 200},
+                "label": {"type": "string", "maxLength": 200},
+                "scope": {"type": "object", "additionalProperties": False,
+                          "required": ["role"], "properties": {
+                              "role": {"type": "string", "enum": list(SCOPE_ROLES)},
+                              "name": {"type": "string", "maxLength": 200}}},
+                "property": {"type": "string", "enum": list(CONTROL_PROPERTIES)},
+                "equals": {"oneOf": [{"type": "boolean"}, {"type": "string", "maxLength": 500}],
+                           "description": "String for value (empty allowed); Boolean for other properties."},
+            },
+        },
+    }
+
+
+def _validated_control_expectation(raw: Any) -> dict[str, Any]:
+    allowed = {"role", "name", "label", "scope", "property", "equals"}
+    if not isinstance(raw, dict) or set(raw) - allowed:
+        raise ValueError("control assertion only supports semantic locator, scope, property and equals")
+    has_role, has_label = "role" in raw, "label" in raw
+    if has_role == has_label or ("name" in raw and not has_role):
+        raise ValueError("control assertion needs exactly one role+name or label")
+    if any(not isinstance(raw[key], str) for key in ("role", "name", "label") if key in raw):
+        raise ValueError("control assertion locator fields must be strings")
+    result = ({"role": _bounded_text(raw["role"], maximum=40),
+               "name": _bounded_text(raw.get("name"))} if has_role
+              else {"label": _bounded_text(raw["label"])})
+    prop, expected = raw.get("property"), raw.get("equals")
+    if prop not in CONTROL_PROPERTIES:
+        raise ValueError("unsupported control property")
+    valid = (isinstance(expected, str) and len(expected) <= 500 if prop == "value"
+             else type(expected) is bool)
+    if not valid:
+        raise ValueError("value expects a string of at most 500 characters; other properties expect a Boolean")
+    if "scope" in raw:
+        result["scope"] = _validated_scope(raw["scope"])
+    return {**result, "property": prop, "equals": expected}
+
+
+def _validated_control_expectations(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, list) or len(value) > MAX_ASSERTIONS:
+        raise ValueError(f"expect_controls must contain at most {MAX_ASSERTIONS} assertions")
+    return {"expect_controls": [_validated_control_expectation(item) for item in value]}
 
 
 def _probe_passed(
@@ -107,7 +164,8 @@ def validate_steps(value: Any) -> list[dict[str, Any]]:
         if not isinstance(raw, dict) or str(raw.get("action") or "") not in ALLOWED_ACTIONS:
             raise ValueError(f"browser step {index} has an unsupported action")
         action = str(raw["action"])
-        step: dict[str, Any] = {"action": action, **_step_scopes(raw, action)}
+        step: dict[str, Any] = {"action": action, **_step_scopes(raw, action),
+                                **_validated_control_expectations(raw.get("expect_controls"))}
         if action == "navigate":
             step["path"] = _local_path(raw.get("path"))
         elif action != "reload":
@@ -195,6 +253,71 @@ def _controls(page: Any) -> list[dict[str, str]]:
     )
 
 
+def _read_control_property(target: Any, prop: str) -> str | bool | None:
+    if prop == "value":
+        if (target.get_attribute("type", timeout=500) or "").lower() == "password":
+            raise ValueError("password value assertions are not supported")
+        return target.input_value(timeout=500)
+    if prop == "disabled":
+        return target.is_disabled(timeout=500)
+    attribute = target.get_attribute("aria-" + prop, timeout=500)
+    if attribute in {"true", "false"}:
+        return attribute == "true"
+    if prop == "checked" and attribute is None:
+        return target.is_checked(timeout=500)
+    return None  # Missing/invalid aria-selected is not the same as false.
+
+
+def _control_result(page: Any, assertion: dict[str, Any]) -> dict[str, Any]:
+    result = {"target": {k: v for k, v in assertion.items() if k not in {"property", "equals"}},
+              "property": assertion["property"], "expected": assertion["equals"], "matched": False}
+    try:
+        target = _locator(page, assertion)
+        if target.count() != 1 or not target.is_visible():
+            raise ValueError("asserted control must be unique and visible")
+        actual = _read_control_property(target, assertion["property"])
+        result.update(actual=actual[:500] if isinstance(actual, str) else actual,
+                      matched=actual == assertion["equals"])
+    except Exception as exc:
+        result["error"] = type(exc).__name__ + ": " + str(exc)[:300]
+    return result
+
+
+def _control_evidence(page: Any, assertions: list[dict[str, Any]] | None) -> dict[str, Any]:
+    if not assertions:
+        return {}
+    results = [_control_result(page, assertion) for assertion in assertions]
+    failures = [_control_failure(row) for row in results if not row["matched"]]
+    return {"control_results": results, "control_failures": failures}
+
+
+def _control_failure(row: dict[str, Any]) -> str:
+    # Keep a concise ordinary assertion failure so existing compaction/regression
+    # paths retain its target, expected state and actual state without a new gate.
+    return (
+        f"Control {row['property']} mismatch at "
+        + json.dumps(row["target"], ensure_ascii=False)[:160]
+        + ": expected " + json.dumps(row["expected"], ensure_ascii=False)[:120]
+        + "; actual " + json.dumps(row.get("actual"), ensure_ascii=False)[:120]
+        + "; " + str(row.get("error", ""))[:100]
+    )
+
+
+def _observation_satisfied(observed: dict[str, Any], require_visible_text: bool) -> bool:
+    return not (observed["missing_text"] or observed["unexpected_text"]
+                or observed.get("control_failures")) and (
+                    not require_visible_text or bool(observed["visible_text"].strip()))
+
+
+def _observation_failures(observations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    failures = []
+    for index, row in enumerate(observations):
+        missing = row["missing_text"] + row.get("control_failures", [])
+        if missing or row["unexpected_text"]:
+            failures.append({"step": index, "missing": missing, "unexpected": row["unexpected_text"]})
+    return failures
+
+
 def _assertion_source(
     page: Any, body: str, expect_scope: dict[str, str] | None,
 ) -> tuple[str, dict[str, Any]]:
@@ -212,6 +335,7 @@ def _assertion_source(
 def _page_observation(
     page: Any, *, expected: list[str], absent: list[str],
     expect_scope: dict[str, str] | None = None,
+    expect_controls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     body = page.locator("body").inner_text(timeout=4000)
     owner_text, scope_evidence = _assertion_source(page, body, expect_scope)
@@ -219,6 +343,7 @@ def _page_observation(
     unexpected = [item for item in absent if item in owner_text]
     current = urlsplit(page.url)
     return {
+        **_control_evidence(page, expect_controls),
         "path": (
             current.path + (f"?{current.query}" if current.query else "")
             + (f"#{current.fragment}" if current.fragment else "")
@@ -239,6 +364,7 @@ def _settled_observation(
     absent: list[str],
     require_visible_text: bool = False,
     expect_scope: dict[str, str] | None = None,
+    expect_controls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Wait briefly for async DOM updates before judging a local user action."""
 
@@ -246,12 +372,9 @@ def _settled_observation(
     while True:
         observed = _page_observation(
             page, expected=expected, absent=absent, expect_scope=expect_scope,
+            expect_controls=expect_controls,
         )
-        if (
-            not observed["missing_text"]
-            and not observed["unexpected_text"]
-            and (not require_visible_text or observed["visible_text"].strip())
-        ):
+        if _observation_satisfied(observed, require_visible_text):
             return observed
         if time.monotonic() >= deadline:
             return observed
@@ -310,6 +433,7 @@ def _observe_probe_step(
         return _settled_observation(
             page, expected=step["expect_text"], absent=step["expect_absent"],
             expect_scope=step.get("expect_scope"),
+            expect_controls=step.get("expect_controls"),
         )
     except Exception as exc:
         failed: dict[str, Any] = {
@@ -420,11 +544,7 @@ def _probe_isolated_app(root: Path, port: int, validated: list[dict[str, Any]]) 
                 context.close()
             finally:
                 browser.close()
-        assertion_failures = [
-            {"step": index, "missing": row["missing_text"], "unexpected": row["unexpected_text"]}
-            for index, row in enumerate(observations)
-            if row["missing_text"] or row["unexpected_text"]
-        ]
+        assertion_failures = _observation_failures(observations)
         if not initial["visible_text"].strip():
             assertion_failures.append({"step": 0, "missing": ["visible application text"], "unexpected": []})
         return {
@@ -437,7 +557,7 @@ def _probe_isolated_app(root: Path, port: int, validated: list[dict[str, Any]]) 
             "behavioral_checks": completed_steps,
             "attempted_behavioral_checks": completed_steps + int(execution_error is not None),
             "behavioral_assertions": sum(
-                len(step["expect_text"]) + len(step["expect_absent"])
+                len(step["expect_text"]) + len(step["expect_absent"]) + len(step.get("expect_controls", []))
                 for step in validated[:completed_steps]
             ),
         }
