@@ -14,6 +14,7 @@
 | MioaAI | https://github.com/ArisLiWind/mioa-harness ；src/mioa/core/agent.py | 可追溯的会话、版本化记忆；区分当前记忆与不可改写操作历史 | 记忆框架本身不能证明代码生成、GUI 通过率或参赛排名 |
 | Cogram | https://github.com/xqscora/cogram-goai | 引用式上下文、可核验失败证据 | README 明确这是 GOAI 教学切片、不调用模型；不能当作 Factory26 的真实生成方案 |
 | 蒋平 | https://github.com/jackyjinggit/factory26-coding-agent | 暂无可评估内容 | 查阅时仓库为空，报名文案不等于实现 |
+| 小黑喜萌-喜君慧 / 烟雨楼 | https://github.com/cacsgr/arccode ；https://github.com/Dragonsandswords/proofForge | 暂无可评估内容 | 本轮打开的公开仓库页面显示为空，不能猜测其私有实现 |
 
 未复制上述仓库代码、未安装或执行其软件。我们的事务化批次、回退、校验已有实现；不因别人也提这些概念而宣称新增能力。优先补真正缺失的可观测性与上下文交付正确性。
 
@@ -32,4 +33,12 @@
 
 修复后对同一公开规格做同样的协议捕获：第二次请求实际携带 4 个工具结果（42,481 字符），第三次携带 8 个（60,611 字符）；新增四页并行读取回归也在强制 16,000 字符软限下通过。模型循环原有 31 项测试通过。本轮完整 146 项测试中，3 项因本机浏览器环境跳过，1 项遇到临时端口 EADDRINUSE；该端口检查用例单独复跑通过，其余测试通过。保留该环境竞争失败，不将它隐藏为从未失败。
 
+随后完整复跑：`python -m unittest discover -s tests -q -b`，146 项 / 143 通过 / 3 跳过，54.105 秒，无失败。上述临时端口竞争历史仍保留。
+
 诊断快照 `f570b78` 已在 ARC-Bench 保存，尚未启动任务；它只增加日志。后续评测使用包含上述压缩修复的新快照，不重复花费额度验证已复现的错误版本。
+
+## 真实复测
+
+修复版 `15242edc22024f0d8542c80eeed8661fff485d64`，包 `dist/langqi-forge-context-fix.zip`，SHA-256 `fbdc5868f67eae31b2d4cccb0b34018d1397bb0d845effc602ae92a2c37265a2`，17 个白名单文件，67,002 字节。保存时间页面显示 `2026/9/25 05:54:56`（未标时区）。保持 `deepseek-v4-flash` 及平台比赛额度，未使用个人 Key。
+
+只启动了一次 GitHub 题：https://arc-bench.com/runs/4f394fa6ab49 。平台预检通过、官方 SDK 加载成功；首批四个规格分三轮读完，11 个规格分页调用均成功，之后读取源码。此时尚未出现新官方分数，Sheet 未运行。
