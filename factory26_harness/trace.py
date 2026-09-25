@@ -66,12 +66,15 @@ _PROGRESS_EVENTS = {
     "implementation_dependency_blocked", "implementation_candidate_validation",
     "agent_session_started", "agent_session_completed", "agent_session_stalled",
     "agent_session_exhausted", "model_output_truncated", "model_gateway_circuit_open",
+    "agent_context_compacted",
 }
 _PROGRESS_FIELDS = {
     "batch", "attempt", "stage", "requirement_ids", "completed", "changed_files",
     "turns", "turn", "reason", "error", "summary", "status", "split_depth",
     "retry_groups", "failed_dependencies", "checks", "phase", "consecutive",
     "model_requests", "staged_changes_committed", "browser_probe",
+    "before_characters", "after_characters", "retained_current_turn",
+    "fresh_observation_messages", "soft_limit_exceeded",
 }
 
 

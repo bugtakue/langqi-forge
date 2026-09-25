@@ -148,6 +148,31 @@ def _context_characters(messages: list[dict[str, Any]]) -> int:
     )
 
 
+def _fresh_observation_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deliver new observations once even when the rolling context is compressed.
+
+    Do not retain large write arguments (already produced by the model). Keep
+    read calls and their matching results together so tool-call pairing remains
+    valid and no read is acknowledged solely by a cursor the model cannot see.
+    """
+    readers = {
+        "read_file", "read_files", "read_requirement_spec", "search_text",
+        "inspect_reference", "browser_probe",
+    }
+    retained: list[dict[str, Any]] = []
+    call_ids: set[str] = set()
+    for message in messages:
+        if message.get("role") == "assistant":
+            calls = [call for call in message.get("tool_calls", [])
+                     if (call.get("function") or {}).get("name") in readers]
+            if calls:
+                retained.append({"role": "assistant", "content": "", "tool_calls": calls})
+                call_ids.update(str(call.get("id")) for call in calls)
+        elif message.get("role") == "tool" and str(message.get("tool_call_id")) in call_ids:
+            retained.append(message)
+    return retained
+
+
 def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {"tool": tool, "ok": bool(payload.get("ok"))}
     for key in (
@@ -311,7 +336,7 @@ class CodingAgent:
         )
         self.maximum_context_characters = max(
             8_000,
-            int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "32000")),
+            int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "96000")),
         )
 
     def implement(
@@ -846,12 +871,16 @@ class CodingAgent:
                 fixed_messages = messages[:2] + [no_snapshot_message]
                 if compact_audit_message is not None:
                     fixed_messages.append(compact_audit_message)
+                recent_messages = messages[turn_message_start:]
+                fresh_observations = _fresh_observation_messages(recent_messages)
+                # Optional source snapshots must not displace observations that
+                # have not yet been sent to the model even once.
                 snapshot_budget = min(
                     MAX_SOURCE_SNAPSHOT_BYTES,
                     max(
                         0,
                         self.maximum_context_characters
-                        - _context_characters(fixed_messages)
+                        - _context_characters(fixed_messages + fresh_observations)
                         - 800,
                     ),
                 )
@@ -876,7 +905,7 @@ class CodingAgent:
                     if compact_audit_message is not None:
                         compacted_messages.append(compact_audit_message)
                     if (
-                        _context_characters(compacted_messages)
+                        _context_characters(compacted_messages + fresh_observations)
                         <= self.maximum_context_characters
                     ):
                         break
@@ -884,14 +913,14 @@ class CodingAgent:
                 else:
                     compacted_messages = fixed_messages
                     source_snapshot_manifest = []
-                recent_messages = messages[turn_message_start:]
                 with_recent_turn = compacted_messages + recent_messages
                 retained_current_turn = (
                     _context_characters(with_recent_turn)
                     <= self.maximum_context_characters
                 )
                 messages = (
-                    with_recent_turn if retained_current_turn else compacted_messages
+                    with_recent_turn if retained_current_turn
+                    else compacted_messages + fresh_observations
                 )
                 self.trace.record(
                     "agent_context_compacted",
@@ -901,6 +930,8 @@ class CodingAgent:
                     after_characters=_context_characters(messages),
                     checkpoint=checkpoint,
                     retained_current_turn=retained_current_turn,
+                    fresh_observation_messages=len(fresh_observations),
+                    soft_limit_exceeded=_context_characters(messages) > self.maximum_context_characters,
                     source_snapshot=source_snapshot_manifest,
                 )
             if (
