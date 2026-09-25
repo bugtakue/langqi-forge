@@ -722,7 +722,11 @@ class CodingAgent:
                 fixed_characters = _context_characters(messages + [audit_message("")] + retained_observations)
                 target_characters = self.maximum_context_characters - 400
                 snapshot_budget = min(
-                    MAX_SOURCE_SNAPSHOT_BYTES,
+                    # Compaction removed the earlier complete source turns.
+                    # Reuse the rolling source allowance inside the unchanged
+                    # total context cap instead of discarding useful free space.
+                    # Noncompacted audits still append only the small snapshot.
+                    MAX_ROLLING_SOURCE_SNAPSHOT_BYTES,
                     max(0, target_characters - fixed_characters - 400),
                 )
                 snapshot, snapshot_manifest = _fit_source_snapshot(

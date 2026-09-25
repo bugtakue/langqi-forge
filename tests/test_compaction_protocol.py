@@ -116,6 +116,18 @@ class CompactionProtocolTests(unittest.TestCase):
                     pending.add(call["id"])
         self.assertFalse(pending, f"unanswered tool calls: {pending}")
 
+    def _force_acceptance_compaction(self, messages):
+        call = _call("validate", "run_validation", scope="quick")
+        predicted = _result_message("validate", {
+            "ok": True, "checks": [check.as_dict() for check in self.checks],
+            "validated_change_revision": self.tools.change_revision,
+            "current_changes_validated": True,
+        })
+        base = _reply([call])
+        padding = 95_500 - _context_characters(messages + [base.raw_message, predicted])
+        self.assertGreater(padding, 0)
+        return _reply([call], content="P" * padding)
+
     def _assert_delivered(self, scripted, read_calls, reasoning):
         for request in scripted.requests:
             self._assert_paired(request)
@@ -191,6 +203,56 @@ class CompactionProtocolTests(unittest.TestCase):
         self.assertTrue(self._events("agent_context_compacted"))
         self.validation.assert_called_once()
         self._assert_delivered(scripted, [read], reasoning)
+
+    def test_acceptance_compaction_uses_free_space_for_complete_changed_sources(self):
+        contents = {
+            "backend/edited.js": "/*" + "A" * 7_000 + " MIDDLE_BACKEND " + "A" * 2_000 + "*/\n",
+            "frontend/edited.js": "/*" + "B" * 7_000 + " MIDDLE_FRONTEND " + "B" * 2_000 + "*/\n",
+            "frontend/style.css": "/*" + "C" * 1_000 + "*/\n",
+        }
+
+        scripted = self._capture([
+            _reply([_call(f"write-{i}", "write_file", path=path, content=content)
+                    for i, (path, content) in enumerate(contents.items())]),
+            self._force_acceptance_compaction,
+        ])
+        audit = self._events("agent_acceptance_audit_requested")[-1]
+        compacted = self._events("agent_context_compacted")[-1]
+        self.assertEqual(compacted["reason"], "acceptance_audit_context_limit")
+        self.assertEqual(compacted["before_characters"], 95_500)
+        self.assertFalse(compacted["soft_limit_exceeded"])
+        self.assertLessEqual(_context_characters(scripted.requests[-1]), DEFAULT_CONTEXT_CHARS)
+        self.assertEqual({row["path"] for row in audit["snapshot"]}, set(contents))
+        self.assertTrue(all(not row["truncated"] for row in audit["snapshot"]))
+        self.assertEqual(sum(row["included_bytes"] for row in audit["snapshot"]),
+                         sum(len(text.encode()) for text in contents.values()))
+        visible = "\n".join(str(message.get("content", "")) for message in scripted.requests[-1])
+        for content in contents.values():
+            self.assertIn(content, visible)
+        for request in scripted.requests:
+            self._assert_paired(request)
+
+    def test_compacted_audit_still_caps_source_bytes(self):
+        scripted = self._capture([
+            _reply([_call("write", "write_file", path="backend/edited.js",
+                          content="/*" + "A" * 45_000 + "*/\n")]),
+            self._force_acceptance_compaction,
+        ])
+        audit = self._events("agent_acceptance_audit_requested")[-1]
+        self.assertTrue(audit["snapshot"][0]["truncated"])
+        self.assertEqual(sum(row["included_bytes"] for row in audit["snapshot"]), 36_000)
+        self.assertLessEqual(_context_characters(scripted.requests[-1]), DEFAULT_CONTEXT_CHARS)
+
+    def test_noncompacted_acceptance_keeps_small_additional_snapshot(self):
+        scripted = self._capture([
+            _reply([_call("write", "write_file", path="backend/edited.js",
+                          content="/*" + "A" * 20_000 + "*/\n")]),
+            _reply([_call("validate", "run_validation", scope="quick")]),
+        ])
+        self.assertFalse(self._events("agent_context_compacted"))
+        audit = self._events("agent_acceptance_audit_requested")[-1]
+        self.assertLessEqual(sum(row["included_bytes"] for row in audit["snapshot"]), 12_000)
+        self.assertLessEqual(_context_characters(scripted.requests[-1]), DEFAULT_CONTEXT_CHARS)
 
     def test_rolling_compaction_preserves_multiple_reads_and_reasoning(self):
         self._source("frontend/a.js", 'export const a = "READ_A";\n')
