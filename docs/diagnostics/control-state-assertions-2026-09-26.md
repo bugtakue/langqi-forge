@@ -32,3 +32,11 @@
 本地没有Python Playwright/匹配Runner Chromium的完整环境，既有3项真实浏览器集成测试继续按原条件跳过；本次fixture没有调用真实模型/浏览器，不能宣称正式效果已验证。辅助AST决策代理显示既有runtime函数无增长、新增最大14；不作为正式复杂度CI替代品。
 
 主分支仍bounded编码策略，包含完整源码保留、失败现场回传及默认关闭completion tail；正式fb84f4e是另一独立源码，尚不含以上后续改动。本候选不热改、取消或并行打断Sheet运行。下一次是否提分必须靠同一新快照双题正式成绩与费用证明。
+
+## 干净封包与独立解包
+
+- 源码`e0e5e0e17b8f0c754d97602e7b26b34c4ffab4ac`，干净工作树封包`dist/langqi-forge-control-states.zip`。
+- 21成员、194181字节；ZIP SHA `85827fc75a7988a0f19ef7f012537b78be7120732cc5a6d5e537779bc7453ed7`，合同SHA `687dc15136ae72d34642c6dd2ddef223f8423a5616dc4783c4b75bcaed823d58`。
+- 独立解包到`/private/tmp/factory26-control-states.XbjkIZ`，精确白名单、ZIP CRC、所有文件大小/SHA、整个manifest重算、全部Python AST通过。运行时模块实际来自该解包目录，不是工作树。
+- 针对真实解包模块运行46项控件状态/失败现场/入口语义/收尾/协议压缩回归，全部通过（0.191秒）。没有修改依赖、没有执行真实模型或浏览器。
+- 未上传、未开新评测、未推送GitHub；现有Sheet继续使用原fb84f4e快照。本ZIP替代旧b443单独候选作为后续综合修订包，不追认任何线上成绩。
