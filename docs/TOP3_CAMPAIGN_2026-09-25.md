@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**10m09s最后现场：Pro request5也超时，第二尝试在途。** 14:48:39 UTC首尝试240.15秒TimeoutError，14:48:40启动第二尝试/seq43。仍同一359dd7e72ca7、Stage2/Stage3 pending，无新增写入、晋升或官方成绩。没有手动重开，页面已保留；下轮继续读取这一确切任务，不能把下方request4恢复概括为通道稳定。
+
 **当前Pro已从一次超时恢复，仍未观察到功能晋升。** request4首尝试240.075秒超时，第二次33.818秒正常返回；随后官方注册/登录参考图两次inspect_reference成功，14:44:39 UTC发出request5/seq41。14:47 UTC现场8m10s仍Stage2、Stage3 pending，无已观察源码写入或官方新成绩。没有取消、重开或并行Sheet；不能把恢复请求当作增分或Flash定因。见`diagnostics/pro-comparison-2026-09-25.md`。
 
 **修复后新流程重验候选已封包，未上传。** 干净源码`51d78d0e52200b1a877ed16ca62fe930118f6a07` → `dist/langqi-forge-candidate-flow-recheck.zip`，21成员/190,088字节，SHA `8c7b733785b9083236e99b0454457a794179cd8451796cce8325d5385381a8d4`。独立解包`/private/tmp/factory26-flow-recheck.7OcaRL`，20个runtime成员精确哈希/大小/集合、合同、CRC、Python语法与实际导入均通过；包内模块的6项重验测试全部通过。当前正式Pro仍精确c3887cd，不含此候选。此次是独立候选制品核验及新现场证据进展，不是阻塞；下方未封包为更早时点。
