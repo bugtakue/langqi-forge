@@ -98,3 +98,7 @@
 本轮最后读取官方运行时，页面时长 22m15s、仍处于生成阶段。06:51:29 日志确认拆批后的 `REQ-1-1-1` 在 20 回合内完成 harness 验收并晋升，`staged_changes_committed=true`；其 `browser_probe.calls=0`、`behavioral_probe_verified=false`，不能说通过浏览器行为验证或主办方 GUI 测试。后续 `REQ-1-1-2` 正在生成，新官方得分尚未产生。本地新修订未并行启动额外任务。
 
 本轮候选源码 `8da9d8229454e3ce3dbe6169134724f5c5588f1f` 已从干净工作树打包为 `dist/langqi-forge-prompt-contract.zip`：17 个白名单文件，70,146 字节，SHA-256 `99c69d324cfc82e56ccb3f60b52f604123a82a13c9a953eaab0daf71894e07df`，ZIP 完整性检查通过。包内包含源码版本及逐文件清单；没有上传、没有触发新评测，也没有推送 GitHub。
+
+## 前三持续目标开始后的上传
+
+队长随后明确要求持续到前三。已创建可核验的正式综合榜 Goal 和每 15 分钟的当前任务跟进。核验第三名 29.17 分、bugtakue 仍第 14 / 0.00 后，保存上述 `8da9d82` 包为 `Langqi Forge 8da9d82 - prompt contract`，页面时间 `2026/9/25 07:01:23`；History 为 5，两题均未运行。当前 `1b3419d` 的 GitHub 基线仍生成中，不并行启动第二个任务。持续台账、明确完成标准与下一步见 `docs/TOP3_CAMPAIGN_2026-09-25.md`。
