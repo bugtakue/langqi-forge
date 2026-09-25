@@ -19,7 +19,7 @@
 
 - **https://arc-bench.com/runs/de30d58e3116**
 - `Langqi Forge b53d9a9 - prompt and evidence`，仅 GitHub 正在运行，Sheet 未开始。
-- 已通过环境预检、安装依赖并进入 Stage 2。日志 `07:26:58` 开始首批，`07:27:08` 两项完整规格均已读完，进入请求 4。此时没有已晋升批次、没有官方 GUI 分数。
+- 已通过环境预检、安装依赖并进入 Stage 2。日志 `07:26:58` 开始首批，`07:34:34` 注册/登录两项在同一批 17 回合完成，`committed=true`、`behavioral_probe_verified=true`；三次探针依次为成功查看、断言失败、成功行为验证（以日志投影为准，不扩张为所有场景验证）。首批规格总共 6 次分页读取，七次压缩均完整保留两项规格，未重复读。当前已进入第二批 `REQ-1-1-3` / `REQ-1-2` / `REQ-1-3`，整题尚无官方 GUI 分数。
 - 编码 `deepseek-v4-flash`、视觉 `deepseek-v4-flash-vision-exp`、比赛额度，与前轮一致。只点击 GitHub 单题“运行最新提交”一次，不点“Run 1 remaining task”。
 - 最新概览明确旧版 cancelled、新版 running。余额仍显示 ￥496.92；旧版及新版的精确费用字段均缺失，不能推定取消不计费。
 
