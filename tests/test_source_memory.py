@@ -147,6 +147,65 @@ class SourceMemoryTests(unittest.TestCase):
         self.assertGreater(latest["retained_source_page_bytes"], 0)
         self.assertLessEqual(latest["retained_source_page_bytes"] + latest["source_snapshot_bytes"], 36000)
 
+    def _capture_known_sources(self, context_characters):
+        contents = {}
+        for name in ("frontend/one.js", "frontend/two.js"):
+            content = "".join(f"// {i:03d} " + "x" * 150 + "\n" for i in range(100))
+            target = self.root / name
+            target.write_text(content)
+            contents[name] = content
+        captures = []
+
+        class Reader:
+            turn = 0
+
+            def complete(self, messages, _schemas):
+                self.turn += 1
+                if self.turn == 3:
+                    captures.append(messages)
+                    raise RuntimeError("captured complete-source choice")
+                path = "frontend/one.js" if self.turn == 1 else "frontend/two.js"
+                calls = [{"id": f"whole-{self.turn}", "type": "function", "function": {
+                    "name": "read_file", "arguments": json.dumps({"path": path,
+                        "start_line": 1, "end_line": 45})}}]
+                return SimpleNamespace(tool_calls=calls, content="discussion " * 14000,
+                    raw_message={"role": "assistant", "content": "discussion " * 14000,
+                                 "tool_calls": calls})
+
+        with patch.dict(os.environ, {"FACTORY26_AGENT_CONTEXT_CHARS": str(context_characters)}):
+            with self.assertRaisesRegex(RuntimeError, "captured complete-source choice"):
+                CodingAgent(Reader(), self.tools, self.tools.trace)._run(
+                    "Implement the assigned flow.", stage="implementation", requirement_ids=[])
+        rows = [json.loads(l) for l in self.tools.trace.path.read_text().splitlines()]
+        latest = [r["payload"] for r in rows if r["event"] == "agent_context_compacted"][-1]
+        return captures[-1], latest, contents
+
+    def test_complete_current_sources_replace_overlapping_page_cache_when_they_fit(self):
+        request, latest, contents = self._capture_known_sources(96000)
+        self.assertEqual(latest["source_retention_mode"], "complete_current_sources")
+        self.assertEqual(latest["source_snapshot_complete_files"], 2)
+        self.assertEqual(latest["retained_source_page_bytes"], 0)
+        self.assertLessEqual(latest["source_snapshot_bytes"], 36000)
+        self.assertLessEqual(_context_characters(request), 96000)
+        visible = "\n".join(m.get("content", "") for m in request)
+        for content in contents.values():
+            self.assertIn(content, visible)
+        fresh = [m for m in request if m.get("tool_call_id") == "whole-2"]
+        self.assertEqual(len(fresh), 1)
+        self.assertIn("45:", json.loads(fresh[0]["content"])["content"])
+
+    def test_complete_files_that_exceed_context_keep_existing_page_fallback(self):
+        request, latest, contents = self._capture_known_sources(30000)
+        self.assertLess(sum(len(s.encode()) for s in contents.values()), 36000)
+        self.assertEqual(latest["source_retention_mode"], "observed_pages_and_snapshot")
+        self.assertGreater(latest["retained_source_page_bytes"], 0)
+        self.assertLess(latest["source_snapshot_complete_files"], 2)
+        self.assertLessEqual(latest["source_snapshot_bytes"] + latest["retained_source_page_bytes"], 36000)
+        self.assertLessEqual(_context_characters(request), 30000)
+        fresh = [m for m in request if m.get("tool_call_id") == "whole-2"]
+        self.assertEqual(len(fresh), 1)
+        self.assertIn("45:", json.loads(fresh[0]["content"])["content"])
+
 
 if __name__ == "__main__":
     unittest.main()

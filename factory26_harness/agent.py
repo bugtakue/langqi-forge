@@ -1125,25 +1125,7 @@ class CodingAgent:
                 )
                 if retained_specs is not None:
                     fixed_messages.append(retained_specs)
-                read_memory_message, read_memory_manifest, read_memory_bytes = read_memory.retain(
-                    fresh_observations, maximum_bytes=MAX_ROLLING_SOURCE_SNAPSHOT_BYTES // 2,
-                    fits=lambda message: _context_characters(
-                        fixed_messages + [message] + fresh_observations
-                    ) <= context_target - 800,
-                )
-                if read_memory_message is not None:
-                    fixed_messages.append(read_memory_message)
-                # Optional source snapshots must not displace observations that
-                # have not yet been sent to the model even once.
-                snapshot_budget = min(
-                    MAX_ROLLING_SOURCE_SNAPSHOT_BYTES - read_memory_bytes,
-                    max(
-                        0,
-                        context_target
-                        - _context_characters(fixed_messages + fresh_observations)
-                        - 800,
-                    ),
-                )
+                read_memory_message, read_memory_manifest, read_memory_bytes = None, [], 0
                 def with_source(source_snapshot: str) -> list[dict[str, Any]]:
                     checkpoint_message = {
                         "role": "user",
@@ -1163,12 +1145,41 @@ class CodingAgent:
                         compacted_messages.append(read_memory_message)
                     return compacted_messages
 
-                source_snapshot, source_snapshot_manifest = _fit_source_snapshot(
-                    self.tools.root, snapshot_paths, maximum_bytes=snapshot_budget,
-                    fits=lambda source: _context_characters(
-                        with_source(source) + fresh_observations
-                    ) <= context_target,
+                # Complete current files dominate overlapping cached fragments
+                # only when ALL selected files and fresh observations fit the
+                # unchanged caps. Otherwise preserve the existing page fallback.
+                source_snapshot, source_snapshot_manifest = _source_snapshot(
+                    self.tools.root, snapshot_paths,
+                    maximum_bytes=MAX_ROLLING_SOURCE_SNAPSHOT_BYTES,
                 )
+                complete_sources_fit = (
+                    bool(source_snapshot_manifest)
+                    and {row["path"] for row in source_snapshot_manifest} == set(snapshot_paths)
+                    and all(not row["truncated"] for row in source_snapshot_manifest)
+                    and _context_characters(with_source(source_snapshot) + fresh_observations)
+                    <= context_target
+                )
+                if not complete_sources_fit:
+                    read_memory_message, read_memory_manifest, read_memory_bytes = read_memory.retain(
+                        fresh_observations, maximum_bytes=MAX_ROLLING_SOURCE_SNAPSHOT_BYTES // 2,
+                        fits=lambda message: _context_characters(
+                            fixed_messages + [message] + fresh_observations
+                        ) <= context_target - 800,
+                    )
+                    if read_memory_message is not None:
+                        fixed_messages.append(read_memory_message)
+                    # Never displace observations not yet seen by the model.
+                    snapshot_budget = min(
+                        MAX_ROLLING_SOURCE_SNAPSHOT_BYTES - read_memory_bytes,
+                        max(0, context_target
+                            - _context_characters(fixed_messages + fresh_observations) - 800),
+                    )
+                    source_snapshot, source_snapshot_manifest = _fit_source_snapshot(
+                        self.tools.root, snapshot_paths, maximum_bytes=snapshot_budget,
+                        fits=lambda source: _context_characters(
+                            with_source(source) + fresh_observations
+                        ) <= context_target,
+                    )
                 compacted_messages = (
                     with_source(source_snapshot) if source_snapshot_manifest else fixed_messages
                 )
@@ -1198,6 +1209,10 @@ class CodingAgent:
                     retained_specification_ids=retained_spec_ids,
                     retained_source_pages=read_memory_manifest,
                     retained_source_page_bytes=read_memory_bytes,
+                    source_retention_mode=(
+                        "complete_current_sources" if complete_sources_fit
+                        else "observed_pages_and_snapshot"
+                    ),
                 )
             if (
                 implementation_validation_completed
