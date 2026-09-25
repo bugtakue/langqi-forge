@@ -403,7 +403,9 @@ def main(argv: list[str] | None = None) -> int:
         if unexpected or prior_agent_artifacts:
             raise SystemExit("output directory contains prior agent work or unexpected files")
     output_dir.mkdir(parents=True, exist_ok=True)
-    trace = ProductionTrace(output_dir / ".arc" / "production-trace.jsonl")
+    trace = ProductionTrace(
+        output_dir / ".arc" / "production-trace.jsonl", stdout_progress=True
+    )
     started = time.monotonic()
     run_id = str(uuid.uuid4())
     report: dict[str, Any] = {

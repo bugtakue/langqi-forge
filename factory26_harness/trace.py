@@ -57,6 +57,53 @@ _SECRET_TEXT_PATTERNS = (
 )
 MAX_TRACE_STRING_CHARS = 100_000
 
+# ARC-Bench's project download omits .arc/. Mirror only operational evidence,
+# never prompts, source bodies, model responses or request arguments, to stdout.
+_PROGRESS_EVENTS = {
+    "run_started", "run_completed", "run_failed",
+    "implementation_batch_started", "implementation_batch_finished",
+    "implementation_batch_exception", "implementation_batch_split",
+    "implementation_dependency_blocked", "implementation_candidate_validation",
+    "agent_session_started", "agent_session_completed", "agent_session_stalled",
+    "agent_session_exhausted", "model_output_truncated", "model_gateway_circuit_open",
+}
+_PROGRESS_FIELDS = {
+    "batch", "attempt", "stage", "requirement_ids", "completed", "changed_files",
+    "turns", "turn", "reason", "error", "summary", "status", "split_depth",
+    "retry_groups", "failed_dependencies", "checks", "phase", "consecutive",
+    "model_requests", "staged_changes_committed", "browser_probe",
+}
+
+
+def _progress_projection(event: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    if event == "tool_result":
+        result = payload.get("result")
+        if not isinstance(result, dict):
+            return None
+        selected = {
+            key: result[key] for key in (
+                "ok", "error", "path", "changed", "change_revision", "checks",
+                "current_changes_validated", "assertion_failures", "page_errors",
+                "requirement_id", "start_char", "next_start_char", "complete",
+            ) if key in result
+        }
+        return {"event": event, "tool": payload.get("tool"), "result": selected}
+    if event in _PROGRESS_EVENTS:
+        return {"event": event, **{
+            key: value for key, value in payload.items() if key in _PROGRESS_FIELDS
+        }}
+    return None
+
+
+def _bounded_progress(value: Any) -> Any:
+    if isinstance(value, str):
+        return value if len(value) <= 900 else value[:900] + " [truncated]"
+    if isinstance(value, dict):
+        return {key: _bounded_progress(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_bounded_progress(item) for item in value[:12]]
+    return value
+
 
 def _redact_text(value: str) -> str:
     redacted = value
@@ -221,8 +268,9 @@ def verify_trace_rows(
 
 
 class ProductionTrace:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, stdout_progress: bool = False) -> None:
         self.path = path
+        self.stdout_progress = stdout_progress
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._sequence = 0
@@ -260,3 +308,14 @@ class ProductionTrace:
             self._previous_hash = row["hash"]
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+            if self.stdout_progress:
+                progress = _progress_projection(event, row["payload"])
+                if progress is not None:
+                    progress["sequence"] = self._sequence
+                    try:
+                        print("[factory26:event] " + json.dumps(
+                            _bounded_progress(progress), ensure_ascii=True, sort_keys=True
+                        ), flush=True)
+                    except (BrokenPipeError, OSError):
+                        # Console delivery must not change the persisted run outcome.
+                        self.stdout_progress = False
