@@ -35,7 +35,7 @@ Hard rules:
 - No CDN, external APIs, telemetry or browser network dependencies; probes reject external requests.
 - Never start a server yourself; use run_validation, which uses a safe smoke port.
 - Preserve `/api/health` and persistent backend state across refresh and process restart.
-- Inspect generic helpers before use: `backend/storage.mjs` (loadState/saveState/updateState),
+- Inspect generic helpers before use: `backend/storage.mjs` (loadState/transactState/updateState),
   `backend/http.mjs` (readJsonBody/sendJson), `frontend/src/api.js` (requestJson).
   They contain no task-specific behavior.
 - Implement real behavior, not screenshots or hard-coded answers.
@@ -52,21 +52,21 @@ Hard rules:
 - Workflow UIs should send a command (`action`, stable item id, action inputs) to the backend; do not
   trust a client-computed replacement collection. The backend must find the target, validate the
   current state and actor/input, derive the next state, then persist it atomically.
-- Keep one state schema across seed, backend and UI. Check uniqueness, permissions and transitions
-  INSIDE updateState against its fresh state before mutating; prior loadState checks can race.
-  Throw on invalidity; send the HTTP response only after awaiting updateState. Persist once.
-- Make the smallest coherent change. Do not rewrite unrelated working features.
+- Keep one schema across seed/backend/UI. Use loadState for reads. In transactState, check
+  invariants INSIDE its fresh draft, mutate it, return response data. Throw to abort; await
+  commit before responding. updateState REPLACES THE WHOLE DATABASE with its return value:
+  never return API payloads there. Outside checks can race.
+- Keep edits minimal; preserve unrelated working features.
 - Batch independent calls; inspect related paths with read_files.
 - Read relevant source ranges, not every file to EOF. requested_range_complete means the requested
   existing lines were supplied; content_truncated merely says later file text exists. Follow page
   cursors only for needed omitted code; use start_char for oversized lines. If a batch supplies
   only hashes with re_read_files_individually=true, read the relevant files separately.
-- A successful write is authoritative; reread only when a failure requires exact current text.
+- A successful write is authoritative; reread only to diagnose failures.
   Fix every reported validation location before revalidating. Never repeat no-op writes.
   Use the latest observed read/write SHA as `expected_sha256` for full-file replacement.
-- Prefer exact replace_text for one isolated block. When a small file needs multiple coordinated
-  edits or a state contract changes across layers, replace it once with write_file and the latest
-  observed SHA instead of stacking fragile text replacements.
+- Use replace_text for one block. For coordinated edits, replace a small file once with write_file
+  and its latest observed SHA instead of stacking fragile replacements.
 - Stay within the changed-file and cumulative-write budgets reported by tools.
 - Hidden tests are unavailable. Generalize from the requirement rather than guessing test data.
 - Use full originals in <untrusted_prefilled_specifications> without repaging. For other
@@ -95,7 +95,8 @@ Build success is not behavioral evidence. Try to break the highest-risk assigned
 Fix observed gaps; do not spend this audit redesigning working code or adding optional features.
 
 Check all of these failure surfaces:
-1. Trace every action end to end: UI payload -> backend validation -> one atomic persistence -> rendered response.
+1. Trace every action: UI payload -> backend validation -> atomic persistence -> rendered response.
+   Verify transaction response data never replaces the database state.
 2. Every successful mutation immediately updates its owning view without a manual refresh, then remains correct after refresh/restart.
 3. Match specified roles/names/labels, not merely generated controls; check visible copy and DOM whitespace.
 4. Every action-specific error/status is inside its owning form/card/dialog/row, not a page-global node or browser dialog.

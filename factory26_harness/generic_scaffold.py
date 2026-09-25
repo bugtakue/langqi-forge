@@ -115,18 +115,35 @@ export async function saveState(next) {
   return next;
 }
 
-// Single-process transaction: check mutable-state invariants INSIDE updater,
-// against its fresh state, before mutation. Earlier loadState snapshots can race.
-// Throw to reject without persisting; send HTTP responses after awaiting this call.
+function queueWrite(operation) {
+  const task = previousWrite.then(operation);
+  previousWrite = task.catch(() => {});
+  return task;
+}
+
+// Replacement API: updater MUST return the entire next database, never an API
+// response payload. Use transactState for in-place edits with a separate result.
+// Check mutable-state invariants INSIDE updater against its fresh state.
 export function updateState(updater) {
-  const task = previousWrite.then(async () => {
+  return queueWrite(async () => {
     const current = await loadState();
     const next = await updater(structuredClone(current));
     if (next === undefined) throw new Error("state updater returned undefined");
     return saveState(next);
   });
-  previousWrite = task.catch(() => {});
-  return task;
+}
+
+// Preferred mutation API: mutate draft in place; return an independent response
+// result (or nothing). Only draft is persisted, NEVER the callback's return value.
+// Check invariants inside this callback. Throw to reject all edits. Both APIs
+// share the same single-process queue; await commit before sending a response.
+export function transactState(mutator) {
+  return queueWrite(async () => {
+    const draft = structuredClone(await loadState());
+    const result = await mutator(draft);
+    await saveState(draft);
+    return result;
+  });
 }
 '''
 
