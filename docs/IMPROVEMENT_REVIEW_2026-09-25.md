@@ -2,6 +2,12 @@
 
 ## 最新终态与真实浏览器诊断
 
+### f3 首批中途产物的独立复核
+
+2026-09-25 10:19 UTC 本队工作区文件已可下载，归档 `dist/official-evidence/9eb571d8b5b6/project-partial-20260925T1019.zip`，SHA-256 `56c7bc37e7f351a2004938b2e39d23b6d1ecb507b7ffa63008bf711cebc1a2eb`。仅在清空继承环境、loopback的临时副本运行。真实Chrome确认注册链接角色修复、多字段错误同时出现、失败非敏感输入保留、种子邮箱登录和刷新会话、退出后刷新回未登录。未执行成功注册、恢复或完整权限流程；组织/仓库仍为空占位，不能当作整题完成。临时服务已停止，未改线上或参赛快照；详细见 `docs/diagnostics/f3-partial-identity-browser-review.md`。
+
+同一正式任务10:23 UTC仍 Stage2；请求26在10:20:58因输出length结束，报告24,477 completion_tokens，下一请求27接续。此回合是新独立产物证据和已核验等待，没有新runtime修订、付费调用、上传或排名结论。保留b7fe418候选等待正式结果，不追加未经证实的工程复杂度。
+
 ### DOM 静态检查误判：真实浏览器反证与局部修订
 
 f3 首批在 sequence 113/125 遇到挂载检查失败。正常“文件”页显示工作区文件不可用，因此没有把具体线上失败归因于猜测。独立合成样例证实旧正则把 `append(document.createTextNode("Prefix: "), details)` 的第一个右括号当成外层调用结束；append/prepend/replaceChildren 三个子例均先在旧检查失败。

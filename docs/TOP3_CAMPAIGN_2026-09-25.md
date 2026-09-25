@@ -12,6 +12,8 @@
 
 **当前唯一活任务： https://arc-bench.com/runs/9eb571d8b5b6 ，f3b0a9e 的 GitHub。** 2026-09-25 10:17 UTC 核验仍 Stage 2，首批已晋升：sequence160 浏览器探针 `ok=true`、无断言失败/页面错误；sequence167 在 `10:17:04` 记录 REQ-1-1-1 / REQ-1-1-2 经20回合完成，`behavioral_probe_verified=true`、`staged_changes_committed=true`。这只证明该次探针和本地晋升，不是官方100项GUI成绩，也不把模型总结里的所有动作当作逐项已复核证据。第二批 REQ-1-1-3 / REQ-1-2 / REQ-1-3 已开始，最新请求26于 `10:17:25` 发出。不是终态，不重启、重复运行或并行 Sheet。
 
+**10:23 UTC 接续**：同一任务34m12s / Stage2，sequence221的请求26在10:20:58返回length、报告24,477 completion_tokens，sequence222标记一次截断，请求27继续。已经正常下载本队首批产物并独立在真实Chrome核验链接角色、多字段错误/输入保留、种子邮箱登录/刷新/退出；组织与仓库仍为空占位，未做成功注册/恢复/权限全流程。仅使用隔离临时副本，服务已停止，完整证据见 `docs/diagnostics/f3-partial-identity-browser-review.md`。这是新局部证据，不是新官方分数；当前不再叠加没有复现依据的改动。
+
 **新证据、暂不热改**：视觉 sequence 41/45 均为 `empty_caption`、`finish_reason=length`、输出 500 Token；已报告用量被正确累计，不能证明比赛网关启用了何种推理配置。首批途中出现静态挂载/名称检查失败，现已修复到通过；对应 f3 源码当时不可见，不能据此把所有报错归为误判。不能宣称记忆、语义或视觉改进已提升官方通过率。
 
 **下一候选仅在本地**：含可切回 provider-default 的推理策略（编码 low / 短视觉 disabled，仅限明确列出的 DeepSeek 型号），再补一个经真实浏览器反证的静态误判：`append(document.createTextNode(...), node)` 的嵌套前置参数不应令合法节点被拒。保留旧包装调用识别、全部安全/验收门及原模型调用预算。完整回归 229 项 / 226 通过 / 3 浏览器环境跳过，56.469 秒；尚未验证比赛代理透传、质量或费用收益。不得热换当前 f3、为此取消在途任务或并行测试。具体协议与限制见改进记录最新章节。
