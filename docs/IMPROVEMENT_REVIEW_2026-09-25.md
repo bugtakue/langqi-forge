@@ -196,3 +196,5 @@ GitHub 单题页明确显示最新快照 `Langqi Forge b53d9a9 - prompt and evid
 Pasteur 新增 `tests/test_compaction_protocol.py` 四项固定响应回归，主 Agent 审阅并独立运行 4/4 通过：仅验收触发压缩的首次正文投递、审计失效后调用配对、多文件/规格及 reasoning 原样保留、七个转义读取结果总量超软限仍完整投递。使用真实 trace/workspace/agent 代码，只有本地 quick checks 用固定结果替身，不联网或跑真实模型。原模型循环 32/32 通过；旧完整套件 201 项 / 198 通过 / 3 浏览器环境跳过，56.685 秒。四项加入后的完整合跑正在核验，最终结果以后续记录为准。
 
 最终完整合跑 `.venv/bin/python -m unittest discover -s tests -q -b`：**205 项 / 202 通过 / 3 浏览器环境跳过，56.973 秒**，`git diff --check` 通过。审查员还报告同四项测试对修复前 b41a377 为三项失败、一项通过；主 Agent 已独立复现两类旧缺陷并验证当前四项全通过。Pasteur 已关闭，没有赛事模型或外部服务调用。当前正式版本不含修复，最新现场 88m22s、请求 147（`08:53:04`）、Stage 2 / Stage 3 pending。
+
+干净提交 `bbbe5125a55e615584b95b0b9afd30dccc362642` 打包为 `dist/langqi-forge-observation-integrity.zip`：18 白名单文件 / 78,126 字节，SHA-256 `fd5dd5825330e5403e4fdf135c53a8418a2b0811146a09193f2c8a3913f33fbd`，`unzip -t` 通过。未上传、未推送；这是当前下一轮候选，不补跑仍含已确认缺陷的旧本地包。
