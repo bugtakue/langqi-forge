@@ -8,11 +8,13 @@
 
 `interaction_policy_check` 保留可定位的静态风险检查，但不是 JavaScript 数据流或浏览器行为证明。2026-09-25 的本地修订补上包含一层嵌套前置参数的 append/prepend/replaceChildren 等调用识别；保留旧包装调用/返回/激活识别，未挂载节点和无可访问名称的动态输入框仍拒绝。该修订已由独立合成样例和真实 Chrome 交互交叉核验，不意味着任何正式任务已通过。所有候选仍须构建/启动与规定的行为验收，不凭正则通过宣称完整可用性。
 
-### 推理强度候选策略（2026-09-25，本地候选，非在途 f3）
+### 推理强度候选策略（2026-09-25，b7在途，不改写f3历史请求）
 
 `FACTORY26_DEEPSEEK_REASONING_POLICY=bounded` 为候选默认值，仅对明确列入的 DeepSeek 模型申请参数：编码 `deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-pro` 使用 `reasoning_effort=low`；视觉使用这些模型或本赛 `deepseek-v4-flash-vision-exp` 别名时申请 `thinking.type=disabled`。其他模型不增加参数；`provider-default` 可精确恢复原先不发送这些字段的请求。非法策略值在本地报错，不自动多试几种参数。
 
 这只是按 [DeepSeek 文档](https://api-docs.deepseek.com/guides/thinking_mode/) 发出的控制请求，不保证比赛代理透传或执行，更不保证质量提升。仍记录提供商实际用量、超时与原始返回协议字段；不得删掉编码模型的必要 reasoning 字段以伪造节费。编码/视觉单次 max_tokens 保持 8192/500，累计用量闸门、调用次数、超时、重试、工具与验收门均不增加。已发现服务报告的 completion_tokens 可以高于请求的 max_tokens，所以后者不作可靠的总输出或账单硬上限声明。实际成本以平台人民币账单为准。
+
+10:54 UTC起，b7在正式运行 `e36c41c1ff7d` 中使用该策略。10:56 UTC可见四次编码响应成功、两张参考图描述成功（输出130/168 Token、finish_reason=stop），说明请求未被直接拒绝；仍不能证明代理实际采用指定推理档位。第四个编码响应报告10,562 completion_tokens，继续不把max_tokens当总输出硬限。该局部观察不是完整功能验收或最终节费结论。
 
 入口接受主办方 `requirements/requirements.yaml` 路径及 `--output-dir`。输出根目录有 `frontend/` 与 `backend/`，后端由 `npm start` 按 `PORT` 监听，前端由 `npm run build` 产出 `frontend/dist/`。默认静态服务和 `/api/health` 是通用运行底座，不包含题目专用行为。
 
