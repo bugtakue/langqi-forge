@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**新运行首段证据**：12cc147于13:07:21 UTC开始首批注册/登录，首个编码请求13:07:24正常返回（2.973秒，报告输入11,224/输出116 Token），随后read_files成功、第二请求发出。只证明真实模型调用和工具读取启动正常，不是批次完成或官方增分。实际运行页已保留接续。
+
 **当前唯一正式活任务： https://arc-bench.com/runs/1844901550a1 ，Langqi Forge 12cc147 - complete flows，GitHub。** 13:06 UTC左右单题页刷新后核验最新保存名称12cc147、时间13:03:59和“当前没有正在进行的任务运行”，才点击一次“运行最新提交”。已核验新运行ID、版本、环境预检和依赖安装通过、Stage2启动；Stage3 pending。未启动Sheet、未取消其他任务、未点击双题批量运行。先观察这一快照，不为未测收益继续叠加runtime变更。
 
 **最新包已上传保存并串行启动**：干净源码`12cc147a94375e008e8421f2f76c7664b5355cf1` → `dist/langqi-forge-error-diagnostics.zip`，20文件/186,495字节，SHA-256 `2546a116619aa05f9623d78d32ce622ac6e4187b6aead0b5ba40eff548d82ebd`。保存名`Langqi Forge 12cc147 - complete flows`、页面时间2026/9/25 13:03:59（页面未标时区）。编码deepseek-v4-flash、视觉deepseek-v4-flash-vision-exp、赛事网关https://api.arc-bench.com/v1、比赛额度勾选，无个人Key。包含16步完整流程、独立语义区域/局部反馈、探针耗尽及时停止和安全错误分类；不保留网关正文、不重试400、不增模型预算。最终全套277项/274通过/3环境跳过（63.280秒）。独立解包`/private/tmp/factory26-error-diagnostics.bH5Zvm`验证19个runtime文件成员/哈希/大小、合同、真实导入位置与安全分类；ZIP CRC通过。未推送GitHub；新运行尚无官方成绩和结算费用。旧400根因仍未知，不能称已修复。见`diagnostics/gateway-error-shape-2026-09-25.md`。
