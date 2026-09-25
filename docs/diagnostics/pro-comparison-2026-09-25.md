@@ -46,3 +46,5 @@ request5第二尝试139.202秒后成功（输入17,697/输出10,484），seq46�
 14:57:00，seq138明确首批REQ-1-1-1/REQ-1-1-2 completed=true、staged_changes_committed=true、19回合、2次行为自测。当前内部2/47，不能当作官方测试2/100。seq141开始恢复账号/退出/改密码三项；最新request22/seq157于14:57:08发出，19m34s现场仍Stage2、Stage3 pending。没有官方新成绩/费用或新综合名次，未并行Sheet。
 
 期间发现验收压缩会在有空间时无谓缩减源码，本地最小修订和离线对照见`audit-source-capacity-2026-09-25.md`；不属于当前Pro运行。公开检索未确认VOLO-AI的参赛源码，不对第一名架构作推测；只读到公开ARC基线的接口设计/测试先行说明（https://github.com/code-philia/agentic-requirement-compiler）及其React模板目录（https://github.com/Weiyu-Kong/arc-template），未复制、安装、运行或替换当前参赛栈。
+
+23m08s交接现场：request22第一次在15:01:08 UTC以240.155秒TimeoutError结束，15:01:09开始第二次尝试/seq159。仍Stage2/Stage3 pending，内部晋升仍2/47，无新官方结果。页面已保留，不取消、不重开、不并行。

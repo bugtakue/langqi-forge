@@ -33,3 +33,11 @@
 - `git diff --check`通过。
 
 代价是该夹具下一次输入增加6,802字符；只有模型因此减少后续读取/推理时才可能降低总成本。不能从源码保留率推算Token、人民币或官方得分改善。上一51d78d0候选ZIP不含本修订，后续需要重新封包。
+
+## 已独立封包（尚未上传）
+
+- 干净源码`b49aee23fda814184995c7affa7d3ffafbfa5388`，包含前轮候选流程重验和本轮验收源码容量修订。
+- ZIP `dist/langqi-forge-audit-source-capacity.zip`，21成员、190,173字节，SHA `d3fa8562ef544b699f9343e49dda1077909e24763d4ea84c714e41b0565917cb`。
+- 合同SHA `217870d2d411272e036e75f4104eda0365c789d3544353ba05c9852e15743e35`。
+- 独立解包`/private/tmp/factory26-audit-capacity.GJv5Qe`核验20个runtime文件精确哈希/大小/成员、合同、CRC和Python语法；实际导入包内agent，再跑7项压缩协议测试全部通过（0.059秒）。
+- 没有上传、推送或新开评测；当前359dd7e72ca7仍为c3887cd Pro对照。不要上传旧51d包冒充本修订。
