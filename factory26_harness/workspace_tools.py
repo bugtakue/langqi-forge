@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .browser_probe import probe_local_app
+from .browser_probe import probe_local_app, validate_steps
 from .checks import run_full_checks, run_quick_checks, structure_check
 from .trace import ProductionTrace
 from .visual_reference import VisualReferenceClient
@@ -46,6 +46,70 @@ def _batch_content_budgets(lengths: list[int], total_budget: int) -> list[int]:
             remaining -= lengths[index]
             pending.remove(index)
     return budgets
+
+
+def _compact_browser_result(result: dict[str, Any], original_chars: int) -> str:
+    """Keep probe diagnostics and the latest state within the serialized limit."""
+
+    text_limit = 500
+
+    def text(value: Any, limit: int | None = None) -> str:
+        return value[:text_limit if limit is None else limit] if isinstance(value, str) else ""
+
+    def items(value: Any, limit: int) -> list[Any]:
+        return value[:limit] if isinstance(value, list) else []
+
+    def texts(value: Any, limit: int) -> list[str]:
+        return [text(item) for item in items(value, limit) if isinstance(item, str)]
+
+    def number(value: Any) -> int:
+        return max(0, min(value, 1_000_000_000)) if type(value) is int else 0
+
+    observations = result.get("observations")
+    latest = observations[-1] if isinstance(observations, list) and observations else None
+    while True:
+        summary = {
+            "ok": bool(result.get("ok")),
+            "truncated": True,
+            "original_chars": original_chars,
+            "workspace_isolated": bool(result.get("workspace_isolated")),
+            "behavioral_checks": number(result.get("behavioral_checks")),
+            "behavioral_assertions": number(result.get("behavioral_assertions")),
+            "assertion_failures": [
+                {"step": number(row.get("step")), "missing": texts(row.get("missing"), 4),
+                 "unexpected": texts(row.get("unexpected"), 4)}
+                for row in items(result.get("assertion_failures"), 9) if isinstance(row, dict)
+            ],
+            "page_errors": texts(result.get("page_errors"), 10),
+            "blocked_external_hosts": texts(result.get("blocked_external_hosts"), 10),
+        }
+        if "error" in result:
+            summary["error"] = text(result["error"])
+        if isinstance(latest, dict):
+            visible_text = text(latest.get("visible_text"), min(2800, text_limit * 6))
+            summary["observations"] = [{
+                "action": text(latest.get("action")),
+                "path": text(latest.get("path")),
+                "visible_text": visible_text,
+                "visible_text_truncated": (
+                    bool(latest.get("visible_text_truncated"))
+                    or visible_text != latest.get("visible_text")
+                ),
+                "missing_text": texts(latest.get("missing_text"), 4),
+                "unexpected_text": texts(latest.get("unexpected_text"), 4),
+                "controls": [
+                    {"tag": text(control.get("tag")), "role": text(control.get("role")),
+                     "name": text(control.get("name")), "disabled": bool(control.get("disabled"))}
+                    for control in items(latest.get("controls"), 40) if isinstance(control, dict)
+                ],
+            }]
+            summary["observations_omitted"] = len(observations) - 1
+        encoded = json.dumps(summary, ensure_ascii=False, sort_keys=True)
+        if len(encoded) <= MAX_TOOL_RESULT_CHARS:
+            return encoded
+        # JSON escaping can expand each source character. Bound the encoded
+        # result as well; the fixed schema/array caps fit even at zero text.
+        text_limit //= 2
 
 
 def _contains_sensitive_part(parts: tuple[str, ...]) -> bool:
@@ -329,7 +393,18 @@ class WorkspaceTools:
                             "in Chromium. Inspect visible text/semantic controls, then optionally "
                             "click, fill, press, select, check, reload or navigate local paths. "
                             "Use a short real user workflow and explicit visible-text assertions; "
-                            "this is not a hidden-test or score oracle. At most three calls per batch."
+                            "this is not a hidden-test or score oracle. At most three launches per batch. "
+                            "Use steps=[] to inspect controls if names are unknown. Every call starts "
+                            "from fresh seed state at /; keep the entire flow within one call. "
+                            "For a control step choose EXACTLY ONE: role+name, label, or text. "
+                            "Never combine them, nest a locator, or use CSS selectors. "
+                            "Use role+name for buttons/links; label is an input's associated label, "
+                            "not arbitrary visible button text. Example steps: "
+                            '[{"action":"fill","label":"Name","value":"Alice"},'
+                            '{"action":"click","role":"button","name":"Save",'
+                            '"expect_text":["Saved: Alice"]},'
+                            '{"action":"reload","expect_text":["Saved: Alice"]}]. '
+                            "Adapt names and assertions to actual requirements/source or observed controls."
                         ),
                         "parameters": {
                             "type": "object",
@@ -344,10 +419,10 @@ class WorkspaceTools:
                                                 "type": "string",
                                                 "enum": ["click", "fill", "press", "select", "check", "reload", "navigate"],
                                             },
-                                            "role": {"type": "string"},
-                                            "name": {"type": "string"},
-                                            "label": {"type": "string"},
-                                            "text": {"type": "string"},
+                                            "role": {"type": "string", "description": "Accessible role, e.g. button or link. Requires name; excludes label/text."},
+                                            "name": {"type": "string", "description": "Exact accessible name. Only with role."},
+                                            "label": {"type": "string", "description": "Exact associated form-control label. Excludes role/text."},
+                                            "text": {"type": "string", "description": "Exact visible text for click/press only. Excludes role/label."},
                                             "index": {"type": "integer", "minimum": 0, "maximum": 19},
                                             "path": {"type": "string"},
                                             "value": {"type": "string"},
@@ -460,6 +535,8 @@ class WorkspaceTools:
         encoded = json.dumps(result, ensure_ascii=False, sort_keys=True)
         if len(encoded) <= MAX_TOOL_RESULT_CHARS:
             return encoded
+        if name == "browser_probe" and isinstance(result, dict):
+            return _compact_browser_result(result, len(encoded))
         if name == "read_files" and isinstance(result, dict) and isinstance(result.get("files"), list):
             return json.dumps(
                 {
@@ -861,13 +938,21 @@ class WorkspaceTools:
             raise ValueError("browser probe call budget exhausted for this batch")
         if not self.current_changes_validated:
             raise ValueError("run passing quick validation for the current revision first")
+        steps = validate_steps(arguments.get("steps"))
+        previously_verified = (
+            not self.browser_probe_requires_recheck
+            and self.browser_probe_verified_revision == self.change_revision
+        )
         self.browser_probe_calls += 1
         self.browser_probe_requires_recheck = True
-        result = probe_local_app(self.root, self.smoke_port, arguments.get("steps"))
+        self.browser_probe_verified_revision = -1
+        result = probe_local_app(self.root, self.smoke_port, steps)
         if (
             result.get("ok")
-            and result.get("behavioral_checks", 0) > 0
-            and result.get("behavioral_assertions", 0) > 0
+            and (
+                previously_verified
+                or (result.get("behavioral_checks", 0) > 0 and result.get("behavioral_assertions", 0) > 0)
+            )
         ):
             self.browser_probe_requires_recheck = False
             self.browser_probe_verified_revision = self.change_revision

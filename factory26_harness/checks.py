@@ -262,7 +262,7 @@ def interaction_policy_check(root: Path) -> CheckResult:
                 )
                 attached = re.search(
                     rf"(?:append|appendChild|prepend|replaceChildren|insertBefore|"
-                    rf"replaceWith)\s*\([^;\n)]*\b{escaped}\b"
+                    rf"replaceWith)\s*\([^;)]*\b{escaped}\b"
                     rf"|\b{escaped}\s*\.\s*(?:click|showModal|replaceWith)\s*\("
                     rf"|\breturn\s+{escaped}\b",
                     body,

@@ -24,7 +24,7 @@ from factory26_harness.trace import (
     redact_sensitive_data,
     verify_trace_rows,
 )
-from factory26_harness.workspace_tools import WorkspaceTools
+from factory26_harness.workspace_tools import MAX_TOOL_RESULT_CHARS, WorkspaceTools
 
 
 DUMMY_BUILD = (
@@ -634,6 +634,106 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertEqual(tools.change_revision, 0)
             self.assertEqual(tools.changed_files, set())
 
+    def test_oversized_browser_result_keeps_errors_counts_and_latest_observation(self) -> None:
+        latest = {
+            "action": "click", "path": "/saved", "visible_text": "x" * 2700 + "FINAL_STATE",
+            "visible_text_truncated": False, "missing_text": ["Expected"],
+            "unexpected_text": ["Unexpected"],
+            "controls": [{"tag": "button", "role": "button", "name": "Save", "disabled": False}],
+        }
+        payload = {
+            "ok": False, "workspace_isolated": True,
+            "observations": [{**latest, "visible_text": "old" * 900}] * 8 + [latest],
+            "assertion_failures": [{"step": 8, "missing": ["Expected"], "unexpected": ["Unexpected"]}],
+            "page_errors": ["LATE_ERROR: save handler failed"],
+            "blocked_external_hosts": ["example.com"],
+            "behavioral_checks": 8, "behavioral_assertions": 2,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3917)
+            with patch.object(tools, "_tool_browser_probe", return_value=payload):
+                encoded = tools.execute("browser_probe", {"steps": []})
+        self.assertLessEqual(len(encoded), MAX_TOOL_RESULT_CHARS)
+        result = json.loads(encoded)
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["truncated"])
+        self.assertGreater(result["original_chars"], MAX_TOOL_RESULT_CHARS)
+        self.assertTrue(result["workspace_isolated"])
+        self.assertEqual(result["behavioral_checks"], 8)
+        self.assertEqual(result["behavioral_assertions"], 2)
+        for key in ("assertion_failures", "page_errors", "blocked_external_hosts"):
+            self.assertEqual(result[key], payload[key])
+        self.assertEqual(result["observations"], [latest])
+        self.assertEqual(result["observations_omitted"], 8)
+
+    def test_browser_compaction_bounds_hostile_arrays_and_json_escaped_strings(self) -> None:
+        hostile = '"\\\n\x00' * 1000
+        latest = {
+            "action": "click", "path": "/latest" + hostile, "visible_text": "LATEST" + hostile,
+            "visible_text_truncated": False,
+            "missing_text": [hostile] * 12, "unexpected_text": [hostile] * 12,
+            "controls": [{"tag": hostile, "role": hostile, "name": hostile, "disabled": False}] * 60,
+        }
+        payload = {
+            "ok": False, "workspace_isolated": True, "error": "ERROR" + hostile,
+            "observations": [{}] * 1000 + [latest],
+            "assertion_failures": [{"step": 8, "missing": [hostile] * 12, "unexpected": [hostile] * 12}] * 12,
+            "page_errors": ["PAGE_ERROR" + hostile] * 12,
+            "blocked_external_hosts": ["HOST" + hostile] * 12,
+            "behavioral_checks": 8, "behavioral_assertions": 64,
+            "unrecognized": hostile,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3917)
+            with patch.object(tools, "_tool_browser_probe", return_value=payload), patch.object(tools.trace, "record"):
+                encoded = tools.execute("browser_probe", {"steps": []})
+        self.assertLessEqual(len(encoded), MAX_TOOL_RESULT_CHARS)
+        result = json.loads(encoded)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["behavioral_checks"], 8)
+        self.assertEqual(result["behavioral_assertions"], 64)
+        self.assertEqual(result["observations_omitted"], 1000)
+        self.assertEqual(len(result["observations"]), 1)
+        observed = result["observations"][0]
+        self.assertTrue(observed["visible_text"].startswith("LATEST"))
+        self.assertTrue(observed["visible_text_truncated"])
+        self.assertTrue(result["error"].startswith("ERROR"))
+        self.assertTrue(result["page_errors"][0])
+        self.assertTrue(payload["page_errors"][0].startswith(result["page_errors"][0]))
+        self.assertLessEqual(len(result["error"]), 500)
+        self.assertLessEqual(len(observed["visible_text"]), 2800)
+        for control in observed["controls"]:
+            for key in ("tag", "role", "name"):
+                self.assertLessEqual(len(control[key]), 500)
+        self.assertNotIn("unrecognized", result)
+        self.assertLessEqual(len(result["assertion_failures"]), 9)
+        self.assertLessEqual(len(result["page_errors"]), 10)
+        self.assertLessEqual(len(result["blocked_external_hosts"]), 10)
+        self.assertLessEqual(len(observed["controls"]), 40)
+        for row in result["assertion_failures"]:
+            self.assertLessEqual(len(row["missing"]), 4)
+            self.assertLessEqual(len(row["unexpected"]), 4)
+        self.assertLessEqual(len(observed["missing_text"]), 4)
+        self.assertLessEqual(len(observed["unexpected_text"]), 4)
+        self.assertEqual(len(latest["controls"]), 60)
+        self.assertFalse(latest["visible_text_truncated"])
+
+    def test_oversized_browser_exception_keeps_a_bounded_structured_error(self) -> None:
+        message = "Locator timeout: " + '"\\\n\x00' * 10_000
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3917)
+            with patch.object(tools, "_tool_browser_probe", side_effect=RuntimeError(message)):
+                encoded = tools.execute("browser_probe", {"steps": []})
+        self.assertLessEqual(len(encoded), MAX_TOOL_RESULT_CHARS)
+        result = json.loads(encoded)
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["truncated"])
+        self.assertTrue(result["error"].startswith("Locator timeout: "))
+        self.assertLessEqual(len(result["error"]), 500)
+
     def test_validation_subprocess_does_not_receive_model_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -682,6 +782,22 @@ class ToolAndTraceTests(unittest.TestCase):
             self.assertFalse(result.passed)
             self.assertIn("postinstall", result.summary)
             self.assertIn("unsafe dependency", result.summary)
+
+    def test_interaction_policy_accepts_multiline_dom_attachments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = root / "frontend/src/app.js"
+            app.parent.mkdir(parents=True)
+            for method in ("append", "appendChild"):
+                with self.subTest(method=method):
+                    app.write_text(
+                        'const details = document.createElement("div");\n'
+                        'details.textContent = "Saved";\n'
+                        f"document.body.{method}(\n  details\n);\n",
+                        encoding="utf-8",
+                    )
+                    result = interaction_policy_check(root)
+                    self.assertTrue(result.passed, result.summary)
 
     def test_interaction_policy_requires_in_page_feedback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

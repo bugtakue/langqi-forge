@@ -26,12 +26,15 @@ class ProgressTraceTests(unittest.TestCase):
                 })
                 trace.record("implementation_batch_finished", batch=1, completed=False,
                              summary="maximum tool turns reached", turns=20)
+                trace.record("agent_context_compacted", retained_specification_ids=["R-1"],
+                             specifications="PRIVATE_REQUIREMENTS")
             rendered = output.getvalue()
             self.assertNotIn("PRIVATE_", rendered)
             self.assertNotIn("sk-test", rendered)
             self.assertIn("[REDACTED]", rendered)
             self.assertIn("maximum tool turns reached", rendered)
             self.assertIn('"completed": false', rendered)
+            self.assertIn('"retained_specification_ids": ["R-1"]', rendered)
             rows = [json.loads(line) for line in path.read_text().splitlines()]
             self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
 

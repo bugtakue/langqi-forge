@@ -106,6 +106,7 @@ class BrowserProbeTests(unittest.TestCase):
                 inspection = json.loads(tools.execute("browser_probe", {"steps": []}))
                 self.assertTrue(inspection["ok"])
                 self.assertTrue(tools.browser_probe_requires_recheck)
+                self.assertEqual(tools.browser_probe_verified_revision, -1)
 
                 verified = json.loads(tools.execute("browser_probe", {"steps": steps}))
                 self.assertTrue(verified["ok"])
@@ -118,6 +119,7 @@ class BrowserProbeTests(unittest.TestCase):
                 )
                 self.assertTrue(written["ok"])
                 self.assertTrue(tools.browser_probe_requires_recheck)
+                self.assertEqual(tools.browser_probe_verified_revision, -1)
 
                 tools.last_validation_passed = True
                 tools.validated_revision = tools.change_revision
@@ -129,6 +131,109 @@ class BrowserProbeTests(unittest.TestCase):
                 exhausted = json.loads(tools.execute("browser_probe", {"steps": steps}))
                 self.assertFalse(exhausted["ok"])
                 self.assertIn("budget", exhausted["error"])
+
+    def test_invalid_steps_do_not_consume_probe_quota_or_revoke_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3917)
+            tools.maximum_browser_probe_calls = 3
+            tools.last_validation_passed = True
+            tools.validated_revision = 0
+            tools.validation_scope = "quick"
+            invalid_steps = [
+                [{"action": "click", "role": "button", "name": "Sign up", "label": "Sign up"}],
+                [{"action": "reload"}, {"action": "click"}],
+            ]
+            with patch(
+                "factory26_harness.workspace_tools.probe_local_app",
+                return_value={"ok": True, "behavioral_checks": 1, "behavioral_assertions": 1},
+            ) as probe:
+                for verified in (False, True):
+                    if verified:
+                        result = json.loads(tools.execute("browser_probe", {
+                            "steps": [{"action": "reload", "expect_text": ["Saved"]}],
+                        }))
+                        self.assertTrue(result["ok"])
+                    calls_before = tools.browser_probe_calls
+                    for steps in invalid_steps:
+                        result = json.loads(tools.execute("browser_probe", {"steps": steps}))
+                        self.assertFalse(result["ok"])
+                        self.assertIn("exactly one semantic locator", result["error"])
+                        self.assertEqual(tools.browser_probe_calls, calls_before)
+                        self.assertEqual(probe.call_count, calls_before)
+                        self.assertFalse(tools.browser_probe_requires_recheck)
+                        self.assertEqual(tools.browser_probe_verified_revision, 0 if verified else -1)
+
+    def test_successful_inspections_preserve_current_behavioral_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3917)
+            tools.maximum_browser_probe_calls = 3
+            tools.last_validation_passed = True
+            tools.validated_revision = 0
+            tools.validation_scope = "quick"
+            steps = [{"action": "reload", "expect_text": ["Saved"]}]
+            with patch(
+                "factory26_harness.workspace_tools.probe_local_app",
+                side_effect=[
+                    {"ok": True, "behavioral_checks": 1, "behavioral_assertions": 1},
+                    {"ok": True, "behavioral_checks": 0, "behavioral_assertions": 0},
+                    {"ok": True, "behavioral_checks": 0, "behavioral_assertions": 0},
+                ],
+            ):
+                for actions in (steps, [], []):
+                    result = json.loads(tools.execute("browser_probe", {"steps": actions}))
+                    self.assertTrue(result["ok"])
+                    self.assertFalse(tools.browser_probe_requires_recheck)
+                    self.assertEqual(tools.browser_probe_verified_revision, tools.change_revision)
+                exhausted = json.loads(tools.execute("browser_probe", {"steps": steps}))
+                self.assertFalse(exhausted["ok"])
+                self.assertIn("budget", exhausted["error"])
+                self.assertFalse(tools.browser_probe_requires_recheck)
+            self.assertEqual(tools.browser_probe_calls, 3)
+
+    def test_inspection_cannot_restore_verification_after_failure_or_edit(self) -> None:
+        for invalidation in ("failed_result", "exception", "edit"):
+            with self.subTest(invalidation=invalidation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3917)
+                tools.maximum_browser_probe_calls = 5
+                tools.last_validation_passed = True
+                tools.validated_revision = 0
+                tools.validation_scope = "quick"
+                steps = [{"action": "reload", "expect_text": ["Saved"]}]
+                passed = {"ok": True, "behavioral_checks": 1, "behavioral_assertions": 1}
+                with patch(
+                    "factory26_harness.workspace_tools.probe_local_app", return_value=passed
+                ) as probe:
+                    self.assertTrue(json.loads(tools.execute("browser_probe", {"steps": steps}))["ok"])
+                    if invalidation == "edit":
+                        written = json.loads(tools.execute("write_file", {
+                            "path": "frontend/src/app.js", "content": "// changed\n",
+                        }))
+                        self.assertTrue(written["ok"])
+                        tools.last_validation_passed = True
+                        tools.validated_revision = tools.change_revision
+                        tools.validation_scope = "quick"
+                    else:
+                        probe.return_value = {"ok": False, "behavioral_checks": 1, "behavioral_assertions": 1}
+                        if invalidation == "exception":
+                            probe.side_effect = RuntimeError("probe failed")
+                        failed = json.loads(tools.execute("browser_probe", {"steps": steps}))
+                        self.assertFalse(failed["ok"])
+                        probe.side_effect = None
+                    self.assertTrue(tools.browser_probe_requires_recheck)
+                    self.assertEqual(tools.browser_probe_verified_revision, -1)
+
+                    probe.return_value = {"ok": True, "behavioral_checks": 0, "behavioral_assertions": 0}
+                    self.assertTrue(json.loads(tools.execute("browser_probe", {"steps": []}))["ok"])
+                    self.assertTrue(tools.browser_probe_requires_recheck)
+                    self.assertEqual(tools.browser_probe_verified_revision, -1)
+
+                    probe.return_value = passed
+                    self.assertTrue(json.loads(tools.execute("browser_probe", {"steps": steps}))["ok"])
+                    self.assertFalse(tools.browser_probe_requires_recheck)
+                    self.assertEqual(tools.browser_probe_verified_revision, tools.change_revision)
 
     @unittest.skipUnless(
         os.environ.get("FACTORY26_RUN_BROWSER_INTEGRATION") == "1",

@@ -72,7 +72,12 @@ def validate_steps(value: Any) -> list[dict[str, Any]]:
         elif action != "reload":
             locators = [key for key in ("role", "label", "text") if raw.get(key)]
             if len(locators) != 1:
-                raise ValueError(f"browser step {index} needs exactly one semantic locator")
+                raise ValueError(
+                    f"browser step {index} needs exactly one semantic locator: "
+                    'use role+name (e.g. {"action":"click","role":"button","name":"Save"}), '
+                    "OR label for a labeled input, OR text for visible text. "
+                    "Do not combine these keys or nest them under selector/locator."
+                )
             kind = locators[0]
             if kind == "role":
                 step["role"] = _bounded_text(raw["role"], maximum=40)

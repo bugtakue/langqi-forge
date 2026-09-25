@@ -75,6 +75,7 @@ _PROGRESS_FIELDS = {
     "model_requests", "staged_changes_committed", "browser_probe",
     "before_characters", "after_characters", "retained_current_turn",
     "fresh_observation_messages", "soft_limit_exceeded",
+    "retained_specification_ids",
 }
 
 
