@@ -10,6 +10,10 @@
 
 ## 当前证据快照
 
+**d9首批超时失败已封印归档，单开关对照fb84f4e已串行启动GitHub。** 2026-09-25 18:09—18:18 UTC：b15311c6f690正式失败0/0、￥0.6018、15m44s，34行轨迹/清单/脱敏全验通过，0写入/0晋升；不再跑该失败快照的Sheet。仍以c3887cd已完成双项的综合第9/24、6.55、17/200、￥25.0273为最近成绩。
+
+新分支`codex/factory26-nonthinking-20260926`从精确d9基线创建，源码fb84f4e6dcba99b9d858425b5d92a3d873d63825；只默认编码thinking=disabled，未包含b443的完整源码保留修订，不改预算/门禁。全量321项318通过3跳过，解包29项通过；ZIP`dist/langqi-forge-nonthinking-d9.zip`190501字节，SHA e781889d49cb1165659debce898224ce7f42eee33a27ca1bd279180e68101082，合同ab5bfcb432ed522ae3dbd345f603742e2f80338e0ba6a6c4a9742b69279c7dfb。保存18:15:38/Pro/比赛额度，前置余额￥441.64，唯一新运行[465e25b12c29](https://arc-bench.com/runs/465e25b12c29)，环境预检/依赖通过、Stage2启动、Stage3 pending；暂无模型响应或正式新成绩。详见`diagnostics/nonthinking-comparison-2026-09-26.md`与`diagnostics/checkpoint-official-run-2026-09-26.md`。如果有有效产出，再同快照Sheet；代理拒绝字段不盲目重启。当前目标active，不是前三。下方“必须先完成d9双项”等为已被无产出失败取代的历史计划。
+
 **下一候选b443324已封包并独立验证，未上传。** `dist/langqi-forge-complete-sources.zip`，21成员/190526字节，SHA d4307f723d23a6f36cfc8a827e3698542943af772b4f327e73e1966a96bb4410；源码b44332403381f3953601d1da28ae29d5b47df78a，合同038bea989466e03fcd384f9136f998ffc3553ff311f5ffa405e6b4e7ec55650c。独立解包38项协议/缓存/验收检查通过，源码全量320项317通过/3跳过。详见`diagnostics/complete-source-retention-2026-09-26.md`。它替代旧d9c ZIP作为后续候选，但当前正式运行b15311c6f690仍精确d9c86b4，不改/取消/并行；须先完成当前同快照双项。目标未完成。
 
 **完整源码优先的窄条件修订本地通过全量回归，未封包/上传；正式新版仍运行。** 只有所选源码全文在原36KB及整体上下文预算都放得下时，替代重复旧页；否则完全沿用原回退。离线反例旧版两主文件都截断、新版都完整；30K不足时回退仍保页。全量320项/317通过/3环境跳过（63.457秒），不增预算/改验收。详见`diagnostics/complete-source-retention-2026-09-26.md`。正式d9c86b4/b15311c6f690在7m11s request2已215.816秒正常返回list_files，seq24 request3在途；不是超时，仍无写入/业务晋升/新成绩。综合最近已结算第9/24仍有效，目标未完成。
