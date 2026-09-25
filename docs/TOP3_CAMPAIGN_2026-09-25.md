@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**当前正式界面已进入Stage3评分，本轮完成独立组织浏览检查。** 101m43s及103m26s现场Stage2标完成、Stage3 Evaluation in progress；stdout尚停在旧request107/seq795重试，不能用旧日志确定生成终态详情或最终数量。最新中途包`project-partial-org.zip` SHA `5de0c9d83461aca8c685688e816ebc35dce4ac0c1174f43faea559cd04a7c977`，41成员/3,309,600字节，Chrome访客筛选/返回/刷新/私有直达拒绝及10项本地接口检查通过；发现登录后Workspace没有任何应用内导航链接，刷新仍0链接，浏览器Back可绕回首页。这是未被访客自测覆盖的具体入口缺口，不预言官方失败数。原件/源码未改，临时服务19438已停止、本地页已关闭；完整证据见`diagnostics/pro-partial-org-review-2026-09-26.md`。未改参赛runtime，待测包仍a31cfa9；新最终生成证据下载已通过正常UI请求一次，尚在打包，只允许检查生成封印轨迹，不读评分期数据。
+
 **最新现场85m55s（北京时间2026-09-26 00:05）：组织浏览单项已晋升，内部4/47。** seq755浏览器探针通过，seq760—761两个旧行为胶囊全部重放通过，seq762完整检查通过，seq763在15回合/1探针后committed=true；seq765保存第三个胶囊。seq766开始组织/团队创建REQ-2-1-2、REQ-2-2-1，最新request107/seq793。同一Pro仍Stage2/Stage3 pending，无新官方成绩/费用/综合排名。106个可见编码响应累计输入2,363,938/输出248,053，仅为报告用量。本轮取得新增晋升证据、没有叠加runtime或另起评测，待测包仍a31cfa9。详见`diagnostics/pro-comparison-2026-09-25.md`。
 
 **最新现场77m52s：Pro组织原组20回合没有代码落地、没有浏览器验收，已自动拆分。** seq658 changed_files=[]、completed=false、committed=false、probe calls=0；seq659拆分，seq660开始组织浏览REQ-2-1-1，最新request91/seq676。仍内部3/47、同一359dd7e72ca7、Stage2/Stage3 pending，无官方新分数/费用；不根据源码快照一个字段误判整个上下文可见内容。约15:55 UTC正式综合榜全部任务/模型再次确认第19/24、旧Flash0分，第三名29.17；本轮为新失败证据与确切在途核验，不追加runtime改动/上传/评测。最新待测包仍a31cfa9，见下方精确身份及`diagnostics/pro-comparison-2026-09-25.md`。
