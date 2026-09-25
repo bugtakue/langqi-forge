@@ -165,6 +165,36 @@ class AgentRun:
     turns: int
 
 
+def _completion_tail_enabled() -> bool:
+    value = os.environ.get("FACTORY26_COMPLETION_TAIL", "0")
+    if value not in {"0", "1"}:
+        raise ValueError("FACTORY26_COMPLETION_TAIL must be 0 or 1")
+    return value == "1"
+
+
+def _current_behavior_verified(tools: WorkspaceTools) -> bool:
+    return (
+        not tools.browser_probe_requires_recheck
+        and tools.browser_probe_verified_revision == tools.change_revision
+    )
+
+
+def _tail_probe_arguments(reply: Any) -> dict[str, Any] | None:
+    if getattr(reply, "finish_reason", "") == "length" or len(reply.tool_calls) != 1:
+        return None
+    call = reply.tool_calls[0]
+    if not isinstance(call, dict) or not isinstance(call.get("id"), str) or not call["id"]:
+        return None
+    function = call.get("function") or {}
+    if not isinstance(function, dict) or function.get("name") != "browser_probe":
+        return None
+    try:
+        raw = function.get("arguments") or "{}"
+        return json.loads(raw) if isinstance(raw, str) else dict(raw)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+
+
 def _assistant_message(reply_message: dict[str, Any]) -> dict[str, Any]:
     message: dict[str, Any] = {
         "role": "assistant",
@@ -458,6 +488,7 @@ class CodingAgent:
         self.tools = tools
         self.trace = trace
         self.max_turns = max(2, max_turns)
+        self.completion_tail_enabled = _completion_tail_enabled()
         self.maximum_tool_calls_per_turn = max(
             1, int(os.environ.get("FACTORY26_MAX_TOOL_CALLS_PER_TURN", "8"))
         )
@@ -1271,6 +1302,61 @@ class CodingAgent:
                         reason="context limit; acceptance/source context takes priority",
                     )
         changed = tuple(sorted(self.tools.changed_files - changed_before))
+        return self._finish_or_exhaust(
+            messages, stage, requirement_ids, changed, final_summary,
+            acceptance_audit_revision, total_tool_calls,
+        )
+
+    def _tail_admissible(
+        self, stage: str, changed: tuple[str, ...], audit_revision: int | None,
+        total_tool_calls: int,
+    ) -> bool:
+        tools = self.tools
+        ready = (
+            self.completion_tail_enabled and stage == "implementation" and bool(changed)
+            and tools.current_changes_validated and audit_revision == tools.change_revision
+            and tools.maximum_browser_probe_calls > 0
+        )
+        can_probe = (
+            tools.browser_probe_calls < tools.maximum_browser_probe_calls
+            and total_tool_calls < self.maximum_total_tool_calls
+        )
+        return bool(ready and (_current_behavior_verified(tools) or can_probe))
+
+    def _tail_message(self, messages: list[dict[str, Any]], content: str) -> bool:
+        message = {"role": "user", "content": content}
+        if _context_characters(messages + [message]) > self.maximum_context_characters:
+            return False
+        messages.append(message)
+        return True
+
+    def _tail_probe(self, messages: list[dict[str, Any]]) -> bool:
+        schemas = [schema for schema in self.tools.schemas()
+                   if schema["function"]["name"] == "browser_probe"]
+        reply = self.model.complete(messages, schemas)
+        arguments = _tail_probe_arguments(reply)
+        if not isinstance(arguments, dict):
+            return False
+        messages.append(_assistant_message(reply.raw_message))
+        result = self.tools.execute("browser_probe", arguments)
+        messages.append({"role": "tool", "tool_call_id": reply.tool_calls[0].get("id", ""),
+                         "content": result})
+        return _current_behavior_verified(self.tools)
+
+    def _tail_audit(self, messages: list[dict[str, Any]]) -> str:
+        reply = self.model.complete(messages, [])
+        if reply.tool_calls or getattr(reply, "finish_reason", "") == "length":
+            return ""
+        summary = reply.content.strip()
+        return summary if re.match(r"^`?AUDIT PASS(?:\s|:|$)", summary) else ""
+
+    def _finish_or_exhaust(
+        self, messages: list[dict[str, Any]], stage: str, requirement_ids: list[str],
+        changed: tuple[str, ...], final_summary: str, audit_revision: int | None,
+        total_tool_calls: int,
+    ) -> AgentRun:
+        if self._tail_admissible(stage, changed, audit_revision, total_tool_calls):
+            return self._run_completion_tail(messages, requirement_ids, changed)
         self.trace.record(
             "agent_session_exhausted",
             stage=stage,
@@ -1283,3 +1369,40 @@ class CodingAgent:
             changed,
             self.max_turns,
         )
+
+    def _run_completion_tail(
+        self, messages: list[dict[str, Any]], requirement_ids: list[str],
+        changed: tuple[str, ...],
+    ) -> AgentRun:
+        revision = self.tools.change_revision
+        calls = 0
+        summary = ""
+        self.trace.record("agent_completion_tail_started", requirement_ids=requirement_ids,
+                          change_revision=revision, maximum_model_calls=2, writes_allowed=False)
+        needs_probe = not _current_behavior_verified(self.tools)
+        if needs_probe and self._tail_message(messages,
+            "Implementation turns ended. Code is frozen. One browser_probe call remains for "
+            "a requirement-derived action and visible assertion on this validated revision. "
+            "No reads, writes, inspection-only calls or other tools are allowed; no automatic retry. "
+            "Failure rejects this candidate. Do not adapt the flow to incorrect app behavior."):
+            calls += 1
+            self._tail_probe(messages)
+        if _current_behavior_verified(self.tools) and self._tail_message(messages,
+            "Code is frozen and current-revision behavior is verified. Perform the existing "
+            "requirement-by-requirement acceptance audit using the provided evidence. No tools. "
+            "Reply AUDIT PASS: only if all assigned requirements are implemented; report unverified "
+            "behavior and handoff contracts. Missing evidence or any gap requires AUDIT BLOCKED:"):
+            calls += 1
+            summary = self._tail_audit(messages)
+        passed = (
+            bool(summary) and self.tools.change_revision == revision
+            and self.tools.current_changes_validated and _current_behavior_verified(self.tools)
+        )
+        self.trace.record("agent_completion_tail_finished", requirement_ids=requirement_ids,
+                          change_revision=revision, model_calls=calls, completed=passed)
+        if passed:
+            self.trace.record("agent_session_completed", stage="implementation",
+                              requirement_ids=requirement_ids, changed_files=changed,
+                              summary=summary, acceptance_audit=True, acceptance_audit_self_reported=True)
+        return AgentRun(passed, summary if passed else "completion-only tail did not pass unchanged gates",
+                        changed, self.max_turns + calls)
