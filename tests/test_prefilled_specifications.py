@@ -105,6 +105,8 @@ class PrefilledSpecificationTests(unittest.TestCase):
             self.assertEqual(len(requests), 3)
             for messages in requests:
                 self.assertEqual(prefilled_body(messages[1]["content"]), {"R": node.full_spec_document()})
+                self.assertNotIn("[ABBREVIATED:", messages[1]["content"])
+                self.assertIn("[R] Complete original", messages[1]["content"])
                 self.assertLessEqual(_context_characters(messages), 96_000)
             rows = [json.loads(row) for row in trace.path.read_text().splitlines()]
             self.assertTrue(any(row["event"] == "agent_context_compacted" for row in rows))
@@ -113,6 +115,40 @@ class PrefilledSpecificationTests(unittest.TestCase):
             prepared = next(row["payload"] for row in rows if row["event"] == "requirement_prefill_prepared")
             self.assertEqual(prepared["documents"][0]["characters"], len(node.full_spec_document()))
             self.assertFalse(prepared["model_receipt_confirmed"])
+            self.assertGreater(prepared["duplicate_preview_characters_removed"], 1000)
+
+    def test_mixed_prefill_removes_only_delivered_preview(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 33245)
+            nodes = [flatten_atomic({"id": key, "type": "ATOMIC", "name": key,
+                "description": description, "extra_rule": "must retain exact original"})[0]
+                for key, description in [("fits", "first requirement " * 30),
+                                         ("too-large", "unfitted original " * 2000),
+                                         ("later-fit", "third requirement " * 20)]]
+            with patch.dict(os.environ, {"FACTORY26_INLINE_SPEC_CHARS": "2400"}):
+                agent = CodingAgent(None, tools, tools.trace)
+            with patch.object(agent, "_run", return_value=AgentRun(False, "not executed", (), 0)) as run:
+                agent.implement(nodes, task_outline="preserve this architecture index")
+            prompt = run.call_args.args[0]
+            self.assertEqual(prefilled_body(prompt), {
+                node.req_id: node.full_spec_document() for node in (nodes[0], nodes[2])})
+            self.assertIn(nodes[1].compact_spec(), prompt)
+            self.assertNotIn(nodes[0].compact_spec(), prompt)
+            self.assertNotIn(nodes[2].compact_spec(), prompt)
+            self.assertIn("preserve this architecture index", prompt)
+            self.assertFalse(tools.requirement_specs_complete)
+            self.assertEqual(tools.requirement_spec_offsets["too-large"], 0)
+
+    def test_rebuild_cannot_expand_previously_measured_allocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 33246)
+            tools.register_requirement_specs({"R": "original"})
+            agent = CodingAgent(None, tools, tools.trace)
+            prompt = agent._prefill_prompt("original prefix", rebuild_prompt=lambda _ids: "x" * 96_000)
+            self.assertTrue(prompt.startswith("original prefix"))
+            self.assertEqual(prefilled_body(prompt), {"R": "original"})
 
     def test_opt_out_and_unfitted_documents_still_require_paging(self):
         for setting in ("0", "900"):
