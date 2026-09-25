@@ -100,6 +100,8 @@ class CompletionTailTests(unittest.TestCase):
     def test_validated_last_turn_can_reprobe_then_audit_without_more_writes(self):
         result, requests, probes, rows = self.run_boundary()
         self.assertTrue(result.completed, result.summary)
+        started = next(row for row in rows if row["event"] == "agent_session_started")
+        self.assertIs(started["payload"]["completion_tail_enabled"], True)
         self.assertEqual((result.turns, len(requests), probes), (7, 7, 2))
         self.assertEqual([x["function"]["name"] for x in requests[5]["schemas"]], ["browser_probe"])
         self.assertEqual(requests[6]["schemas"], [])

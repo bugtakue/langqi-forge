@@ -667,6 +667,7 @@ class CodingAgent:
             stage=stage,
             requirement_ids=requirement_ids,
             prompt=prompt,
+            completion_tail_enabled=self.completion_tail_enabled,
         )
         changed_before = set(self.tools.changed_files)
         final_summary = ""

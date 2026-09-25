@@ -1,5 +1,7 @@
 # 完成边界的只验收收尾窗口（默认关闭候选）
 
+后续入口政策已变更：参赛main.py显式默认开启，库仍默认关闭、Runner明确设置优先，详见completion-entry-policy-2026-09-26.md。以下为最初实验合同与验证记录，门禁仍保留。
+
 2026-09-26。代码位于factory26_harness/agent.py；11项离线边界测试位于tests/test_completion_tail.py。此改动属于主分支本地候选，未包含在正式运行fb84f4e中，未上传、未证明提分。
 
 ## 动机不是无限延长

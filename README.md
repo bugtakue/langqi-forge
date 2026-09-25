@@ -6,7 +6,7 @@
 
 当前正式版包含“行为回归胶囊”：将当前版本成功执行的操作流程固化，后续批次抽查、修复后及最终验收全量重放已存流程，保护旧功能免于被新改动破坏。正常回放不增加大模型调用；未覆盖的流程仍明确未知。详见[运行合同](docs/QUALIFIER_OPERATIONS.md)。
 
-主分支本地候选与已上传fb84f4e不同：包含[完整源码保留](docs/diagnostics/complete-source-retention-2026-09-26.md)、[失败现场回传](docs/diagnostics/probe-failure-scene-2026-09-26.md)、[控件状态断言](docs/diagnostics/control-state-assertions-2026-09-26.md)和默认关闭的[只验收收尾窗口](docs/diagnostics/completion-tail-2026-09-26.md)，默认编码策略仍为bounded；351项本地回归中348通过/3环境跳过，尚未以这些后续改动取得正式新成绩。
+主分支本地候选与已上传fb84f4e不同：包含[完整源码保留](docs/diagnostics/complete-source-retention-2026-09-26.md)、[失败现场回传](docs/diagnostics/probe-failure-scene-2026-09-26.md)、[控件状态断言](docs/diagnostics/control-state-assertions-2026-09-26.md)及[参赛入口启用的冻结代码收尾](docs/diagnostics/completion-entry-policy-2026-09-26.md)。库默认关闭、Runner明确设置优先；编码策略仍bounded。355项本地回归中352通过/3环境跳过，尚未以这些后续改动取得正式新成绩。Sheet已结束生成，675行[封印证据](docs/diagnostics/nonthinking-sheet-final-evidence-2026-09-26.md)核验通过，官方评分仍在进行。
 
 ## 历史版本说明（不是当前运行状态）
 
