@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import base64
+import contextlib
+import io
 import json
 import os
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -40,6 +43,107 @@ class FakeResponse:
 
 
 class VisualReferenceTests(unittest.TestCase):
+    def _response_case(self, response_body: bytes, network_error: Exception | None = None):
+        """Only local response fixtures; never call a model or expose image bytes."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "task/reference").mkdir(parents=True)
+            (root / "task/reference/home.png").write_bytes(TINY_PNG)
+            trace = ProductionTrace(root / "trace.jsonl", stdout_progress=True)
+            configuration, _ = resolve_visual_gateway({
+                "VISUAL_API_KEY": "fixture-secret",
+                "VISUAL_BASE_URL": "https://vision.example.test/v1",
+                "VISUAL_MODEL": "fixture-vision",
+            })
+            client = VisualReferenceClient(root / "task", trace, configuration)
+            response = FakeResponse()
+            response.read = lambda _limit: response_body
+            output = io.StringIO()
+            error = None
+            with contextlib.redirect_stdout(output), patch(
+                "factory26_harness.visual_reference.urllib.request.urlopen",
+                return_value=response, side_effect=network_error,
+            ) as opener:
+                try:
+                    answer = client.describe("reference/home.png")
+                except RuntimeError as exc:
+                    error, answer = str(exc), None
+            rows = [json.loads(line) for line in trace.path.read_text().splitlines()]
+            self.assertTrue(verify_trace_rows(rows, require_fully_sealed=True)["valid"])
+            self.assertEqual(opener.call_count, 1)
+            return client, answer, error, rows[-1], output.getvalue()
+
+    def test_empty_caption_keeps_reported_usage_and_safe_failure_reason(self) -> None:
+        client, answer, error, row, output = self._response_case(json.dumps({
+            "choices": [{"finish_reason": "length", "message": {
+                "content": None, "reasoning_content": "private-provider-body",
+            }}],
+            "usage": {"prompt_tokens": 42, "completion_tokens": 500},
+        }).encode())
+        self.assertIsNone(answer)
+        self.assertIn("empty_caption", error)
+        self.assertEqual((client.prompt_tokens, client.completion_tokens), (42, 500))
+        self.assertEqual(row["payload"]["finish_reason"], "length")
+        self.assertEqual(row["payload"]["usage_status"], "reported")
+        self.assertIn('"error_category": "empty_caption"', output)
+        self.assertNotIn("private-provider-body", str(row) + output + error)
+
+    def test_malformed_visual_responses_have_bounded_categories(self) -> None:
+        for body, category in (
+            (b'{"error": "private-provider-body"', "invalid_json"),
+            (b'[]', "invalid_response"),
+            (b'{"choices": []}', "invalid_response"),
+            (b'{"choices": [{"message": {"content": 42}}]}', "invalid_caption"),
+            (b'x' * 100_001, "response_too_large"),
+        ):
+            with self.subTest(category=category):
+                client, answer, error, row, output = self._response_case(body)
+                self.assertIsNone(answer)
+                self.assertIn(category, error)
+                self.assertEqual(row["payload"]["error_category"], category)
+                self.assertEqual(client.calls, 1)
+                self.assertNotIn("private-provider-body", str(row) + output + error)
+
+    def test_visual_usage_is_sanitized_and_not_inferred_when_missing(self) -> None:
+        for usage, status, totals in (
+            ({"prompt_tokens": 8, "completion_tokens": 9, "extra": "private-provider-body"},
+             "reported", (8, 9)),
+            ({"prompt_tokens": 8}, "partial", (8, 0)),
+            ({"prompt_tokens": True, "completion_tokens": -1}, "invalid", (0, 0)),
+            (None, "unavailable", (0, 0)),
+        ):
+            with self.subTest(status=status):
+                client, answer, error, row, output = self._response_case(json.dumps({
+                    "choices": [{"finish_reason": "private-provider-body", "message": {
+                        "content": [{"type": "text", "text": "A visible Save button."}],
+                    }}], "usage": usage,
+                }).encode())
+                self.assertIsNone(error)
+                self.assertEqual(answer["description"], "A visible Save button.")
+                self.assertEqual((client.prompt_tokens, client.completion_tokens), totals)
+                self.assertEqual(row["payload"]["usage_status"], status)
+                self.assertEqual(row["payload"]["finish_reason"], "unknown")
+                self.assertNotIn("private-provider-body", str(row) + output)
+                self.assertNotIn("A visible Save button.", output)
+
+    def test_network_failure_does_not_leak_provider_detail_or_guess_usage(self) -> None:
+        for failure, category in (
+            (urllib.error.HTTPError("https://vision.example.test", 429,
+                                    "private-provider-body", {}, None), "http_error"),
+            (urllib.error.URLError("private-provider-body"), "transport_error"),
+            (TimeoutError("private-provider-body"), "transport_error"),
+        ):
+            with self.subTest(category=category, error_type=type(failure).__name__):
+                client, answer, error, row, output = self._response_case(b"", failure)
+                self.assertIsNone(answer)
+                self.assertIn(category, error)
+                self.assertEqual(row["payload"]["usage_status"], "unavailable")
+                self.assertEqual(row["payload"]["usage"], {})
+                self.assertEqual((client.prompt_tokens, client.completion_tokens), (0, 0))
+                self.assertNotIn("private-provider-body", str(row) + output + error)
+                if category == "http_error":
+                    self.assertEqual(row["payload"]["http_status"], 429)
+
     def test_named_visual_model_can_reuse_the_coding_gateway(self) -> None:
         environment = {
             "OPENAI_API_KEY": "shared-fixture-secret",

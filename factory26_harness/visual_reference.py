@@ -33,6 +33,61 @@ MAX_VISUAL_RESPONSE_BYTES = 100_000
 MAX_CAPTION_CHARS = 1_500
 
 
+class _VisualResponseError(ValueError):
+    """A fixed diagnostic code, never provider-controlled response text."""
+
+
+def _reported_usage(value: Any) -> tuple[dict[str, int], str]:
+    if value is None:
+        return {}, "unavailable"
+    if not isinstance(value, dict):
+        return {}, "invalid"
+    usage = {}
+    invalid = False
+    for key in ("prompt_tokens", "completion_tokens"):
+        if key not in value:
+            continue
+        count = value[key]
+        if type(count) is int and count >= 0:
+            usage[key] = count
+        else:
+            invalid = True
+    status = "invalid" if invalid else (
+        "reported" if len(usage) == 2 else "partial" if usage else "unavailable"
+    )
+    return usage, status
+
+
+def _visual_message(result: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    choices = result.get("choices")
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        raise _VisualResponseError("invalid_response")
+    message = choices[0].get("message")
+    if not isinstance(message, dict):
+        raise _VisualResponseError("invalid_response")
+    reason = choices[0].get("finish_reason")
+    allowed = {"stop", "length", "tool_calls", "function_call", "content_filter"}
+    return message, reason if isinstance(reason, str) and reason in allowed else "unknown"
+
+
+def _visual_caption(message: dict[str, Any]) -> str:
+    caption = message.get("content")
+    if caption is None:
+        caption = ""
+    if isinstance(caption, list):
+        caption = " ".join(
+            item["text"] for item in caption
+            if isinstance(item, dict) and item.get("type") == "text"
+            and isinstance(item.get("text"), str)
+        )
+    if not isinstance(caption, str):
+        raise _VisualResponseError("invalid_caption")
+    caption = caption.strip()[:MAX_CAPTION_CHARS]
+    if not caption:
+        raise _VisualResponseError("empty_caption")
+    return caption
+
+
 @dataclass(frozen=True)
 class VisualGatewayConfiguration:
     api_key: str
@@ -189,26 +244,43 @@ class VisualReferenceClient:
             method="POST",
             headers={"authorization": "Bearer " + self.api_key, "content-type": "application/json"},
         )
+        diagnostic: dict[str, Any] = {"usage": {}, "usage_status": "unavailable",
+                                      "finish_reason": "unknown"}
         try:
             with urllib.request.urlopen(request, timeout=90) as response:
                 body = response.read(MAX_VISUAL_RESPONSE_BYTES + 1)
+            diagnostic["response_bytes"] = len(body)
             if len(body) > MAX_VISUAL_RESPONSE_BYTES:
-                raise ValueError("visual response exceeds byte limit")
+                raise _VisualResponseError("response_too_large")
             result = json.loads(body.decode("utf-8"))
-            message = result["choices"][0]["message"]
-            caption = message.get("content") or ""
-            if isinstance(caption, list):
-                caption = " ".join(str(item.get("text") or "") for item in caption if isinstance(item, dict))
-            caption = str(caption).strip()[:MAX_CAPTION_CHARS]
-            if not caption:
-                raise ValueError("visual response was empty")
-            usage = result.get("usage") or {}
-            self.prompt_tokens += max(0, int(usage.get("prompt_tokens") or 0))
-            self.completion_tokens += max(0, int(usage.get("completion_tokens") or 0))
+            if not isinstance(result, dict):
+                raise _VisualResponseError("invalid_response")
+            usage, usage_status = _reported_usage(result.get("usage"))
+            diagnostic.update(usage=usage, usage_status=usage_status)
+            # A billed response may have no usable caption. Keep its reported
+            # usage, but never invent usage for transport failures or missing fields.
+            self.prompt_tokens += usage.get("prompt_tokens", 0)
+            self.completion_tokens += usage.get("completion_tokens", 0)
+            message, diagnostic["finish_reason"] = _visual_message(result)
+            caption = _visual_caption(message)
             answer = {"path": relative, "image_sha256": digest, "description": caption, "cached": False}
             self._cache[digest] = answer
-            self.trace.record("visual_reference_response", **answer, usage=usage)
+            self.trace.record("visual_reference_response", **answer, **diagnostic)
             return answer
-        except (urllib.error.URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            self.trace.record("visual_reference_error", path=relative, image_sha256=digest, error=str(exc)[:500])
-            raise RuntimeError(f"visual reference unavailable: {type(exc).__name__}") from exc
+        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            if isinstance(exc, _VisualResponseError):
+                category = str(exc)
+            elif isinstance(exc, urllib.error.HTTPError):
+                category = "http_error"
+                diagnostic["http_status"] = exc.code
+            elif isinstance(exc, (urllib.error.URLError, TimeoutError)):
+                category = "transport_error"
+            else:
+                category = "invalid_json"
+            self.trace.record(
+                "visual_reference_error", path=relative, image_sha256=digest,
+                error_type=type(exc).__name__, error_category=category, **diagnostic,
+            )
+            raise RuntimeError(
+                f"visual reference unavailable: {category} (finish_reason={diagnostic['finish_reason']})"
+            ) from exc

@@ -108,6 +108,17 @@ def _progress_projection(event: str, payload: dict[str, Any]) -> dict[str, Any] 
                 if key in payload["usage"]
             }
         return {"event": event, **selected}
+    if event in {"visual_reference_response", "visual_reference_error"}:
+        selected = {key: payload[key] for key in (
+            "error_type", "error_category", "finish_reason", "usage_status",
+            "response_bytes", "http_status",
+        ) if key in payload}
+        if isinstance(payload.get("usage"), dict):
+            selected["usage"] = {
+                key: payload["usage"][key] for key in ("prompt_tokens", "completion_tokens")
+                if key in payload["usage"]
+            }
+        return {"event": event, **selected}
     if event == "tool_result":
         result = payload.get("result")
         if not isinstance(result, dict):
