@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**最新待测包已封装并独立验收，未上传。** 源码`a31cfa9c8b513e7524cb0e2afe0dd3777449d610` → `dist/langqi-forge-write-precondition.zip`，21成员/190,209字节，SHA `c80dd890bc64d8534ac02443488e79d46ab8a473d1745130fa38f1ae99620be0`，合同SHA `4b4cdf57a4027cc3a9b34e83a3372bf1947ccbd4722cc033a06bec82eebf6ac7`。独立解包实际模块的15项相关测试通过，精确成员/哈希/CRC/语法均通过；全量315项/312通过/3环境跳过。该包含新流程重验、验收源码容量和本次写入schema，替代b49aee2待测包。正式Pro仍同一c3887cd，70m03s现场request84/seq615、组织批次在途、内部3/47、Stage2/Stage3 pending，无新官方成绩/费用；不重开、不并行、不将本地合同测试当提分。
+
 **67m39s现场与最小工具合同修订。** Pro request72第三尝试101.243秒正常返回，但seq540完整文件写入因遗漏expected_sha256被拒；组织组尚未晋升，最新request81/seq591，仍内部3/47、Stage2/Stage3 pending。当前本地仅把已有哈希要求同步到write_file的required字段并放在content之前，新文件使用空字符串，运行时覆盖保护不变。旧schema回归先失败、新schema通过，最终全量315项/312通过/3环境跳过，64.853秒；待重新封包，b49aee2旧ZIP不含此次修订。见`diagnostics/write-precondition-contract-2026-09-25.md`。不把本地测试当作官方增分，不热改、取消、重开或并行。
 
 **最新现场53m47s：Pro退出/改密未晋升，进入组织批次，内部仍3/47。** seq503在20回合后completed=false/committed=false；此前静态/构建通过，但seq494浏览器实际失败（第11步断言缺失、null.textContent页面错误），不把失败简化为回合不足。seq504开始REQ-2-1-1/REQ-2-1-2/REQ-2-2-1，最新request72/seq533。同一359dd7e72ca7仍Stage2/Stage3 pending，无新官方成绩或人民币费用；71个可见编码响应报告输入1,541,010/输出150,458，不是最终总账。待测包仍b49aee2，本轮只补确切失败证据，不改runtime、不重开、不并行。详情见`diagnostics/pro-comparison-2026-09-25.md`。
