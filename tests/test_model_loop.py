@@ -335,10 +335,10 @@ class ModelLoopTests(unittest.TestCase):
                     and "<untrusted_changed_sources>" in str(message.get("content") or "")
                 ]
                 actions = {
-                    1: (("write_file", {"path": "frontend/src/first.js", "content": "first"}),),
+                    1: (("write_file", {"path": "frontend/src/first.js", "content": "'first';"}),),
                     2: (
                         ("run_validation", {"scope": "quick"}),
-                        ("write_file", {"path": "frontend/src/second.js", "content": "second"}),
+                        ("write_file", {"path": "frontend/src/second.js", "content": "'second';"}),
                     ),
                     3: (("run_validation", {"scope": "quick"}),),
                 }.get(self.turn, ())
@@ -390,9 +390,9 @@ class ModelLoopTests(unittest.TestCase):
                     and "<untrusted_changed_sources>" in str(message.get("content") or "")
                 ]
                 actions = {
-                    1: (("write_file", {"path": "frontend/src/first.js", "content": "first"}),),
+                    1: (("write_file", {"path": "frontend/src/first.js", "content": "'first';"}),),
                     2: (("run_validation", {"scope": "quick"}),),
-                    3: (("write_file", {"path": "frontend/src/second.js", "content": "second"}),),
+                    3: (("write_file", {"path": "frontend/src/second.js", "content": "'second';"}),),
                     4: (("run_validation", {"scope": "quick"}),),
                 }.get(self.turn, ())
                 calls = tuple({
@@ -534,9 +534,9 @@ class ModelLoopTests(unittest.TestCase):
                             },
                         }
                         for index, (path, content) in enumerate((
-                            ("backend/routes/feature.mjs", "// BACKEND_START\n" + "x" * 7_000 + "\n// BACKEND_END"),
+                            ("backend/routes/feature.mjs", "// BACKEND_START\n//" + "x" * 7_000 + "\n// BACKEND_END"),
                             ("backend/data/feature.json", '{"canonical":"state"}'),
-                            ("frontend/src/feature.js", "// FRONTEND_START\n" + "x" * 7_000 + "\n// FRONTEND_END"),
+                            ("frontend/src/feature.js", "// FRONTEND_START\n//" + "x" * 7_000 + "\n// FRONTEND_END"),
                         ))
                     )
                 elif self.turn == 2:
@@ -1343,7 +1343,7 @@ class ModelLoopTests(unittest.TestCase):
                                 "arguments": json.dumps(
                                     {
                                         "path": "frontend/src/large.js",
-                                        "content": "x" * 9_000,
+                                        "content": "//" + "x" * 8_998,
                                     }
                                 ),
                             },
@@ -1463,7 +1463,7 @@ class ModelLoopTests(unittest.TestCase):
                             "function": {
                                 "name": "write_file",
                                 "arguments": json.dumps(
-                                    {"path": path, "content": "x" * 60_000}
+                                    {"path": path, "content": "//" + "x" * 59_998}
                                 ),
                             },
                         },

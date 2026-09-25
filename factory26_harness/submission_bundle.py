@@ -32,6 +32,8 @@ BUNDLE_MODULES = (
     "factory26_harness/trace.py",
     "factory26_harness/visual_reference.py",
     "factory26_harness/workspace_tools.py",
+    "factory26_harness/vendor/javascript_scope.cjs",
+    "factory26_harness/vendor/JAVASCRIPT_SCOPE_NOTICES.txt",
 )
 EXCLUDED_PARTS = frozenset({"__pycache__", ".git", ".venv", "dist"})
 SECRET_NAME_MARKERS = (

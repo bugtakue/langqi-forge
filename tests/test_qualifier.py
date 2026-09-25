@@ -1281,7 +1281,10 @@ children:
             self.assertEqual(report["status"], "local-contract-passed")
             self.assertEqual(report["evidence_export"]["status"], "exported")
             self.assertTrue((output / report["evidence_export"]["path"]).is_file())
-            self.assertEqual(len(report["initial_checks"]), 6)
+            self.assertEqual([item["name"] for item in report["initial_checks"]], [
+                "structure", "package_policy", "interaction_policy", "javascript_syntax",
+                "javascript_scope", "frontend_build", "startup_health",
+            ])
             self.assertTrue(all(item["passed"] for item in report["initial_checks"]))
             self.assertEqual(report["implemented_requirements"], ["REQ-1"])
             self.assertFalse(report["behavioral_probe_tested"])

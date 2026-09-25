@@ -4,6 +4,14 @@
 
 ## 输入与产出
 
+### 离线 JavaScript 作用域检查（b7之后的本地候选）
+
+快速检查顺序为结构→包策略→交互策略→语法→词法作用域→构建，完整检查再加启动；同一入口覆盖模型run_validation、批次晋升、修复与最终检查。检查器用Espree解析及ESLint Scope做名字绑定，不使用正则猜变量、不加载应用的ESLint配置/插件、不执行或导入应用源码。前端.js按浏览器ES模块，后端.js按最近package.json，.mjs/.cjs分别按模块/CommonJS分析；各自有环境内建全局。直接`typeof missing`是安全探测而放行，`typeof missing.property`仍报告；注释和`eslint-disable`不能关闭门禁。
+
+只处理frontend/src与backend的.js/.mjs/.cjs，排除node_modules、dist等生成目录；至多120文件、每文件2MB、总源/序列化载荷8MB，子进程15秒与256MiB堆上限，环境无模型Key和NODE_OPTIONS。超限、软链、解析/运行/结果协议错误均失败关闭。检查器源码、锁定依赖和重建脚本在tools/js_scope，runtime仅带352,830字节预打包JS及八项依赖许可证，不在正式运行时npm安装检查器。干净环境可用`cd tools/js_scope && npm ci --ignore-scripts && npm run build`重建。
+
+这是局部词法检查，不检查对象字段、导入目标是否存在、TDZ、业务语义、运行时全局可用性、TS/JSX、跨多个传统script标签的隐式全局协作。它不能替代构建/启动/真实浏览器/官方评测；需要上述未覆盖能力时须据新证据扩展，不允许模型通过注释放行未声明名字。
+
 ### 静态 DOM 挂载检查的范围
 
 `interaction_policy_check` 保留可定位的静态风险检查，但不是 JavaScript 数据流或浏览器行为证明。2026-09-25 的本地修订补上包含一层嵌套前置参数的 append/prepend/replaceChildren 等调用识别；保留旧包装调用/返回/激活识别，未挂载节点和无可访问名称的动态输入框仍拒绝。该修订已由独立合成样例和真实 Chrome 交互交叉核验，不意味着任何正式任务已通过。所有候选仍须构建/启动与规定的行为验收，不凭正则通过宣称完整可用性。

@@ -1,0 +1,13 @@
+{
+  "name": "langqi-forge-scope-check-build",
+  "private": true,
+  "type": "module",
+  "scripts": {"build": "node build.mjs"},
+  "dependencies": {
+    "espree": "10.4.0",
+    "eslint-scope": "8.4.0",
+    "eslint-visitor-keys": "4.2.1",
+    "globals": "16.5.0"
+  },
+  "devDependencies": {"esbuild": "0.25.11"}
+}

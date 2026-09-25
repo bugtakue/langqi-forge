@@ -65,6 +65,7 @@ NODE_CHECK_SUFFIXES = {".js", ".mjs", ".cjs"}
 IGNORED_SOURCE_PARTS = {"node_modules", "dist", "coverage", ".git", ".arc"}
 MAX_NODE_CHECK_FILES = 120
 MAX_NODE_CHECK_FILE_BYTES = 2_000_000
+MAX_SCOPE_PAYLOAD_BYTES = 8_000_000
 
 
 @dataclass(frozen=True)
@@ -382,6 +383,98 @@ def javascript_syntax_check(root: Path) -> CheckResult:
     )
 
 
+def _scope_source_paths(root: Path) -> list[Path]:
+    paths = []
+    total_bytes = 0
+    for directory in (root / "frontend/src", root / "backend"):
+        if directory.is_symlink() or directory.parent.is_symlink():
+            raise ValueError("JavaScript source directory is a symlink")
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.rglob("*")):
+            relative = path.relative_to(root)
+            if any(part in IGNORED_SOURCE_PARTS for part in relative.parts):
+                continue
+            if path.is_symlink():
+                raise ValueError(f"JavaScript source contains a symlink: {relative}")
+            if not path.is_file() or path.suffix.lower() not in NODE_CHECK_SUFFIXES:
+                continue
+            if path.stat().st_size > MAX_NODE_CHECK_FILE_BYTES:
+                raise ValueError(f"JavaScript source exceeds size limit: {relative}")
+            total_bytes += path.stat().st_size
+            if total_bytes > MAX_SCOPE_PAYLOAD_BYTES:
+                raise ValueError("JavaScript source total exceeds scope size limit")
+            paths.append(path)
+            if len(paths) > MAX_NODE_CHECK_FILES:
+                raise ValueError("Too many JavaScript source files for scope check")
+    return paths
+
+
+def _javascript_source_type(path: Path, root: Path) -> str:
+    if path.suffix == ".mjs":
+        return "module"
+    if path.suffix == ".cjs":
+        return "commonjs"
+    if path.relative_to(root).parts[0] == "frontend":
+        return "module"  # browser modules, not the frontend build tool's package mode
+    for directory in path.parents:
+        if directory == root:
+            break
+        package = directory / "package.json"
+        if package.is_symlink():
+            raise ValueError("JavaScript package metadata is a symlink")
+        if package.is_file():
+            if package.stat().st_size > 100_000:
+                raise ValueError("JavaScript package metadata exceeds size limit")
+            data = json.loads(package.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("JavaScript package metadata is not an object")
+            return "module" if data.get("type") == "module" else "commonjs"
+    return "commonjs"
+
+
+def javascript_scope_check(root: Path) -> CheckResult:
+    """Resolve lexical names offline; no generated code/config is imported or run."""
+    started = time.monotonic()
+    related: tuple[str, ...] = ()
+    try:
+        paths = _scope_source_paths(root)
+        related = tuple(path.relative_to(root).as_posix() for path in paths)
+        records = [{
+            "path": relative,
+            "source": path.read_text(encoding="utf-8"),
+            "environment": "browser" if relative.startswith("frontend/") else "node",
+            "sourceType": _javascript_source_type(path, root),
+        } for path, relative in zip(paths, related)]
+        payload = json.dumps({"files": records}, ensure_ascii=False).encode("utf-8")
+        if len(payload) > MAX_SCOPE_PAYLOAD_BYTES:
+            raise ValueError("JavaScript scope payload exceeds size limit")
+        checker = Path(__file__).parent / "vendor/javascript_scope.cjs"
+        result = subprocess.run(
+            ["node", "--max-old-space-size=256", str(checker.resolve())],
+            input=payload, capture_output=True, timeout=15, check=False,
+            cwd=root, env=_safe_environment(),
+        )
+        if result.returncode != 0:
+            raise ValueError(f"JavaScript scope checker exited {result.returncode}")
+        rows = json.loads(result.stdout)["results"]
+        if [row["path"] for row in rows] != list(related):
+            raise ValueError("JavaScript scope result does not match source files")
+        errors = [
+            f'{row["path"]}:{message["line"]}:{message["column"]}: {message["message"]}'
+            for row in rows for message in row["messages"]
+        ]
+        summary = "\n".join(errors[:10]) if errors else (
+            f"JavaScript scope passed ({len(paths)} files; lexical names only)"
+        )
+        passed = not errors
+    except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
+        passed, summary = False, f"JavaScript scope check failed: {str(exc)[:500]}"
+    return CheckResult(
+        "javascript_scope", passed, summary, related, time.monotonic() - started
+    )
+
+
 def _npm_install(directory: Path) -> tuple[int, str, float]:
     package = json.loads((directory / "package.json").read_text(encoding="utf-8"))
     dependencies = package.get("dependencies") or {}
@@ -655,6 +748,8 @@ def run_quick_checks(root: Path) -> list[CheckResult]:
         results.append(interaction_policy_check(root))
     if results[-1].passed:
         results.append(javascript_syntax_check(root))
+    if results[-1].passed:
+        results.append(javascript_scope_check(root))
     if results[-1].passed:
         results.append(frontend_build_check(root))
     return results
