@@ -86,10 +86,11 @@ def validate_steps(value: Any) -> list[dict[str, Any]]:
                 if kind == "text" and action not in {"click", "press"}:
                     raise ValueError("text locator is only supported for click and press")
                 step[kind] = _bounded_text(raw[kind])
-            offset = raw.get("index", 0)
-            if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 19:
-                raise ValueError("browser locator index must be an integer from 0 to 19")
-            step["index"] = offset
+            if "index" in raw:
+                offset = raw["index"]
+                if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 19:
+                    raise ValueError("browser locator index must be an integer from 0 to 19")
+                step["index"] = offset
             if action in {"fill", "press", "select"}:
                 step["value"] = _bounded_text(raw.get("value"), maximum=500)
             if action == "select":
@@ -113,7 +114,9 @@ def _locator(page: Any, step: dict[str, Any]) -> Any:
         selection = page.get_by_label(step["label"], exact=True)
     else:
         selection = page.get_by_text(step["text"], exact=True)
-    return selection.nth(step.get("index", 0))
+    # Keep Playwright's uniqueness check unless the model explicitly selects a
+    # repeated item. Silently choosing the first match conceals duplicate controls.
+    return selection.nth(step["index"]) if "index" in step else selection
 
 
 def _controls(page: Any) -> list[dict[str, str]]:

@@ -192,7 +192,9 @@ class BrowserProbeTests(unittest.TestCase):
                         self.assertIn("exactly one semantic locator", result["error"])
                         self.assertEqual(tools.browser_probe_calls, calls_before)
                         self.assertEqual(probe.call_count, calls_before)
-                        self.assertFalse(tools.browser_probe_requires_recheck)
+                        # Preserve genuine current evidence, but a rejected
+                        # first plan leaves the behavioral obligation pending.
+                        self.assertEqual(tools.browser_probe_requires_recheck, not verified)
                         self.assertEqual(tools.browser_probe_verified_revision, 0 if verified else -1)
 
     def test_successful_inspections_preserve_current_behavioral_verification(self) -> None:

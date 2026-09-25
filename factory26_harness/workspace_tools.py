@@ -413,7 +413,9 @@ class WorkspaceTools:
                             '{"action":"click","role":"button","name":"Save",'
                             '"expect_text":["Saved: Alice"]},'
                             '{"action":"reload","expect_text":["Saved: Alice"]}]. '
-                            "Adapt names and assertions to actual requirements/source or observed controls."
+                            "Take specified roles/names/assertions from requirements, not generated controls. "
+                            "Repair app mismatches; never relax a locator to pass. Omit index to enforce "
+                            "a unique match; specify it only for intentionally repeated items."
                         ),
                         "parameters": {
                             "type": "object",
@@ -432,7 +434,7 @@ class WorkspaceTools:
                                             "name": {"type": "string", "description": "Exact accessible name. Only with role."},
                                             "label": {"type": "string", "description": "Exact associated form-control label. Excludes role/text."},
                                             "text": {"type": "string", "description": "Exact visible text for click/press only. Excludes role/label."},
-                                            "index": {"type": "integer", "minimum": 0, "maximum": 19},
+                                            "index": {"type": "integer", "minimum": 0, "maximum": 19, "description": "Optional explicit repeated-item position. Omit for strict unique matching."},
                                             "path": {"type": "string"},
                                             "value": {"type": "string"},
                                             "option_by": {"type": "string", "enum": ["label", "value"]},
@@ -948,7 +950,15 @@ class WorkspaceTools:
             raise ValueError("browser probe call budget exhausted for this batch")
         if not self.current_changes_validated:
             raise ValueError("run passing quick validation for the current revision first")
-        steps = validate_steps(arguments.get("steps"))
+        try:
+            steps = validate_steps(arguments.get("steps"))
+        except ValueError:
+            # A rejected plan performed no behavioral verification. Keep an
+            # outstanding obligation, without charging a browser launch.
+            if self.browser_probe_verified_revision != self.change_revision:
+                self.browser_probe_requires_recheck = True
+                self._successful_browser_steps = []
+            raise
         previously_verified = (
             not self.browser_probe_requires_recheck
             and self.browser_probe_verified_revision == self.change_revision

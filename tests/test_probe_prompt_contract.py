@@ -16,8 +16,9 @@ class ProbePromptContractTests(unittest.TestCase):
             schema = next(item["function"] for item in tools.schemas()
                           if item["function"]["name"] == "browser_probe")
             description = schema["description"]
-            raw = description.split("Example steps: ", 1)[1].split(". Adapt", 1)[0]
-            steps = validate_steps(json.loads(raw))
+            raw = description.split("Example steps: ", 1)[1]
+            example, _ = json.JSONDecoder().raw_decode(raw)
+            steps = validate_steps(example)
             self.assertEqual([step["action"] for step in steps], ["fill", "click", "reload"])
             self.assertEqual(steps[1]["role"], "button")
             self.assertEqual(steps[1]["name"], "Save")
