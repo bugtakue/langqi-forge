@@ -206,6 +206,43 @@ def validate_steps(value: Any) -> list[dict[str, Any]]:
     return result
 
 
+def invalid_plan_diagnostics(value: Any) -> dict[str, Any]:
+    """Explain a rejected plan without executing, repairing or accepting it.
+
+    Reuse the real validator, at most 16 steps and eight errors. This is not
+    another admission path: valid calls still pass the original whole-plan gate.
+    Step numbers are one-based, matching validate_steps error messages.
+    """
+    errors: list[dict[str, Any]] = []
+    inspected = 0
+    if isinstance(value, list):
+        for number, raw in enumerate(value[:MAX_STEPS], 1):
+            inspected += 1
+            try:
+                validate_steps([raw])
+            except ValueError as exc:
+                message = str(exc).replace('browser step 1 ', f'browser step {number} ', 1)
+                errors.append({'step': number, 'error': message[:300]})
+                if len(errors) == 8:
+                    break
+    return {
+        'plan_executed': False,
+        'supplied_steps': len(value) if isinstance(value, list) else None,
+        'maximum_steps': MAX_STEPS,
+        'maximum_assertions_per_field': MAX_ASSERTIONS,
+        'allowed_actions': sorted(ALLOWED_ACTIONS),
+        'steps_inspected': inspected,
+        'step_errors': errors,
+        'guidance': (
+            'Submit steps as an array within the original limit. Fix all listed errors; '
+            'uninspected steps may contain more. Attach expect_text, expect_absent or '
+            'expect_controls to a supported action; there is no standalone assert/wait action. '
+            'Keep requirement-derived outcomes and assertions; do not truncate the plan or '
+            'drop assertions merely to fit. Rejection did not verify behavior or spend a browser launch.'
+        ),
+    }
+
+
 def _scope_target(page: Any, scope: dict[str, str]) -> Any:
     options: dict[str, Any] = {"exact": True}
     if "name" in scope:

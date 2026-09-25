@@ -8,7 +8,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .browser_probe import MAX_ASSERTIONS, MAX_STEPS, SCOPE_ROLES, control_expectation_schema, probe_local_app, validate_steps
+from .browser_probe import (
+    MAX_ASSERTIONS, MAX_STEPS, SCOPE_ROLES, control_expectation_schema,
+    invalid_plan_diagnostics, probe_local_app, validate_steps,
+)
 from .checks import run_full_checks, run_quick_checks, structure_check
 from .trace import ProductionTrace
 from .visual_reference import VisualReferenceClient
@@ -1041,13 +1044,16 @@ class WorkspaceTools:
             raise ValueError("run passing quick validation for the current revision first")
         try:
             steps = validate_steps(arguments.get("steps"))
-        except ValueError:
+        except ValueError as exc:
             # A rejected plan performed no behavioral verification. Keep an
             # outstanding obligation, without charging a browser launch.
             if self.browser_probe_verified_revision != self.change_revision:
                 self.browser_probe_requires_recheck = True
                 self._successful_browser_steps = []
-            raise
+            return {
+                'ok': False, 'error': str(exc),
+                'plan_diagnostics': invalid_plan_diagnostics(arguments.get('steps')),
+            }
         previously_verified = (
             not self.browser_probe_requires_recheck
             and self.browser_probe_verified_revision == self.change_revision
