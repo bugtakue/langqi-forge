@@ -1,0 +1,33 @@
+# f3 生成收尾与完整生产证据
+
+2026-09-25；运行 https://arc-bench.com/runs/9eb571d8b5b6 ，源码 `f3b0a9ec82a9f8d62b1c4e8e9042e05fe03506e0`。生成结束不等于官方GUI评测结束。
+
+## 真实生成结果
+
+- 请求28连续三次240秒超时，第三次在10:36:15 UTC结束，不再重试。
+- 第二批未晋升，未验收后端修改没有写入已通过基线；后续模型调用熔断。
+- 保留注册/登录2项，未完成45项，总原子需求47。生成报告status为local-contract-partial，不称全功能完成。
+- 一条真实行为回归胶囊在最终收尾重放通过（报告8个行为检查、5个断言）。这不代表47项/100场景均覆盖。
+- 10:36:18正常结束生成，10:36:19导出证据，10:36:21平台应用在3000端口启动并进入Stage3。
+- 报告duration_seconds=2823.899；28个逻辑请求，27个实际返回响应，32次HTTP尝试。model_requests字段按客户端成功计数为27。
+- 已报告模型输入537,576 /输出176,284 Token；视觉4次，输入4,004 /输出2,000。超时缺失的用量不能当0；人民币成本待平台结算。
+- 28个序列化请求都发送max_tokens=8192，都未指定thinking/reasoning_effort；27个响应中7个completion_tokens高于8192。不能把该字段当成可靠总输出硬上限。
+- 封印轨迹重算首批输入412,744 /输出126,190，与此前可见stdout统计完全一致。报告manual_interventions=0指本次生成进程内没有人工热改；不抹去外部开发、打包、上传与独立审查。
+
+## 归档与完整性
+
+正常下载的自有项目：`dist/official-evidence/9eb571d8b5b6/project.zip`，4,120,505字节，44文件，SHA-256 `72199870b75141f7a12a0c076c7efcd5718e33c68fcd28b1067e3a0e60538723`。原下载为 `/Users/zerongliu/Downloads/9eb571d8b5b6-template (1).zip`；此前中途ZIP另外保留，不覆盖。
+
+提取的 `factory26-evidence.zip`：815,092字节，SHA-256 `4fac048b61e6ff7f2dd4f9586a0c35a1858211ac6fd230ff6612c781f1efed91`，与生成stdout一致。含生产轨迹、报告和manifest。
+
+- production-trace.jsonl：247行全部封印，3,507,849字节。
+- trace SHA-256：`c142a62b120fd83d3ace450d1a6a88f094d5bfdb4e00dbf2d670e3cb25684334`。
+- 链头：`7e6e6d1641862b18d7cc185c773a209fc137132317574347df43c23c8707317b`。
+- report SHA-256：`345ec2f75b4ada76bc1b96fe6f8e303de5690c6778e39f60a354a00b485b1e3a`。
+- 哈希链、manifest文件哈希/字节数、源码身份均核验一致。现有密钥扫描规则命中0，不保证能发现未知敏感模式。没有输出推理正文或真实密钥。
+
+本次只分析生成期封印轨迹，不读取平台隐藏测试或从评分期间的应用数据变化推断隐藏用例。项目归档仅本地保存，未公开上传。
+
+## 下一步状态
+
+10:44 UTC现场仍Stage3 / Evaluation in progress，未取得本轮官方通过率、分数或费用。下一候选 `Langqi Forge b7fe418 - bounded reasoning` 已保存，时间显示2026/9/25 10:43:44（页面未标时区），History=9，两题均未运行。只保存，没有并行评测。待f3评分终态后，先记录其实际结果，再到GitHub单题页启动候选，不点击Run 2 remaining tasks。
