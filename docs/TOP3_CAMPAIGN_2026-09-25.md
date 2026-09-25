@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**当前唯一活任务： https://arc-bench.com/runs/9eb571d8b5b6 ，f3b0a9e 的 GitHub。** 已成功创建，09:49 UTC 现场核验环境预检和依赖安装通过，Stage 2 / Launching generation agent，Stage 3 pending，尚无模型 stdout 或官方新成绩。不要再等待已完成的 b53，不补跑 ad92，不重复点击、不并行 Sheet。正常日志空白不是启动失败，后续按该运行继续观察。
+
 **最新快照已保存并已发起一次 GitHub 单题运行（勿重复点）**：`Langqi Forge f3b0a9e - spec-first verification`，保存时间 `2026/9/25 09:48:40`（页面未标时区），干净源码 `f3b0a9ec82a9f8d62b1c4e8e9042e05fe03506e0`。包 `dist/langqi-forge-spec-semantics.zip`，18 文件 / 78,642 字节，SHA-256 `90600387cd61d52d0090e0796d4d521054b60de6c48366c7d32b91d088c42d7c`，ZIP 校验通过。沿用赛事网关及 Flash 编码/视觉模型、比赛额度；没有个人 Key、并行 Sheet 或补跑旧包。单题页在点击前明确无活任务，点击后显示“正在创建运行…”，须查该次创建结果而非重复启动。源码未推送 GitHub。
 
 **诊断后候选（2026-09-25 09:48 UTC）**：真实浏览器已确认 b53 登录/刷新可用，但注册链接角色不符且大部分业务未实现；不能解释为已证实的平台故障。已做规格优先定位、严格唯一控件和首次无效探针补验的通用修订，完整 218 项 / 215 通过 / 3 浏览器环境跳过，56.631 秒。详细见 `docs/diagnostics/b53-official-zero-review.md`。接下来替换未运行的 ad92 候选，沿用同一模型和预算，只运行新快照 GitHub 单题；不同时追加 Sheet，不给旧包补跑。本段更新下段“先诊断”的接续状态，官方零分事实不变。
