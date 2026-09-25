@@ -35,3 +35,5 @@
 本地浏览器标签741295077已关闭；核对PID90120的cwd正是临时backend后TERM，会话76182以143退出，19438无监听。临时副本与原件保留以便复核，无文件删除。
 
 官方页面已恢复：101m43s及103m26s明确Stage2完成、Generation agent finished successfully，Stage3 Evaluation in progress。尚无官方分数/人民币结算；下一步只读取生成阶段封印证据，不能继续从评分期数据反推隐藏用例。独立复核页741295076已关闭，原任务页保留。
+
+109m28s交接现场仍Stage3评分，第二次下载请求（生成结束后的一次）仍Packaging，本机尚无`359dd7e72ca7-template (2).zip`。文件树只观察到临时`.factory26-evidence-i977c7i9.zip`，不是已核验的最终`factory26-evidence.zip`。源码显示SDK完成标记先于finally中的证据导出；因此界面阶段完成不能代替ZIP三成员、清单、封印哈希链和脱敏核验。不得把中途org包当最终轨迹，也不重复点击尚在打包的下载。
