@@ -2,6 +2,16 @@
 
 ## 最新终态与真实浏览器诊断
 
+### f3 首批接续与视觉截断证据
+
+2026-09-25 09:55 UTC 核验同一 `9eb571d8b5b6` 活任务。首批规格完整读取，随后模型错误读取根目录 package.json，正常收到缺文件反馈后自行 list_files/read_files；不由一次路径错误推断整体失败。请求 7 在 `09:54:50` 首次 240 秒超时，`09:54:51` 进入第二次尝试；仍 Stage 2，未重启、取消或并行。
+
+新诊断准确定位两次视觉错误：sequence 41（09:50:41）与 45（09:50:45）均 `empty_caption` / `finish_reason=length` / completion_tokens=500，prompt_tokens 分别 1064、938，响应大小 2862、2846 字节。现有计量已保留失败用量。这个证据支持输出上限导致没有可用描述；尚未记录供应商 reasoning 字段，不能直接断言 500 Token 全部用于思考。
+
+核对 [DeepSeek 官方思考模式](https://api-docs.deepseek.com/guides/thinking_mode/) 与 [Chat Completions 参数](https://api-docs.deepseek.com/api/create-chat-completion/)：官方模型默认思考，并提供 `thinking.type=disabled`；但比赛的 `deepseek-v4-flash-vision-exp` 是网关模型别名，官网 API 文档页仅说明 runtime SDK，没有核验该网关是否透传此参数。因此不把官方支持等同比赛代理已支持，不改在途快照、不增加视觉预算，也不读取或输出模型内部推理正文。候选取舍留待本轮结果与兼容证据。
+
+综合榜正常页面打开后表格持续加载；曾显示领先者摘要 VOLO-AI / 55.27。未取得完整行，故旧第 14 / 原前三仅保留历史，不作当前名次声明。该读取问题不影响当前生成任务的已核验活跃状态。
+
 修订全量 218 项 / 215 通过 / 3 浏览器环境跳过、56.631 秒后，从干净源码 `f3b0a9ec82a9f8d62b1c4e8e9042e05fe03506e0` 制作 `dist/langqi-forge-spec-semantics.zip`（18 文件 / 78,642 字节，SHA-256 `90600387cd61d52d0090e0796d4d521054b60de6c48366c7d32b91d088c42d7c`）。正常表单保存为 `Langqi Forge f3b0a9e - spec-first verification`，页面时间 `09:48:40`，比赛额度和同一 Flash 模型。确认没有活任务后仅点击一次 GitHub 单题运行，实际创建 https://arc-bench.com/runs/9eb571d8b5b6 ，环境预检和依赖安装已过，生成启动中。没有并行 Sheet、取消旧任务、补跑被取代包或推送 GitHub；这不是新的通过率证明。
 
 b53 正式 GitHub 已完成：0/100、￥9.7380，剩余额度 ￥487.18；Sheet 未运行。自有产物实际可登录、刷新与退出，但公开要求的注册链接却被实现为按钮，自检也迁就该错误；业务页面多数未实现。已据此作任务无关的规格优先、严格唯一定位及无效首次探针补验修订。完整范围、证据与边界见 [诊断记录](diagnostics/b53-official-zero-review.md)。不能把这些缺陷认定为官方所有失败的唯一原因，下方“仍在运行”的内容仅为历史。
