@@ -8,6 +8,8 @@
 
 当前上传快照8f30652包含[完整源码保留](docs/diagnostics/complete-source-retention-2026-09-26.md)、[失败现场回传](docs/diagnostics/probe-failure-scene-2026-09-26.md)、[控件状态断言](docs/diagnostics/control-state-assertions-2026-09-26.md)及[参赛入口启用的冻结代码收尾](docs/diagnostics/completion-entry-policy-2026-09-26.md)。库默认关闭、Runner明确设置优先；编码策略仍bounded。355项本地回归中352通过/3环境跳过，独立解包50项通过；尚未以这些改动取得正式新成绩。旧fb84f4e Sheet的675行[封印证据与官方4/100](docs/diagnostics/nonthinking-sheet-final-evidence-2026-09-26.md)已核验，不能把内部7/24当官方通过率。
 
+下一本地候选0e8f6c1补[无效浏览器计划多步骤诊断](docs/diagnostics/probe-plan-diagnostics-2026-09-26.md)，未放宽动作/断言/预算门。全量358项355通过/3环境跳过；`dist/langqi-forge-probe-plans.zip`已干净封包并独立解包53项通过，尚未上传，不在当前GLM正式运行中。
+
 ## 历史版本说明（不是当前运行状态）
 
 最新正式快照 `c3887cd` 包含阶段化收尾提示、事务内约束提示、同源hash路由支持、[源码范围分义](docs/diagnostics/source-range-contract-2026-09-25.md)和[已读源码页工作集](docs/diagnostics/read-page-memory-2026-09-25.md)，但此次网关失败发生在源码写入/压缩前，未能比较其效果。最新本地候选另补[修复后的新流程重验](docs/diagnostics/candidate-flow-recheck-2026-09-25.md)，全量310项中307通过、3环境跳过，尚未封包上传。下文旧版本的上传/在途措辞是历史说明，不作当前运行依据。
