@@ -85,6 +85,17 @@ _PROGRESS_FIELDS = {
 }
 
 
+def _public_progress_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    selected = {key: value for key, value in payload.items() if key in _PROGRESS_FIELDS}
+    if isinstance(selected.get("checks"), list):
+        selected["checks"] = [
+            {**check, "summary": "Regression replay details are in the sealed trace."}
+            if isinstance(check, dict) and check.get("name") == "behavior_regression"
+            else check for check in selected["checks"]
+        ]
+    return selected
+
+
 def _progress_projection(event: str, payload: dict[str, Any]) -> dict[str, Any] | None:
     # Keep request/response bodies in the sealed trace only. These small fields
     # distinguish model latency/retries from an agent that stopped making work.
@@ -131,10 +142,13 @@ def _progress_projection(event: str, payload: dict[str, Any]) -> dict[str, Any] 
             ) if key in result
         }
         return {"event": event, "tool": payload.get("tool"), "result": selected}
+    if event == "regression_check":
+        return {"event": event, **{key: payload[key] for key in (
+            "phase", "status", "check_id", "final", "capsule_count", "capsule_id",
+            "selected_ids", "unselected_ids", "failed_ids", "source_status",
+        ) if key in payload}}
     if event in _PROGRESS_EVENTS:
-        return {"event": event, **{
-            key: value for key, value in payload.items() if key in _PROGRESS_FIELDS
-        }}
+        return {"event": event, **_public_progress_fields(payload)}
     return None
 
 

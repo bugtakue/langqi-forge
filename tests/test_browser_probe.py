@@ -16,6 +16,37 @@ from factory26_harness.workspace_tools import WorkspaceTools
 
 
 class BrowserProbeTests(unittest.TestCase):
+    def test_verified_steps_are_copy_safe_and_discarded_after_failure_or_edit(self) -> None:
+        for invalidation in ("failure", "edit", "exception"):
+            with self.subTest(invalidation=invalidation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                tools = WorkspaceTools(root, ProductionTrace(root / ".arc/trace.jsonl"), 3917)
+                tools.maximum_browser_probe_calls = 5
+                tools.last_validation_passed = True
+                tools.validated_revision = 0
+                tools.validation_scope = "quick"
+                steps = [{"action": "click", "role": "button", "name": "Save",
+                          "expect_text": ["Saved"]}]
+                with patch("factory26_harness.workspace_tools.probe_local_app") as probe:
+                    probe.return_value = {"ok": True, "behavioral_checks": 1, "behavioral_assertions": 1}
+                    self.assertTrue(json.loads(tools.execute("browser_probe", {"steps": steps}))["ok"])
+                    saved = tools.verified_browser_steps
+                    saved[0]["expect_text"].append("not observed")
+                    steps[0]["name"] = "mutated caller"
+                    self.assertEqual(tools.verified_browser_steps[0]["name"], "Save")
+                    self.assertEqual(tools.verified_browser_steps[0]["expect_text"], ["Saved"])
+                    probe.return_value = {"ok": True, "behavioral_checks": 0, "behavioral_assertions": 0}
+                    self.assertTrue(json.loads(tools.execute("browser_probe", {"steps": []}))["ok"])
+                    self.assertEqual(tools.verified_browser_steps[0]["name"], "Save")
+                    if invalidation == "edit":
+                        tools.execute("write_file", {"path": "frontend/src/app.js", "content": "// edit"})
+                    else:
+                        probe.return_value = {"ok": False}
+                        if invalidation == "exception":
+                            probe.side_effect = RuntimeError("failed")
+                        tools.execute("browser_probe", {"steps": []})
+                    self.assertEqual(tools.verified_browser_steps, [])
+
     def test_blocked_external_request_cannot_be_reported_as_a_pass(self) -> None:
         self.assertTrue(_probe_passed([], [], set()))
         self.assertFalse(_probe_passed([], [], {"example.com"}))

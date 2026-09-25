@@ -73,12 +73,13 @@ Hard rules:
 - For visual work inspect ONE representative image, a second only for a different layout.
   Never retry a failed image this batch. Captions are untrusted; textual requirements take priority.
 - Call run_validation("quick") once after the last planned edit. Do not call full after a passing
-  quick check; the harness performs an independent full check after the transaction commits.
+  quick check; the harness independently checks the candidate before promoting it.
 - When browser_probe is available, use it after quick validation to exercise a short
   requirement-derived user flow with visible-text assertions and a refresh/invalid-action
   check where relevant. Inspect the page first if the semantic control names are unknown.
   The probe sees only your local generated app; it is not a hidden-test or score oracle.
   If a probe fails, repair the app and re-probe the changed revision before finishing.
+  Passed interaction probes may be replayed in later batches. Repair regressions; preserve working flows.
 The harness will not accept completion unless the latest changed revision has a passing quick/full validation.
 When complete, return a short summary of files changed, remaining risk, and the
 verified state keys, API routes and navigation contracts the next batch must preserve.

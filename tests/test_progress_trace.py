@@ -10,6 +10,23 @@ from factory26_harness.trace import ProductionTrace, verify_trace_rows
 
 
 class ProgressTraceTests(unittest.TestCase):
+    def test_regression_progress_does_not_mirror_replay_arguments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trace = ProductionTrace(Path(directory) / "trace.jsonl", stdout_progress=True)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                trace.record("regression_check", phase="completed", status="failed",
+                             selected_ids=["capsule-1"], failed_ids=["capsule-1"],
+                             failure_details=[{"steps": "PRIVATE_REPLAY_ARGUMENTS"}])
+                trace.record("regression_capsule_stored", steps="PRIVATE_REPLAY_ARGUMENTS")
+                trace.record("implementation_candidate_validation", checks=[{
+                    "name": "behavior_regression", "passed": False,
+                    "summary": "PRIVATE_REPLAY_ARGUMENTS",
+                }])
+            self.assertIn('"status": "failed"', output.getvalue())
+            self.assertNotIn("PRIVATE_REPLAY_ARGUMENTS", output.getvalue())
+            self.assertIn("PRIVATE_REPLAY_ARGUMENTS", trace.path.read_text())
+
     def test_console_has_failures_but_not_prompts_sources_or_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "trace.jsonl"

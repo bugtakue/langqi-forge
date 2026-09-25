@@ -99,6 +99,88 @@ class ScriptedModel:
 
 
 class QualifierTests(unittest.TestCase):
+    def test_regression_rejects_or_repairs_new_feature_without_poisoning_old_flow(self) -> None:
+        """Control-flow fixture only: no claim of real browser/model quality."""
+        class RegressionFixtureAgent:
+            repair_succeeds = False
+
+            def __init__(self, model, tools, _trace, max_turns=20):
+                self.model, self.tools = model, tools
+
+            def _write_and_probe(self, content, name):
+                path = "frontend/src/app.js"
+                old = json.loads(self.tools.execute("read_file", {"path": path}))
+                edited = json.loads(self.tools.execute("write_file", {
+                    "path": path, "content": content, "expected_sha256": old["sha256"],
+                }))
+                if not edited["ok"]:
+                    raise AssertionError(edited)
+                self.tools.execute("run_validation", {"scope": "quick"})
+                probed = json.loads(self.tools.execute("browser_probe", {"steps": [{
+                    "action": "click", "role": "button", "name": name,
+                    "expect_text": ["Saved"],
+                }]}))
+                if not probed["ok"]:
+                    raise AssertionError(probed)
+
+            def implement(self, nodes, related_files=(), *, task_outline=""):
+                self.model.request_count += 1
+                is_first = nodes[0].req_id == "REQ-1"
+                self._write_and_probe(
+                    "// retained old flow" if is_first else "// new flow; old one regressed",
+                    "First" if is_first else "Second",
+                )
+                return AgentRun(True, "fixture self-audit", tuple(self.tools.changed_files), 1)
+
+            def repair(self, failure_text, related_files):
+                if "First" not in failure_text:
+                    raise AssertionError("regression failure omitted reproduction steps")
+                if not self.repair_succeeds:
+                    return AgentRun(False, "", (), 1)
+                self._write_and_probe("// retained old flow; new flow", "Second")
+                return AgentRun(True, "fixture repairs old flow", tuple(self.tools.changed_files), 1)
+
+        def replay(root, port, steps):
+            present = "retained old flow" in (root / "frontend/src/app.js").read_text()
+            passed = steps[0]["name"] != "First" or present
+            return {"ok": passed, "behavioral_checks": 1, "behavioral_assertions": 1,
+                    "assertion_failures": [] if passed else [{"step": 1, "missing": ["Saved"]}]}
+
+        checks = [CheckResult("fixture", True, "fixture only", (), 0)]
+        for repairs in (False, True):
+            with self.subTest(repairs=repairs), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                requirements = root / "requirements"
+                requirements.mkdir()
+                (requirements / "requirements.yaml").write_text(
+                    "id: ROOT\nname: Regression fixture\ntype: FOLDER\nchildren:\n"
+                    "  - {id: REQ-1, name: First, type: ATOMIC, description: First feature.}\n"
+                    "  - {id: REQ-2, name: Second, type: ATOMIC, description: Second feature., dependencies: [REQ-1]}\n"
+                )
+                output = root / "output"
+                RegressionFixtureAgent.repair_succeeds = repairs
+                with (
+                    patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+                    patch.object(qualifier, "CodingAgent", RegressionFixtureAgent),
+                    patch.object(qualifier, "run_full_checks", return_value=checks),
+                    patch("factory26_harness.workspace_tools.run_quick_checks", return_value=checks),
+                    patch("factory26_harness.workspace_tools.probe_local_app", side_effect=replay),
+                    patch("factory26_harness.regression.probe_local_app", side_effect=replay),
+                ):
+                    status = qualifier.main([
+                        str(requirements), "--output-dir", str(output), "--batch-size", "1",
+                    ])
+                report = json.loads((output / ".arc/harness-report.json").read_text())
+                self.assertEqual(status, 0)
+                self.assertIn("retained old flow", (output / "frontend/src/app.js").read_text())
+                self.assertEqual(report["failed_requirements"], [] if repairs else ["REQ-2"])
+                self.assertEqual(report["behavioral_regression"]["capsule_count"], 2 if repairs else 1)
+                second = report["candidate_validations"][1]
+                self.assertFalse(second["passed_before_repair"])
+                self.assertTrue(second["repair_attempted"])
+                self.assertEqual(second["passed_after_repair"], repairs)
+                self.assertFalse(report["behavioral_gui_tested"])
+
     def test_rejected_startup_candidate_cannot_poison_later_independent_batch(self) -> None:
         class IndependentFixtureAgent:
             def __init__(self, model, tools, _trace, max_turns=20) -> None:

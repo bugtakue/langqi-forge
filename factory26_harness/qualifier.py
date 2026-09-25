@@ -24,8 +24,9 @@ from .agent import AgentRun, CodingAgent
 from .arc_runtime import ArcRuntime
 from .checks import CheckResult, run_full_checks
 from .generic_scaffold import scaffold_workspace
-from .isolation import stage_app_project, validate_app_project
+from .isolation import app_source_manifest, stage_app_project, validate_app_project
 from .model import ModelBudgetExceeded, ModelGatewayUnavailable, OpenAIChatClient
+from .regression import RegressionMemory
 from .requirements import (
     RequirementNode,
     batches,
@@ -51,6 +52,34 @@ MAX_HANDOFF_PATH_CHARS = 4000
 MAX_HANDOFF_NOTES = 4
 MAX_HANDOFF_NOTE_CHARS = 700
 MAX_HANDOFF_NOTES_CHARS = 2400
+
+
+def _guarded_checks(
+    root: Path, port: int, regression: RegressionMemory, *,
+    requirement_ids: tuple[str, ...] = (), final: bool = False,
+) -> list[CheckResult]:
+    checks = list(run_full_checks(root, port))
+    if all(check.passed for check in checks) and regression.summary()["capsule_count"]:
+        checks.append(regression.check(root, port, requirement_ids=requirement_ids, final=final))
+    return checks
+
+
+def _dependency_ids(nodes: list[RequirementNode]) -> tuple[str, ...]:
+    return tuple(sorted({dependency for node in nodes for dependency in node.dependencies}))
+
+
+def _remember_behavior(
+    regression: RegressionMemory, tools: WorkspaceTools,
+    requirement_ids: list[str], output_dir: Path,
+) -> None:
+    steps = tools.verified_browser_steps
+    if steps:
+        regression.remember(requirement_ids, steps, app_source_manifest(output_dir))
+
+
+def _public_failure_summary(check: CheckResult) -> str:
+    return ("Stored behavior replay failed; see sealed candidate checks."
+            if check.name == "behavior_regression" else check.summary)
 
 
 def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
@@ -435,6 +464,7 @@ def main(argv: list[str] | None = None) -> int:
     active_batch_ids: list[str] = []
     handoff_paths: list[str] = []
     handoff_notes: tuple[str, ...] = ()
+    regression = RegressionMemory(trace)
     try:
         source = _source_identity()
         tree = load_requirement_tree(requirement_dir)
@@ -660,7 +690,9 @@ def main(argv: list[str] | None = None) -> int:
                         # cannot catch a syntactically valid backend that crashes
                         # on startup. Check the isolated candidate before it can
                         # become the base for later requirement batches.
-                        candidate_checks = run_full_checks(staged, smoke_port)
+                        candidate_checks = _guarded_checks(
+                            staged, smoke_port, regression, requirement_ids=_dependency_ids(active_group),
+                        )
                         candidate_passed = all(check.passed for check in candidate_checks)
                         candidate_validation: dict[str, Any] = {
                             "batch": index,
@@ -712,7 +744,11 @@ def main(argv: list[str] | None = None) -> int:
                                 )
                                 correction = AgentRun(False, str(exc), (), 0)
                             if correction.completed:
-                                candidate_checks = run_full_checks(staged, smoke_port)
+                                # Recheck ALL saved flows after a repair, not a
+                                # rotated sample that could miss the original failure.
+                                candidate_checks = _guarded_checks(
+                                    staged, smoke_port, regression, final=True,
+                                )
                                 candidate_passed = all(
                                     check.passed for check in candidate_checks
                                 )
@@ -728,19 +764,19 @@ def main(argv: list[str] | None = None) -> int:
                             candidate_validation["passed_after_repair"] = candidate_passed
                             if correction.completed and not candidate_passed:
                                 failure_detail = "\n".join(
-                                    check.summary
+                                    _public_failure_summary(check)
                                     for check in candidate_checks
                                     if not check.passed
                                 )
                             else:
-                                failure_detail = correction.summary or failure_text
+                                failure_detail = correction.summary or "Candidate checks failed; see sealed trace."
                             result = AgentRun(
                                 candidate_passed,
                                 (
-                                    result.summary + "\n\nPost-audit startup repair: "
+                                    result.summary + "\n\nPost-audit candidate repair: "
                                     + correction.summary
                                     if candidate_passed
-                                    else "Post-audit startup validation failed: "
+                                    else "Post-audit candidate validation failed: "
                                     + failure_detail
                                 ),
                                 tuple(sorted(tools.changed_files)),
@@ -811,6 +847,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 if arc_runtime is not None:
                     arc_runtime.finish_batch(index, requirement_ids)
+                _remember_behavior(regression, tools, requirement_ids, output_dir)
                 report["implemented_requirements"].extend(requirement_ids)
                 active_batch_ids = []
             if terminal_model_error is not None:
@@ -839,7 +876,7 @@ def main(argv: list[str] | None = None) -> int:
                 + (terminal_model_error or "refusing empty scaffold")
             )
 
-        checks = run_full_checks(output_dir, smoke_port)
+        checks = _guarded_checks(output_dir, smoke_port, regression, final=True)
         trace.record("final_validation", checks=_check_results(checks))
         for repair_round in range(1, args.repair_rounds + 1):
             if all(check.passed for check in checks):
@@ -867,7 +904,7 @@ def main(argv: list[str] | None = None) -> int:
                     model, repair_tools, trace, max_turns=args.max_agent_turns
                 ).repair(failure_text, related)
                 if repair.completed:
-                    candidate_checks = run_full_checks(staged, smoke_port)
+                    candidate_checks = _guarded_checks(staged, smoke_port, regression, final=True)
                     trace.record(
                         "repair_candidate_validation",
                         round=repair_round,
@@ -898,7 +935,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             if not committed:
                 break
-            checks = run_full_checks(output_dir, smoke_port)
+            checks = _guarded_checks(output_dir, smoke_port, regression, final=True)
             trace.record("final_validation", repair_round=repair_round, checks=_check_results(checks))
             if arc_runtime is not None:
                 arc_runtime.commit_repairs()
@@ -939,6 +976,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     finally:
         report["duration_seconds"] = round(time.monotonic() - started, 3)
+        report["behavioral_regression"] = regression.summary()
         if model is not None:
             report["model"] = model.gateway_evidence()
             report["model_budget"] = model.budget_evidence()

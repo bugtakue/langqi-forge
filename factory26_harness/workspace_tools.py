@@ -151,6 +151,7 @@ class WorkspaceTools:
         self.browser_probe_calls = 0
         self.browser_probe_requires_recheck = False
         self.browser_probe_verified_revision = -1
+        self._successful_browser_steps: list[dict[str, Any]] = []
         self.maximum_browser_probe_calls = max(
             0, min(5, int(os.environ.get("FACTORY26_MAX_BROWSER_PROBES_PER_BATCH", "3"))))
         self.maximum_changed_files = max(
@@ -167,6 +168,14 @@ class WorkspaceTools:
             and self.validation_scope in VALIDATING_SCOPES
             and self.validated_revision == self.change_revision
         )
+
+    @property
+    def verified_browser_steps(self) -> list[dict[str, Any]]:
+        """Export an isolated copy only while the tested source revision is valid."""
+        if (not self.current_changes_validated or self.browser_probe_requires_recheck
+                or self.browser_probe_verified_revision != self.change_revision):
+            return []
+        return json.loads(json.dumps(self._successful_browser_steps))
 
     def register_requirement_specs(self, specs: dict[str, str]) -> None:
         """Expose only abbreviated requirements assigned to the current batch."""
@@ -509,6 +518,7 @@ class WorkspaceTools:
         if self.browser_probe_calls:
             self.browser_probe_requires_recheck = True
             self.browser_probe_verified_revision = -1
+            self._successful_browser_steps = []
 
     @staticmethod
     def _atomic_write(path: Path, content: str) -> None:
@@ -943,9 +953,11 @@ class WorkspaceTools:
             not self.browser_probe_requires_recheck
             and self.browser_probe_verified_revision == self.change_revision
         )
+        previous_steps = self.verified_browser_steps
         self.browser_probe_calls += 1
         self.browser_probe_requires_recheck = True
         self.browser_probe_verified_revision = -1
+        self._successful_browser_steps = []
         result = probe_local_app(self.root, self.smoke_port, steps)
         if (
             result.get("ok")
@@ -956,4 +968,8 @@ class WorkspaceTools:
         ):
             self.browser_probe_requires_recheck = False
             self.browser_probe_verified_revision = self.change_revision
+            self._successful_browser_steps = (
+                steps if result.get("behavioral_checks", 0) > 0
+                and result.get("behavioral_assertions", 0) > 0 else previous_steps
+            )
         return result
