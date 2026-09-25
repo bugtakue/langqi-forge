@@ -10,7 +10,7 @@
 
 核对 [DeepSeek 官方思考模式](https://api-docs.deepseek.com/guides/thinking_mode/) 与 [Chat Completions 参数](https://api-docs.deepseek.com/api/create-chat-completion/)：官方模型默认思考，并提供 `thinking.type=disabled`；但比赛的 `deepseek-v4-flash-vision-exp` 是网关模型别名，官网 API 文档页仅说明 runtime SDK，没有核验该网关是否透传此参数。因此不把官方支持等同比赛代理已支持，不改在途快照、不增加视觉预算，也不读取或输出模型内部推理正文。候选取舍留待本轮结果与兼容证据。
 
-综合榜正常页面打开后表格持续加载；曾显示领先者摘要 VOLO-AI / 55.27。未取得完整行，故旧第 14 / 原前三仅保留历史，不作当前名次声明。该读取问题不影响当前生成任务的已核验活跃状态。
+综合榜初次表格持续加载，正常刷新后于 09:56 UTC 取得实际行：筛选正式赛 / 全部任务 / 全部模型，bugtakue 第 14 / 0.00 / ￥2.3829、提交时间 05:22:11，仍对应旧完整快照。前三为 VOLO-AI / deepseek-v4-flash / 50.5% / ￥16.3888 / 55.27 分；Iris / deepseek-v4-pro / 40.5% / ￥55.7107 / 36.34 分；尻名山掌管排水渠过弯的神 / glm-5.3-flash / 29.5% / ￥24.9800 / 29.17 分。当前新运行尚无分数，不能由榜单型号推断开发工具或因果归因。新运行页面 7m39s，仍 Stage 2 活跃。
 
 修订全量 218 项 / 215 通过 / 3 浏览器环境跳过、56.631 秒后，从干净源码 `f3b0a9ec82a9f8d62b1c4e8e9042e05fe03506e0` 制作 `dist/langqi-forge-spec-semantics.zip`（18 文件 / 78,642 字节，SHA-256 `90600387cd61d52d0090e0796d4d521054b60de6c48366c7d32b91d088c42d7c`）。正常表单保存为 `Langqi Forge f3b0a9e - spec-first verification`，页面时间 `09:48:40`，比赛额度和同一 Flash 模型。确认没有活任务后仅点击一次 GitHub 单题运行，实际创建 https://arc-bench.com/runs/9eb571d8b5b6 ，环境预检和依赖安装已过，生成启动中。没有并行 Sheet、取消旧任务、补跑被取代包或推送 GitHub；这不是新的通过率证明。
 
