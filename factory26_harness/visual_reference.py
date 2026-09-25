@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 
+from .model import deepseek_reasoning_options
 from .trace import ProductionTrace
 
 
@@ -149,6 +150,7 @@ class VisualReferenceClient:
         self.api_key = configuration.api_key
         self.base_url = configuration.base_url
         self.model = configuration.model
+        self.reasoning_options = deepseek_reasoning_options(self.model, visual=True)
         self.gateway_source = configuration.source
         self.endpoint = self.base_url.rstrip("/")
         if not self.endpoint.endswith("/chat/completions"):
@@ -231,6 +233,7 @@ class VisualReferenceClient:
             }],
             "max_tokens": 500,
         }
+        payload.update(self.reasoning_options)
         self.calls += 1
         self.trace.record(
             "visual_reference_request",
@@ -238,6 +241,7 @@ class VisualReferenceClient:
             image_sha256=digest,
             image_bytes=len(raw),
             model=self.model,
+            requested_reasoning_options=self.reasoning_options,
             endpoint_host=urlsplit(self.endpoint).hostname,
         )
         request = urllib.request.Request(

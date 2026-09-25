@@ -77,6 +77,22 @@ def _http_error_category(body: bytes) -> str:
     return "unclassified"
 
 
+def deepseek_reasoning_options(model: str, *, visual: bool = False) -> dict[str, Any]:
+    """Request documented reasoning controls, without assuming gateway compliance.
+
+    This is a candidate policy, not a guarantee of speed, cost or quality. Keep
+    other providers untouched and allow an explicit provider-default comparison.
+    """
+    policy = os.environ.get("FACTORY26_DEEPSEEK_REASONING_POLICY", "bounded").strip()
+    if policy not in {"bounded", "provider-default"}:
+        raise ValueError("DeepSeek reasoning policy must be bounded or provider-default")
+    documented = {"deepseek-flash", "deepseek-v4-flash", "deepseek-v4-pro"}
+    known_models = documented | ({"deepseek-v4-flash-vision-exp"} if visual else set())
+    if policy == "provider-default" or model not in known_models:
+        return {}
+    return {"thinking": {"type": "disabled"}} if visual else {"reasoning_effort": "low"}
+
+
 class OpenAIChatClient:
     def __init__(self, trace: ProductionTrace, *, planned_turns: int | None = None) -> None:
         if planned_turns is not None and planned_turns < 1:
@@ -84,6 +100,7 @@ class OpenAIChatClient:
         self.api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         self.base_url = os.environ.get("OPENAI_BASE_URL", "").strip()
         self.model = os.environ.get("MODEL", "").strip()
+        self.reasoning_options = deepseek_reasoning_options(self.model)
         self.trace = trace
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
@@ -201,6 +218,7 @@ class OpenAIChatClient:
             if max_tokens is not None
             else int(os.environ.get("FACTORY26_MAX_OUTPUT_TOKENS", "8192")),
         }
+        payload.update(self.reasoning_options)
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice if tool_choice is not None else "auto"

@@ -4,6 +4,12 @@
 
 ## 输入与产出
 
+### 推理强度候选策略（2026-09-25，本地候选，非在途 f3）
+
+`FACTORY26_DEEPSEEK_REASONING_POLICY=bounded` 为候选默认值，仅对明确列入的 DeepSeek 模型申请参数：编码 `deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-pro` 使用 `reasoning_effort=low`；视觉使用这些模型或本赛 `deepseek-v4-flash-vision-exp` 别名时申请 `thinking.type=disabled`。其他模型不增加参数；`provider-default` 可精确恢复原先不发送这些字段的请求。非法策略值在本地报错，不自动多试几种参数。
+
+这只是按 [DeepSeek 文档](https://api-docs.deepseek.com/guides/thinking_mode/) 发出的控制请求，不保证比赛代理透传或执行，更不保证质量提升。仍记录提供商实际用量、超时与原始返回协议字段；不得删掉编码模型的必要 reasoning 字段以伪造节费。编码/视觉单次 max_tokens 保持 8192/500，累计用量闸门、调用次数、超时、重试、工具与验收门均不增加。已发现服务报告的 completion_tokens 可以高于请求的 max_tokens，所以后者不作可靠的总输出或账单硬上限声明。实际成本以平台人民币账单为准。
+
 入口接受主办方 `requirements/requirements.yaml` 路径及 `--output-dir`。输出根目录有 `frontend/` 与 `backend/`，后端由 `npm start` 按 `PORT` 监听，前端由 `npm run build` 产出 `frontend/dist/`。默认静态服务和 `/api/health` 是通用运行底座，不包含题目专用行为。
 
 `requirements.py` 校验树、按原子及父级文件夹依赖排序原子需求，并从**本次**需求生成最多 8,000 字符的全局架构目录：只有应用名、原子需求 ID、短名称、原子依赖及父级模块的短名称/依赖，没有需求正文、测试答案或题目预制实现；优先保留原子目录，再按剩余预算列父级依赖，并显式给出两类列入数/总数。完整父级依赖索引另存于 `.arc/compiled-plan.json`，便于复核批次排序依据。父级文件夹依赖展开成其全部原子后代的**编排先后**约束，出现循环或未知引用则拒绝；为避免一个早期细项失败让其余可独立完成的功能全数跳过，失败级联仍只依据原子节点显式依赖。`qualifier.py` 把父级模块描述、父级依赖提示及父级显式 `visual_reference` 继承到各原子需求，避免遗漏父级背景。原子、场景、步骤或祖先文件夹出现当前简版编译器不认识的附加字段时，当前批次改为 `ABBREVIATED`，模型在改代码前必须通过 `read_requirement_spec` 逐页读完包含原始字段的完整规格，不能静默丢掉约束。视觉图片清单同时读取描述中的 `reference/` 路径和显式 `visual_reference` 字段；是否可检查仍由图片路径、存在性、文件类型、大小和视觉网关配置共同决定。空页面、空样式、健康端点及通用 HTTP/原子 JSON 存储辅助函数由 `generic_scaffold.py` 创建，业务代码只能由模型工具调用写入。
