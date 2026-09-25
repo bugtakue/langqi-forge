@@ -154,3 +154,5 @@ GitHub 单题页明确显示最新快照 `Langqi Forge b53d9a9 - prompt and evid
 初次全量回归暴露 Prompt 增长使 8,000 字符压缩夹具达到 8,033，已缩短新增提示而非放宽预算。之后 `.venv/bin/python -m unittest discover -s tests -q -b`：**200 项 / 197 通过 / 3 浏览器环境跳过，57.154 秒**。最终一行无摘要失败回执的脱敏兜底修改后，再跑入口故障注入、进度投影、胶囊和浏览器工具聚焦回归：35 项 / 32 通过 / 3 跳过，0.426 秒；`git diff --check` 通过。上述均是本地协议/隔离测试，本机缺 Python Playwright，未证明真实浏览器胶囊的耗时或官方得分收益；不把 mock 回放称为实际用户流程执行。
 
 在途 b53d9a9 没有加入本地强化。其第二批原尝试 20 回合未收尾而拆分；单项恢复账号在 `08:00:23` 晋升，但浏览器步骤因 expect_text 超限未实际运行，`behavioral_probe_verified=false`。当前继续其他两项，最后页面 39m17s / 请求 69 / Stage 2，仍没有官方 GUI 分数。保持原评测，不为创作功能另开并发或取消它。
+
+强化源码干净提交 `3afdbd25d2963c363d538ec8a0751fc2f205b3ea`，本地包 `dist/langqi-forge-regression-capsules.zip` 为 18 文件 / 77,760 字节，SHA-256 `deed6814858b2241c33a8ce56bb08122adbafc67e9e7599b23b1cce3523a891a`，`unzip -t` 通过。没有上传或推送。离开页面前再次核验 b53 运行 42m02s、请求 72 / `08:07:03`、Stage 2 活跃，Sheet 尚未启动。
