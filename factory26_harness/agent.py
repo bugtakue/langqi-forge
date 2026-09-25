@@ -81,6 +81,7 @@ Hard rules:
   and expect_scope for feedback inside its required owner, not unrelated page-global success text.
   The probe only sees your local app, never hidden tests or scores. On failure or edits, repair,
   revalidate and re-probe before finishing. Preserve passed flows; they may be replayed later.
+  Stop at assigned outcomes; omit unrelated cleanup or extra convenience controls.
 The harness will not accept completion unless the latest changed revision has a passing quick/full validation.
 When complete, return a short summary of files changed, remaining risk, and the
 verified state keys, API routes and navigation contracts the next batch must preserve.

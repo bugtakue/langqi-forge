@@ -103,6 +103,7 @@ class QualifierTests(unittest.TestCase):
         """Control-flow fixture only: no claim of real browser/model quality."""
         class RegressionFixtureAgent:
             repair_succeeds = False
+            drops_new_flow = False
 
             def __init__(self, model, tools, _trace, max_turns=20):
                 self.model, self.tools = model, tools
@@ -137,18 +138,23 @@ class QualifierTests(unittest.TestCase):
                     raise AssertionError("regression failure omitted reproduction steps")
                 if not self.repair_succeeds:
                     return AgentRun(False, "", (), 1)
-                self._write_and_probe("// retained old flow; new flow", "Second")
+                self._write_and_probe(
+                    "// retained old flow" if self.drops_new_flow else "// retained old flow; new flow",
+                    "First",  # Repair rechecks the old flow, not the assigned new one.
+                )
                 return AgentRun(True, "fixture repairs old flow", tuple(self.tools.changed_files), 1)
 
         def replay(root, port, steps):
-            present = "retained old flow" in (root / "frontend/src/app.js").read_text()
-            passed = steps[0]["name"] != "First" or present
+            source = (root / "frontend/src/app.js").read_text()
+            passed = ("retained old flow" in source if steps[0]["name"] == "First"
+                      else "new flow" in source)
             return {"ok": passed, "behavioral_checks": 1, "behavioral_assertions": 1,
                     "assertion_failures": [] if passed else [{"step": 1, "missing": ["Saved"]}]}
 
         checks = [CheckResult("fixture", True, "fixture only", (), 0)]
-        for repairs in (False, True):
-            with self.subTest(repairs=repairs), tempfile.TemporaryDirectory() as directory:
+        for repairs, drops_new in ((False, False), (True, False), (True, True)):
+            expected_pass = repairs and not drops_new
+            with self.subTest(repairs=repairs, drops_new=drops_new), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 requirements = root / "requirements"
                 requirements.mkdir()
@@ -159,6 +165,7 @@ class QualifierTests(unittest.TestCase):
                 )
                 output = root / "output"
                 RegressionFixtureAgent.repair_succeeds = repairs
+                RegressionFixtureAgent.drops_new_flow = drops_new
                 with (
                     patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
                     patch.object(qualifier, "CodingAgent", RegressionFixtureAgent),
@@ -173,13 +180,21 @@ class QualifierTests(unittest.TestCase):
                 report = json.loads((output / ".arc/harness-report.json").read_text())
                 self.assertEqual(status, 0)
                 self.assertIn("retained old flow", (output / "frontend/src/app.js").read_text())
-                self.assertEqual(report["failed_requirements"], [] if repairs else ["REQ-2"])
-                self.assertEqual(report["behavioral_regression"]["capsule_count"], 2 if repairs else 1)
+                self.assertEqual(report["failed_requirements"], [] if expected_pass else ["REQ-2"])
+                self.assertEqual(report["behavioral_regression"]["capsule_count"], 2 if expected_pass else 1)
                 second = report["candidate_validations"][1]
                 self.assertFalse(second["passed_before_repair"])
                 self.assertTrue(second["repair_attempted"])
-                self.assertEqual(second["passed_after_repair"], repairs)
+                self.assertEqual(second["passed_after_repair"], expected_pass)
                 self.assertFalse(report["behavioral_gui_tested"])
+                rows = [json.loads(line) for line in (output / ".arc/production-trace.jsonl").read_text().splitlines()]
+                if repairs:
+                    rechecked = [row["payload"] for row in rows if row["event"] == "candidate_behavior_recheck"]
+                    self.assertEqual(rechecked[-1]["status"], "failed" if drops_new else "passed")
+                stored = [row["payload"] for row in rows if row["event"] == "regression_capsule_stored"]
+                if expected_pass:
+                    self.assertEqual(stored[-1]["requirement_ids"], ["REQ-2"])
+                    self.assertEqual(stored[-1]["steps"][0]["name"], "Second")
 
     def test_rejected_startup_candidate_cannot_poison_later_independent_batch(self) -> None:
         class IndependentFixtureAgent:

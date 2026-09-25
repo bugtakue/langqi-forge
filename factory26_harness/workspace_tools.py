@@ -153,6 +153,7 @@ class WorkspaceTools:
         self.browser_probe_requires_recheck = False
         self.browser_probe_verified_revision = -1
         self._successful_browser_steps: list[dict[str, Any]] = []
+        self._successful_browser_flows: list[list[dict[str, Any]]] = []
         self.maximum_browser_probe_calls = max(
             0, min(5, int(os.environ.get("FACTORY26_MAX_BROWSER_PROBES_PER_BATCH", "3"))))
         self.maximum_changed_files = max(
@@ -177,6 +178,13 @@ class WorkspaceTools:
                 or self.browser_probe_verified_revision != self.change_revision):
             return []
         return json.loads(json.dumps(self._successful_browser_steps))
+
+    @property
+    def verified_browser_flows(self) -> list[list[dict[str, Any]]]:
+        """All distinct successful recipes on this revision, not just the last one."""
+        if not self.verified_browser_steps:
+            return []
+        return json.loads(json.dumps(self._successful_browser_flows))
 
     def register_requirement_specs(self, specs: dict[str, str]) -> None:
         """Expose only abbreviated requirements assigned to the current batch."""
@@ -564,6 +572,7 @@ class WorkspaceTools:
             self.browser_probe_requires_recheck = True
             self.browser_probe_verified_revision = -1
             self._successful_browser_steps = []
+            self._successful_browser_flows = []
 
     @staticmethod
     def _atomic_write(path: Path, content: str) -> None:
@@ -1017,10 +1026,12 @@ class WorkspaceTools:
             and self.browser_probe_verified_revision == self.change_revision
         )
         previous_steps = self.verified_browser_steps
+        previous_flows = self.verified_browser_flows
         self.browser_probe_calls += 1
         self.browser_probe_requires_recheck = True
         self.browser_probe_verified_revision = -1
         self._successful_browser_steps = []
+        self._successful_browser_flows = []
         result = probe_local_app(self.root, self.smoke_port, steps)
         if (
             result.get("ok")
@@ -1035,4 +1046,7 @@ class WorkspaceTools:
                 steps if result.get("behavioral_checks", 0) > 0
                 and result.get("behavioral_assertions", 0) > 0 else previous_steps
             )
+            self._successful_browser_flows = previous_flows
+            if self._successful_browser_steps not in self._successful_browser_flows:
+                self._successful_browser_flows.append(self._successful_browser_steps)
         return result

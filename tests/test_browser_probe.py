@@ -46,6 +46,32 @@ class BrowserProbeTests(unittest.TestCase):
                             probe.side_effect = RuntimeError("failed")
                         tools.execute("browser_probe", {"steps": []})
                     self.assertEqual(tools.verified_browser_steps, [])
+                    self.assertEqual(tools.verified_browser_flows, [])
+
+    def test_all_current_revision_flows_survive_inspection_without_duplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = WorkspaceTools(root, ProductionTrace(root / "trace.jsonl"), 3917)
+            tools.maximum_browser_probe_calls = 5
+            tools.last_validation_passed = True
+            tools.validated_revision = 0
+            tools.validation_scope = "quick"
+            flows = [[{"action": "click", "role": "button", "name": name,
+                       "expect_text": [f"Saved {name}"]}] for name in ("First", "Second")]
+            with patch("factory26_harness.workspace_tools.probe_local_app") as probe:
+                probe.return_value = {"ok": True, "behavioral_checks": 1, "behavioral_assertions": 1}
+                for flow in (flows[0], flows[1], flows[0]):
+                    self.assertTrue(json.loads(tools.execute("browser_probe", {"steps": flow}))["ok"])
+                saved = tools.verified_browser_flows
+                self.assertEqual([flow[0]["name"] for flow in saved], ["First", "Second"])
+                saved[0][0]["expect_text"].append("not observed")
+                self.assertEqual(tools.verified_browser_flows[0][0]["expect_text"], ["Saved First"])
+                probe.return_value = {"ok": True, "behavioral_checks": 0, "behavioral_assertions": 0}
+                tools.execute("browser_probe", {"steps": []})
+                self.assertEqual(len(tools.verified_browser_flows), 2)
+                probe.side_effect = RuntimeError("actual launch failed")
+                tools.execute("browser_probe", {"steps": flows[0]})
+                self.assertEqual(tools.verified_browser_flows, [])
 
     def test_blocked_external_request_cannot_be_reported_as_a_pass(self) -> None:
         self.assertTrue(_probe_passed([], [], set()))

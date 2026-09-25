@@ -62,6 +62,50 @@ class _Capsule:
     origin_source_manifest_digest: str
 
 
+def recheck_candidate_flows(
+    root: Path, port: int, flows: list[list[dict]], trace: ProductionTrace,
+) -> CheckResult:
+    """Recheck pre-repair observations without publishing them as promoted memory."""
+    started = time.monotonic()
+    results: list[dict[str, Any]] = []
+    source_digest = None
+    error = ""
+    try:
+        if len(flows) > 5:  # WorkspaceTools' absolute per-batch launch cap.
+            raise ValueError("too many candidate recipes")
+        recipes = [_recipe(flow) for flow in flows]
+        if recipes:
+            source_digest = _digest(app_source_manifest(root))
+        for recipe in recipes:
+            item = {"recipe_hash": _digest(recipe), "passed": False, "error": ""}
+            try:
+                observed = probe_local_app(root, port, deepcopy(recipe))
+                if not isinstance(observed, dict):
+                    raise TypeError("probe must return a result dictionary")
+                counts = [observed.get(key) for key in ("behavioral_checks", "behavioral_assertions")]
+                counts = [n if type(n) is int and n > 0 else 0 for n in counts]
+                item["error"] = RegressionMemory._probe_error(observed, *counts)
+                item["passed"] = not item["error"]
+            except Exception as exc:
+                item["error"] = _bounded(f"{type(exc).__name__}: {exc}", 1000)
+            results.append(item)
+    except Exception as exc:
+        error = _bounded(f"{type(exc).__name__}: {exc}", 1000)
+    passed = not error and all(item["passed"] for item in results)
+    status = "failed" if not passed else "passed" if flows else "no_coverage"
+    trace.record(
+        "candidate_behavior_recheck", status=status, source_manifest_digest=source_digest,
+        recipe_count=len(flows), results=results, error=error,
+        note="Pre-repair observed flows only; not promoted memory or requirement coverage",
+    )
+    return CheckResult(
+        "candidate_behavior_recheck", passed,
+        f"Pre-repair candidate flows: {status}; {sum(item['passed'] for item in results)}/{len(flows)}. "
+        "A repair probe cannot substitute for these observations. Requirement coverage is not assessed.",
+        _RELATED_FILES, round(time.monotonic() - started, 4),
+    )
+
+
 class RegressionMemory:
     def __init__(self, trace: ProductionTrace, maximum_capsules: int = 24) -> None:
         if type(maximum_capsules) is not int or maximum_capsules < 0:

@@ -26,7 +26,7 @@ from .checks import CheckResult, run_full_checks
 from .generic_scaffold import scaffold_workspace
 from .isolation import app_source_manifest, stage_app_project, validate_app_project
 from .model import ModelBudgetExceeded, ModelGatewayUnavailable, OpenAIChatClient
-from .regression import RegressionMemory
+from .regression import RegressionMemory, recheck_candidate_flows
 from .requirements import (
     RequirementNode,
     batches,
@@ -71,10 +71,13 @@ def _dependency_ids(nodes: list[RequirementNode]) -> tuple[str, ...]:
 def _remember_behavior(
     regression: RegressionMemory, tools: WorkspaceTools,
     requirement_ids: list[str], output_dir: Path,
+    *, verified_flows: list[list[dict]] | None = None,
 ) -> None:
-    steps = tools.verified_browser_steps
-    if steps:
-        regression.remember(requirement_ids, steps, app_source_manifest(output_dir))
+    flows = tools.verified_browser_flows if verified_flows is None else verified_flows
+    if flows:
+        source_manifest = app_source_manifest(output_dir)
+        for steps in flows:
+            regression.remember(requirement_ids, steps, source_manifest)
 
 
 def _public_failure_summary(check: CheckResult) -> str:
@@ -685,6 +688,9 @@ def main(argv: list[str] | None = None) -> int:
                         result = AgentRun(
                             False, str(exc), tuple(sorted(tools.changed_files)), 0
                         )
+                    # Capture before repair can replace the last successful probe
+                    # with a reproduction of an unrelated older regression.
+                    candidate_flows = tools.verified_browser_flows if result.completed else []
                     if result.completed:
                         # Quick validation proves a fresh frontend build, but it
                         # cannot catch a syntactically valid backend that crashes
@@ -749,6 +755,10 @@ def main(argv: list[str] | None = None) -> int:
                                 candidate_checks = _guarded_checks(
                                     staged, smoke_port, regression, final=True,
                                 )
+                                if all(check.passed for check in candidate_checks) and candidate_flows:
+                                    candidate_checks.append(recheck_candidate_flows(
+                                        staged, smoke_port, candidate_flows, trace,
+                                    ))
                                 candidate_passed = all(
                                     check.passed for check in candidate_checks
                                 )
@@ -847,7 +857,10 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 if arc_runtime is not None:
                     arc_runtime.finish_batch(index, requirement_ids)
-                _remember_behavior(regression, tools, requirement_ids, output_dir)
+                _remember_behavior(
+                    regression, tools, requirement_ids, output_dir,
+                    verified_flows=candidate_flows,
+                )
                 report["implemented_requirements"].extend(requirement_ids)
                 active_batch_ids = []
             if terminal_model_error is not None:
