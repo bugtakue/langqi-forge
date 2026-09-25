@@ -1,5 +1,16 @@
 # c3887cd Pro Sheet 完整生成证据
 
+## 官方结算补充（2026-09-25 17:44—17:47 UTC现场）
+
+刷新运行页后出现View leaderboard、运行控制消失，显示固定Duration 47m46s；此前页面在本地持续计时、旧Evaluation in progress未自动清除。**以后评分阶段须适时重载同一运行页核验，不把本地计时器当服务器仍在运行的证据。** 未因旧界面状态取消或重启。
+
+- [Sheet正式单项榜](https://arc-bench.com/competition?competition=hackathon&task=sheet)：本队第13，4.56分、6.0%=6/100、￥9.4297、Pro、同一提交14:38:41。
+- [正式综合榜](https://arc-bench.com/competition?competition=hackathon)，筛选Agentic Software Factory Hackathon/全部任务/全部模型：本队**第9/24，6.55分、8.5%=17/200、￥25.0273**，Pro、同一提交14:38:41。GitHub同快照11/100与Sheet6/100对应17/200。
+- 前三仍55.27/36.34/29.17；综合前三目标未完成。不是把GitHub单项第三代作完成。
+- 竞赛详情余额￥442.24，为下一轮启动前额度。平台显示的单项费15.5977+9.4297与综合25.0273有0.0001显示舍入差，本页保留各页面原值，不擅自修正账单。
+
+下方“官方评分中”保留为取证时点，不再是当前等待事项；本次证据已归档、结果已结算。
+
 正式运行[40f69fc30bd3](https://arc-bench.com/runs/40f69fc30bd3)，与GitHub359dd7e72ca7使用同一保存快照c3887cd / Pro。本文核验生成终态，不把内部7/24当成官方GUI通过率。53—55分钟现场Stage2完成、Stage3官方评分中，尚无本项最终账单或新综合名次。
 
 ## 制品及封印

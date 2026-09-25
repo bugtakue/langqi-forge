@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**c3887cd正式综合第9/24（6.55分、17/200、￥25.0273）；d9c86b4新版已保存并串行启动GitHub。** Sheet40f69fc30bd3已结算第13、4.56分、6/100、￥9.4297；刷新运行页才清除旧评分状态，不再等待此运行。启动前余额￥442.24。新保存`Langqi Forge d9c86b4 - completion checkpoint`，History14/17:47:29/Pro，ZIP SHA de73d844501606960e9ab449dcf69fcfbd2a4165b549335e0f268b53172260cc；唯一新运行[b15311c6f690](https://arc-bench.com/runs/b15311c6f690)，3秒现场容器启动、Stage2生成/Stage3 pending，尚无模型完成响应或成绩。详见`diagnostics/pro-sheet-final-evidence-2026-09-26.md`及`diagnostics/checkpoint-official-run-2026-09-26.md`。当前前三门槛29.17，目标未完成；新Sheet未开始，不并行、不混成绩，不再上传旧候选。
+
 **Sheet最终生成证据已完整核验，官方仍在评分。** 同一40f69fc30bd3/c3887cd，562行链与脱敏/清单/CRC均通过；内部7/24、2864.742秒、77响应/82 HTTP尝试、输入1776519/输出118795。request78三次240秒超时而熔断，并非预算耗尽。第三批26次read_file对应同一版本源码且存在重复范围，紧张上下文反复截断主文件，另4次非末回合收尾提醒省略。详见`diagnostics/pro-sheet-final-evidence-2026-09-26.md`。只提取生成三成员证据包，未读取评分期应用数据；尚无Sheet官方分数/费用/综合名次，不把内部7/24当官方通过率，下一步等同一运行结算。
 
 **Sheet已结束生成、正在官方评分；收尾提醒候选d9c86b4已独立封包验证，未上传。** 同一40f69fc30bd3在49m34s明确Stage2完成/Stage3 in progress；request78第三次240.090秒超时，seq557熔断、seq560两条最终回归通过、seq562 local-contract-partial/77响应，内部7项。50m06s只有临时evidence ZIP，尚未核验最终证据。最新候选`dist/langqi-forge-turn-checkpoint.zip`（21成员/190319字节，SHA de73d844501606960e9ab449dcf69fcfbd2a4165b549335e0f268b53172260cc），源码d9c86b4819e132dd8f37d4c859b837b6a1de149a；独立解包28项检查通过，替代b565旧候选。详见`diagnostics/turn-checkpoint-reserve-2026-09-26.md`。目标未完成，无新官方成绩/费用/综合排名，不并行、不重启。
