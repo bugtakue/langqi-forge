@@ -10,6 +10,8 @@
 
 ## 当前证据快照
 
+**下一候选b443324已封包并独立验证，未上传。** `dist/langqi-forge-complete-sources.zip`，21成员/190526字节，SHA d4307f723d23a6f36cfc8a827e3698542943af772b4f327e73e1966a96bb4410；源码b44332403381f3953601d1da28ae29d5b47df78a，合同038bea989466e03fcd384f9136f998ffc3553ff311f5ffa405e6b4e7ec55650c。独立解包38项协议/缓存/验收检查通过，源码全量320项317通过/3跳过。详见`diagnostics/complete-source-retention-2026-09-26.md`。它替代旧d9c ZIP作为后续候选，但当前正式运行b15311c6f690仍精确d9c86b4，不改/取消/并行；须先完成当前同快照双项。目标未完成。
+
 **完整源码优先的窄条件修订本地通过全量回归，未封包/上传；正式新版仍运行。** 只有所选源码全文在原36KB及整体上下文预算都放得下时，替代重复旧页；否则完全沿用原回退。离线反例旧版两主文件都截断、新版都完整；30K不足时回退仍保页。全量320项/317通过/3环境跳过（63.457秒），不增预算/改验收。详见`diagnostics/complete-source-retention-2026-09-26.md`。正式d9c86b4/b15311c6f690在7m11s request2已215.816秒正常返回list_files，seq24 request3在途；不是超时，仍无写入/业务晋升/新成绩。综合最近已结算第9/24仍有效，目标未完成。
 
 **c3887cd正式综合第9/24（6.55分、17/200、￥25.0273）；d9c86b4新版已保存并串行启动GitHub。** Sheet40f69fc30bd3已结算第13、4.56分、6/100、￥9.4297；刷新运行页才清除旧评分状态，不再等待此运行。启动前余额￥442.24。新保存`Langqi Forge d9c86b4 - completion checkpoint`，History14/17:47:29/Pro，ZIP SHA de73d844501606960e9ab449dcf69fcfbd2a4165b549335e0f268b53172260cc；唯一新运行[b15311c6f690](https://arc-bench.com/runs/b15311c6f690)，3秒现场容器启动、Stage2生成/Stage3 pending，尚无模型完成响应或成绩。详见`diagnostics/pro-sheet-final-evidence-2026-09-26.md`及`diagnostics/checkpoint-official-run-2026-09-26.md`。当前前三门槛29.17，目标未完成；新Sheet未开始，不并行、不混成绩，不再上传旧候选。

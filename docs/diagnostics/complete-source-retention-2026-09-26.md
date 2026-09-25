@@ -20,3 +20,11 @@
 ## 正式任务观察
 
 b15311c6f690在7m11s现场仍Stage2/Stage3 pending；request2在215.816秒成功，输入13923/输出17330、工具list_files，并非超时；seq22压缩123021→55356字符，八文件快照4369字节完整，seq24 request3在途。仅工具检查，尚无源码写入/功能晋升或官方成绩；不把长响应误报为失败，也不据响应Token计数认定网关违反参数。
+
+## 候选封包（未上传）
+
+- 干净源码`b44332403381f3953601d1da28ae29d5b47df78a`。
+- `dist/langqi-forge-complete-sources.zip`：21成员、190526字节；SHA `d4307f723d23a6f36cfc8a827e3698542943af772b4f327e73e1966a96bb4410`。
+- 合同SHA `038bea989466e03fcd384f9136f998ffc3553ff311f5ffa405e6b4e7ec55650c`。
+- 独立解包`/private/tmp/factory26-complete-sources.IcMHo7`，精确20个runtime成员及清单、逐文件SHA/大小、合同SHA、CRC、Python AST通过。实际从解包目录导入agent，再跑38项源码记忆/压缩/收尾/浏览器预算/探针/修复后重验测试通过（0.170秒）。
+- 此为下一候选，包含d9c86b4，不改变已保存/正在评测的d9c快照。未推送或上传，仍先完成当前同快照双项。
