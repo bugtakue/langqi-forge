@@ -115,6 +115,9 @@ export async function saveState(next) {
   return next;
 }
 
+// Single-process transaction: check mutable-state invariants INSIDE updater,
+// against its fresh state, before mutation. Earlier loadState snapshots can race.
+// Throw to reject without persisting; send HTTP responses after awaiting this call.
 export function updateState(updater) {
   const task = previousWrite.then(async () => {
     const current = await loadState();

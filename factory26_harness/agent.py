@@ -48,9 +48,9 @@ Hard rules:
 - Workflow UIs should send a command (`action`, stable item id, action inputs) to the backend; do not
   trust a client-computed replacement collection. The backend must find the target, validate the
   current state and actor/input, derive the next state, then persist it atomically.
-- Keep one canonical state schema consistent across the initial JSON, backend handlers, and frontend.
-  Validate a command before mapping or mutating collections; never send an HTTP response from inside
-  a map/filter/reduce callback. Persist exactly once only after the whole command is valid.
+- Keep one state schema across seed, backend and UI. Check uniqueness, permissions and transitions
+  INSIDE updateState against its fresh state before mutating; prior loadState checks can race.
+  Throw on invalidity; send the HTTP response only after awaiting updateState. Persist once.
 - Make the smallest coherent change. Do not rewrite unrelated working features.
 - Batch independent calls; inspect related paths with read_files.
 - Source reads are paged. If read_file/read_files reports content_truncated, follow next_start_line
