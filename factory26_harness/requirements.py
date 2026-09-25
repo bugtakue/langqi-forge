@@ -404,11 +404,28 @@ def _stable_topological_order(
     return ordered
 
 
-def batches(nodes: list[RequirementNode], size: int) -> list[list[RequirementNode]]:
+def batches(
+    nodes: list[RequirementNode], size: int, *, max_spec_chars: int | None = None
+) -> list[list[RequirementNode]]:
+    """Keep dependency order, but avoid treating long specs as cheap leaf nodes."""
     normalized = max(1, size)
-    return [
-        nodes[index : index + normalized] for index in range(0, len(nodes), normalized)
-    ]
+    if max_spec_chars is not None and max_spec_chars < 1:
+        raise ValueError("batch specification character budget must be positive")
+    groups: list[list[RequirementNode]] = []
+    current: list[RequirementNode] = []
+    characters = 0
+    for node in nodes:
+        cost = len(node.full_spec_document()) if max_spec_chars is not None else 0
+        if current and (len(current) >= normalized or (
+            max_spec_chars is not None and characters + cost > max_spec_chars
+        )):
+            groups.append(current)
+            current, characters = [], 0
+        current.append(node)
+        characters += cost
+    if current:
+        groups.append(current)
+    return groups
 
 
 def folder_dependency_index(tree: dict[str, Any]) -> list[dict[str, Any]]:

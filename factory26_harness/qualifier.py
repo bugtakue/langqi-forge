@@ -67,6 +67,11 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
         "--batch-size", type=int, default=int(os.environ.get("FACTORY26_BATCH_SIZE", "4"))
     )
     parser.add_argument(
+        "--batch-spec-chars", type=int,
+        default=int(os.environ.get("FACTORY26_BATCH_SPEC_CHARS", "32000")),
+        help="Bound public specification size per batch; a single larger requirement stays intact",
+    )
+    parser.add_argument(
         "--max-agent-turns",
         type=int,
         default=int(os.environ.get("FACTORY26_MAX_AGENT_TURNS", "20")),
@@ -376,6 +381,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("only web applications are supported")
     if args.batch_size < 1 or args.batch_size > 12:
         raise SystemExit("batch size must be between 1 and 12")
+    if not 4000 <= args.batch_spec_chars <= 200000:
+        raise SystemExit("batch specification budget must be between 4000 and 200000 characters")
     if args.max_agent_turns < 3 or args.max_agent_turns > 80:
         raise SystemExit("max agent turns must be between 3 and 80")
     if args.repair_rounds < 0 or args.repair_rounds > 5:
@@ -432,7 +439,7 @@ def main(argv: list[str] | None = None) -> int:
         source = _source_identity()
         tree = load_requirement_tree(requirement_dir)
         nodes = _contextual_nodes(tree, flatten_atomic(tree))
-        groups = batches(nodes, args.batch_size)
+        groups = batches(nodes, args.batch_size, max_spec_chars=args.batch_spec_chars)
         outline = compile_task_outline(tree, nodes)
         outline_index = json.loads(outline)
         outline_listed = int(outline_index["listed_requirements"])
@@ -442,6 +449,7 @@ def main(argv: list[str] | None = None) -> int:
             source=source,
             requirement_sha256=requirement_sha,
             requirement_count=len(nodes),
+            batch_spec_chars=args.batch_spec_chars,
             task_outline_listed_requirements=outline_listed,
             task_outline_listed_folder_dependencies=int(outline_index["listed_folder_dependencies"]),
             task_outline_characters=len(outline),
@@ -480,6 +488,7 @@ def main(argv: list[str] | None = None) -> int:
                 ],
                 "folder_dependencies": folder_index,
                 "salvage_splits": args.salvage_splits,
+                "batch_spec_chars": args.batch_spec_chars,
                 "route": "model-generated-implementation",
                 "task_specific_prebuilt_code": False,
             },

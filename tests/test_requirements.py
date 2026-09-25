@@ -17,6 +17,29 @@ from factory26_harness.requirements import (
 
 
 class RequirementCompilerTests(unittest.TestCase):
+    def test_character_budget_splits_long_specs_without_losing_dependency_order(self) -> None:
+        nodes = flatten_atomic({"id": "ROOT", "type": "FOLDER", "children": [
+            {"id": f"R-{index}", "type": "ATOMIC", "description": "body" * 200,
+             "dependencies": [f"R-{index - 1}"] if index else []}
+            for index in range(5)
+        ]})
+        pair_budget = max(len(nodes[i].full_spec_document()) + len(nodes[i + 1].full_spec_document())
+                          for i in range(4))
+        groups = batches(nodes, 4, max_spec_chars=pair_budget)
+        self.assertEqual([len(group) for group in groups], [2, 2, 1])
+        self.assertEqual([node.req_id for group in groups for node in group],
+                         [node.req_id for node in nodes])
+        self.assertEqual([len(group) for group in batches(nodes, 4)], [4, 1])
+
+    def test_single_oversized_requirement_remains_whole_and_invalid_budget_rejected(self) -> None:
+        nodes = flatten_atomic({"id": "ROOT", "type": "FOLDER", "children": [
+            {"id": "R-1", "type": "ATOMIC", "description": "long" * 500},
+            {"id": "R-2", "type": "ATOMIC", "description": "small"},
+        ]})
+        self.assertEqual(batches(nodes, 4, max_spec_chars=500), [[nodes[0]], [nodes[1]]])
+        with self.assertRaises(ValueError):
+            batches(nodes, 4, max_spec_chars=0)
+
     def test_nonstandard_requirement_fields_are_not_silently_omitted(self) -> None:
         variants = (
             ("atomic", {"acceptance_criteria": "ATOMIC_EXTRA"}),

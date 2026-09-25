@@ -85,7 +85,7 @@ def _progress_projection(event: str, payload: dict[str, Any]) -> dict[str, Any] 
         "model_http_attempt": ("request_number", "attempt", "max_attempts", "timeout_seconds"),
         "model_response": ("finish_reason", "elapsed_seconds"),
         "model_error": (
-            "attempt", "http_status", "error_type", "retryable", "will_retry",
+            "attempt", "http_status", "error_type", "error_category", "retryable", "will_retry",
             "retry_delay_seconds", "retry_after_exceeds_limit", "elapsed_seconds",
         ),
         "model_budget_exhausted": (

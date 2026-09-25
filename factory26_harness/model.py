@@ -55,6 +55,28 @@ def _retryable_http_status(status: int) -> bool:
     return status in {408, 425, 429} or 500 <= status <= 599
 
 
+def _http_error_category(body: bytes) -> str:
+    """Classify a bounded provider error without ever logging its arbitrary text."""
+    try:
+        data = json.loads(body)
+        error = data.get("error", {}) if isinstance(data, dict) else {}
+        message = error.get("message", "") if isinstance(error, dict) else ""
+        lowered = str(message).lower()
+    except (ValueError, TypeError, UnicodeDecodeError):
+        return "unclassified"
+    if "reasoning_content" in lowered:
+        return "reasoning_protocol"
+    if "tool_call" in lowered or "tool call" in lowered:
+        return "tool_protocol"
+    if "context" in lowered and any(word in lowered for word in ("length", "limit", "token")):
+        return "context_limit"
+    if "unsupported" in lowered or "unknown parameter" in lowered:
+        return "unsupported_parameter"
+    if "quota" in lowered or "insufficient" in lowered:
+        return "quota_or_capacity"
+    return "unclassified"
+
+
 class OpenAIChatClient:
     def __init__(self, trace: ProductionTrace, *, planned_turns: int | None = None) -> None:
         if planned_turns is not None and planned_turns < 1:
@@ -297,6 +319,10 @@ class OpenAIChatClient:
                 return reply
             except urllib.error.HTTPError as exc:
                 status = int(exc.code)
+                try:
+                    error_category = _http_error_category(exc.read(65536))
+                except (OSError, ValueError):
+                    error_category = "unclassified"
                 retry_after = _retry_after_seconds(exc.headers)
                 delay = attempt if retry_after is None else retry_after
                 retryable = _retryable_http_status(status)
@@ -310,6 +336,7 @@ class OpenAIChatClient:
                     "model_error",
                     attempt=attempt,
                     http_status=status,
+                    error_category=error_category,
                     retryable=retryable,
                     will_retry=will_retry,
                     retry_delay_seconds=delay if will_retry else None,
@@ -321,8 +348,9 @@ class OpenAIChatClient:
                     time.sleep(delay)
                     continue
                 suffix = " (Retry-After exceeds local cap)" if exceeds_cap else ""
+                category_suffix = f" ({error_category})" if error_category != "unclassified" else ""
                 raise ModelGatewayUnavailable(
-                    f"attempt {attempt}: HTTP {status}{suffix}"
+                    f"attempt {attempt}: HTTP {status}{category_suffix}{suffix}"
                 ) from exc
             except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
                 will_retry = attempt < max_attempts
