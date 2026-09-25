@@ -31,3 +31,5 @@ ARC公开仓库首页描述的是benchmark及复现流程，没有在该页发�
 正式运行[40f69fc30bd3](https://arc-bench.com/runs/40f69fc30bd3)，同c3887cd/Pro。第3个请求首次240.151秒超时，seq31第二次尝试在203.357秒正常返回（输入15,387/输出16,274）；seq34/36成功写入backend/server.mjs和backend/data/state.json。随后seq37上下文从120,630压缩至62,751字符，保留源码快照10,841字节/8个完整文件，seq39发出request4。9m06s现场Stage2仍生成、Stage3 pending，尚无已晋升需求、官方分数或最终费用。
 
 这是已恢复的活运行，不因一次超时取消或重开。上一Goal回合完成正式结算和新任务启动，本轮取得新的请求耗时/参数差异证据与确切恢复进展；综合前三仍未完成。
+
+11m38s交接更新：seq50遗漏expected_sha256的现有文件覆盖被拒，后续seq56/61正确写入前端app.js与styles.css；seq66结构/包政策/交互/语法/作用域/前端构建均通过，尚未出现浏览器验收或批次晋升。最新request11/seq90，仍Stage2、Stage3 pending。此例再次说明a31cfa9候选的写入schema修订有针对性，但不能算该候选已在正式赛验证。
