@@ -91,7 +91,10 @@ class RetainedSpecificationTests(unittest.TestCase):
                             "role": "assistant", "content": "", "reasoning_content": reasoning, "tool_calls": calls})
 
                 checks = [CheckResult("fixture", True, "fixture validation", (), 0)]
-                with patch.dict(os.environ, {"FACTORY26_AGENT_CONTEXT_CHARS": "50000"}), patch(
+                with patch.dict(os.environ, {
+                    "FACTORY26_AGENT_CONTEXT_CHARS": "50000",
+                    "FACTORY26_INLINE_SPEC_CHARS": "0",  # exercise the paging fallback explicitly
+                }), patch(
                     "factory26_harness.workspace_tools.run_quick_checks", return_value=checks,
                 ):
                     result = CodingAgent(Model(), tools, trace, max_turns=10).implement([node])

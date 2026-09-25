@@ -4,6 +4,14 @@
 
 ## 输入与产出
 
+### 完整公开需求预装（b7之后的本地候选）
+
+当前批次已知的ABBREVIATED公开需求，可按完整原文预装到首轮请求的`untrusted_prefilled_specifications`块。逐份选择完整文档，预算按JSON转义后的请求字符数计算，默认至多32,000且不超过总上下文上限的1/3；还从实际首轮余量中留出4,000字符。放不下的文档不截断、不改成摘要放行，仍用原有分页门。`FACTORY26_INLINE_SPEC_CHARS=0`可退回纯分页模式，不增加总上下文、模型轮数、调用预算或费用上限。
+
+只有harness核对与已注册当前批次原文逐字相等后，才能登记首轮输入回执；不是模型可调用的工具。写入前的完整输入要求不变，receipt的`initial_delivery=initial_prompt`与`paged_tool`区分来源；兼容字段`initial_read_complete`仅表示完整文本已供应，不证明理解/实现。轨迹记录`requirement_prefill_prepared`及文档哈希/字符数，明确`model_receipt_confirmed=false`，不捏造read_requirement_spec调用。
+
+首轮消息在滚动压缩中保留，因此不再把同一原文复制到retained-spec块；是否已经在首轮只按本次会话的ID集判断。候选修复会话重新构造预装输入，不能把上一个会话的回执误当作当前模型看得到正文。分页原文仍可按需复查。该能力只传递公开输入，不使用预制业务实现或隐藏测试。
+
 ### 离线 JavaScript 作用域检查（b7之后的本地候选）
 
 快速检查顺序为结构→包策略→交互策略→语法→词法作用域→构建，完整检查再加启动；同一入口覆盖模型run_validation、批次晋升、修复与最终检查。检查器用Espree解析及ESLint Scope做名字绑定，不使用正则猜变量、不加载应用的ESLint配置/插件、不执行或导入应用源码。前端.js按浏览器ES模块，后端.js按最近package.json，.mjs/.cjs分别按模块/CommonJS分析；各自有环境内建全局。直接`typeof missing`是安全探测而放行，`typeof missing.property`仍报告；注释和`eslint-disable`不能关闭门禁。

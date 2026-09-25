@@ -141,6 +141,7 @@ class WorkspaceTools:
         self.handoff_notes = handoff_notes
         self.requirement_specs: dict[str, str] = {}
         self.requirement_spec_offsets: dict[str, int] = {}
+        self.inline_requirement_ids: set[str] = set()
         self.changed_files: set[str] = set()
         self.change_revision = 0
         self.validated_revision = -1
@@ -192,6 +193,19 @@ class WorkspaceTools:
             for req_id, document in self.requirement_specs.items()
         )
 
+    def register_inline_requirement_delivery(self, documents: dict[str, str]) -> None:
+        """Harness-only receipt for exact documents included in the initial prompt.
+
+        This method is deliberately absent from the model tool schema. A prompt
+        summary or partial document cannot satisfy the complete-input gate.
+        """
+        for req_id, document in documents.items():
+            if req_id not in self.requirement_specs or self.requirement_specs[req_id] != document:
+                raise ValueError("inline specification does not match the assigned original")
+        for req_id, document in documents.items():
+            self.inline_requirement_ids.add(req_id)
+            self.requirement_spec_offsets[req_id] = len(document)
+
     def requirement_spec_access_state(self) -> list[dict[str, Any]]:
         """Compact source references for restoring context after chat compression."""
 
@@ -203,6 +217,9 @@ class WorkspaceTools:
                 "next_unread_char": self.requirement_spec_offsets.get(req_id, 0),
                 "initial_read_complete": (
                     self.requirement_spec_offsets.get(req_id, 0) >= len(document)
+                ),
+                "initial_delivery": (
+                    "initial_prompt" if req_id in self.inline_requirement_ids else "paged_tool"
                 ),
             }
             for req_id, document in sorted(self.requirement_specs.items())
