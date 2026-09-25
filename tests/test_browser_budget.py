@@ -37,7 +37,11 @@ class BrowserBudgetTests(unittest.TestCase):
             class Model:
                 calls = 0
 
-                def complete(self, _messages, _schemas):
+                def __init__(self):
+                    self.requests = []
+
+                def complete(self, messages, _schemas):
+                    self.requests.append(json.loads(json.dumps(messages)))
                     if self.calls >= len(script):
                         raise AssertionError("unexpected extra model request")
                     item = script[self.calls]
@@ -59,11 +63,20 @@ class BrowserBudgetTests(unittest.TestCase):
                  "assertion_failures": [] if outcome else [{"step": 1, "missing": ["Saved"]}]}
                 for outcome in outcomes
             ]) as probe:
-                result = CodingAgent(model, tools, trace, max_turns=10).implement(
+                result = CodingAgent(model, tools, trace, max_turns=8).implement(
                     flatten_atomic({"id": "R", "type": "ATOMIC", "name": "Fixture", "description": "Save a record."}))
             self.assertEqual(model.calls, len(script))
             self.assertEqual(probe.call_count, len(outcomes))
             self.assertEqual(result.turns, len(script))
+            reminders = [message["content"] for message in model.requests[2]
+                if message.get("role") == "user"
+                and message.get("content", "").startswith("Turn-budget checkpoint:")]
+            self.assertTrue(reminders)
+            if maximum > 0:
+                self.assertIn("current-revision browser evidence is missing", reminders[-1])
+                self.assertNotIn("finish now", reminders[-1])
+            else:
+                self.assertIn("finish now", reminders[-1])
             rows = [json.loads(line) for line in trace.path.read_text().splitlines()]
             if expected_failure:
                 self.assertFalse(result.completed)

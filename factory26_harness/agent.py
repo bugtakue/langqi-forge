@@ -128,6 +128,28 @@ STARTER_SOURCE_PATHS = (
 )
 
 
+def _turn_budget_instruction(tools: WorkspaceTools) -> str:
+    """Describe missing verification, without turning validation into acceptance."""
+    if not tools.current_changes_validated:
+        return (
+            "Stop broad inspection. Finish edits; reserve turns for quick validation, "
+            "behavioral browser_probe and no-tool AUDIT PASS."
+        )
+    if tools.maximum_browser_probe_calls > 0 and (
+        tools.browser_probe_requires_recheck
+        or tools.browser_probe_verified_revision != tools.change_revision
+    ):
+        return (
+            "Quick validation passed, but current-revision browser evidence is missing. "
+            "Run browser_probe now with a required user action and visible assertion; "
+            "repair and revalidate failures before re-probing. Do not claim AUDIT PASS yet."
+        )
+    return (
+        "If every required behavior is implemented, finish now with a no-tool "
+        "summary beginning with `AUDIT PASS:`. Otherwise fix gaps and re-run quick once."
+    )
+
+
 @dataclass(frozen=True)
 class AgentRun:
     completed: bool
@@ -1176,16 +1198,7 @@ class CodingAgent:
                     )
             remaining_turns = self.max_turns - turn
             if remaining_turns <= 6:
-                if self.tools.current_changes_validated:
-                    instruction = (
-                        "If every required behavior is implemented, finish now with a no-tool "
-                        "summary beginning with `AUDIT PASS:`. Otherwise fix gaps and re-run quick once."
-                    )
-                else:
-                    instruction = (
-                        'Stop broad inspection. Finish edits; reserve turns for quick validation, '
-                        'behavioral browser_probe and no-tool AUDIT PASS.'
-                    )
+                instruction = _turn_budget_instruction(self.tools)
                 reminder = {
                     "role": "user",
                     "content": (
