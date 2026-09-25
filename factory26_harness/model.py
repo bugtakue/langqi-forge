@@ -202,6 +202,14 @@ class OpenAIChatClient:
                 f"model request exceeds {self.max_request_bytes} byte safety limit"
             )
         for attempt in range(1, max_attempts + 1):
+            attempt_started = time.monotonic()
+            self.trace.record(
+                "model_http_attempt",
+                request_number=self.request_count + 1,
+                attempt=attempt,
+                max_attempts=max_attempts,
+                timeout_seconds=request_timeout,
+            )
             request = urllib.request.Request(
                 self.endpoint,
                 data=encoded,
@@ -256,6 +264,7 @@ class OpenAIChatClient:
                     gateway=self.gateway_evidence(),
                     response_id=response_id,
                     finish_reason=finish_reason,
+                    elapsed_seconds=round(time.monotonic() - attempt_started, 3),
                     message=message,
                     usage={
                         "prompt_tokens": prompt_tokens,
@@ -305,6 +314,7 @@ class OpenAIChatClient:
                     will_retry=will_retry,
                     retry_delay_seconds=delay if will_retry else None,
                     retry_after_exceeds_limit=exceeds_cap,
+                    elapsed_seconds=round(time.monotonic() - attempt_started, 3),
                 )
                 exc.close()
                 if will_retry:
@@ -321,6 +331,7 @@ class OpenAIChatClient:
                     "model_error",
                     attempt=attempt,
                     error_type=error_type,
+                    elapsed_seconds=round(time.monotonic() - attempt_started, 3),
                     will_retry=will_retry,
                     retry_delay_seconds=attempt if will_retry else None,
                 )
@@ -335,6 +346,8 @@ class OpenAIChatClient:
                     "model_error",
                     attempt=attempt,
                     error=f"invalid model response: {type(exc).__name__}",
+                    error_type=type(exc).__name__,
+                    elapsed_seconds=round(time.monotonic() - attempt_started, 3),
                     will_retry=False,
                 )
                 raise ModelGatewayUnavailable("invalid model response") from exc

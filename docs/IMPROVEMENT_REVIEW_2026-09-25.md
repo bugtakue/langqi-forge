@@ -42,3 +42,13 @@
 修复版 `15242edc22024f0d8542c80eeed8661fff485d64`，包 `dist/langqi-forge-context-fix.zip`，SHA-256 `fbdc5868f67eae31b2d4cccb0b34018d1397bb0d845effc602ae92a2c37265a2`，17 个白名单文件，67,002 字节。保存时间页面显示 `2026/9/25 05:54:56`（未标时区）。保持 `deepseek-v4-flash` 及平台比赛额度，未使用个人 Key。
 
 只启动了一次 GitHub 题：https://arc-bench.com/runs/4f394fa6ab49 。平台预检通过、官方 SDK 加载成功；首批四个规格分三轮读完，11 个规格分页调用均成功，之后读取源码。此时尚未出现新官方分数，Sheet 未运行。
+
+运行约 10 分钟时仍在生成阶段、官方评估待开始；日志已推进到参考图检查，其中部分成功、部分报 `visual reference unavailable: ValueError`。这只能证明代理继续执行，不能证明第一个实现批次已通过，也不能推定视觉错误的具体上游原因。
+
+## 下一版诊断（未上传，不影响上述运行）
+
+增加模型 HTTP 尝试开始、超时上限、耗时、重试决定、返回终止原因与 Token 计数的 stdout 白名单。请求正文、模型返回正文、响应 ID、endpoint 与未知 usage 字段不向 stdout 镜像。完整脱敏轨迹仍独立密封。这解决“生成中”时无法区分等待模型、重试或工具执行的诊断缺口，不冒充生成质量提升。
+
+本机验证应使用仓库 `.venv/bin/python`：系统 `python3` 缺 PyYAML，另一全局 `python` 不具备完整官方 SDK。用错解释器的运行不计作提交版本测试通过。
+
+下一版诊断完整回归：`.venv/bin/python -m unittest discover -s tests -q -b`，147 项 / 144 通过 / 3 跳过，54.774 秒，无失败；`git diff --check` 通过。该诊断改动保留本地，在线快照仍为 `15242ed`，未为日志增强单独消耗第二次评测额度。

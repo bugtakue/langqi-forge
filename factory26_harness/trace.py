@@ -79,6 +79,28 @@ _PROGRESS_FIELDS = {
 
 
 def _progress_projection(event: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    # Keep request/response bodies in the sealed trace only. These small fields
+    # distinguish model latency/retries from an agent that stopped making work.
+    model_fields = {
+        "model_http_attempt": ("request_number", "attempt", "max_attempts", "timeout_seconds"),
+        "model_response": ("finish_reason", "elapsed_seconds"),
+        "model_error": (
+            "attempt", "http_status", "error_type", "retryable", "will_retry",
+            "retry_delay_seconds", "retry_after_exceeds_limit", "elapsed_seconds",
+        ),
+        "model_budget_exhausted": (
+            "request_count", "maximum_requests", "total_prompt_tokens",
+            "total_completion_tokens", "maximum_prompt_tokens", "maximum_completion_tokens",
+        ),
+    }
+    if event in model_fields:
+        selected = {key: payload[key] for key in model_fields[event] if key in payload}
+        if event == "model_response" and isinstance(payload.get("usage"), dict):
+            selected["usage"] = {
+                key: payload["usage"][key] for key in ("prompt_tokens", "completion_tokens")
+                if key in payload["usage"]
+            }
+        return {"event": event, **selected}
     if event == "tool_result":
         result = payload.get("result")
         if not isinstance(result, dict):
