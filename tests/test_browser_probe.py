@@ -85,7 +85,6 @@ class BrowserProbeTests(unittest.TestCase):
         for steps in (
             [{"action": "navigate", "path": "https://example.com"}],
             [{"action": "navigate", "path": "//example.com"}],
-            [{"action": "navigate", "path": "/safe#fragment"}],
             [{"action": "click", "text": "Save", "role": "button", "name": "Save"}],
             [{"action": "fill", "text": "Name", "value": "Alice"}],
             [{"action": "click", "role": "button"}],

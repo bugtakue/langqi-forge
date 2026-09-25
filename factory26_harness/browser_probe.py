@@ -60,9 +60,13 @@ def _local_path(value: Any) -> str:
         or "\\" in path
         or parsed.scheme
         or parsed.netloc
-        or parsed.fragment
     ):
-        raise ValueError("browser navigation must use a local path beginning with /")
+        raise ValueError(
+            "browser navigation needs a local path such as /settings or /#/settings; "
+            "absolute URLs, // and backslashes are forbidden"
+        )
+    # The fixed loopback origin is prepended by _perform. A fragment is local
+    # client-side routing, not a new origin; network/origin guards still apply.
     return path
 
 
@@ -215,7 +219,10 @@ def _page_observation(
     unexpected = [item for item in absent if item in owner_text]
     current = urlsplit(page.url)
     return {
-        "path": current.path + (f"?{current.query}" if current.query else ""),
+        "path": (
+            current.path + (f"?{current.query}" if current.query else "")
+            + (f"#{current.fragment}" if current.fragment else "")
+        ),
         "visible_text": body[:MAX_TEXT_CHARS],
         "visible_text_truncated": len(body) > MAX_TEXT_CHARS,
         "missing_text": missing,

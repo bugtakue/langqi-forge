@@ -476,7 +476,7 @@ class WorkspaceTools:
                                                     ("expect_scope", "Unique visible semantic owner of post-action assertions, including after reload. Missing/ambiguous owner fails."),
                                                 )
                                             },
-                                            "path": {"type": "string"},
+                                            "path": {"type": "string", "description": "Local /path or /#/route; optional query/fragment. No absolute URL or //."},
                                             "value": {"type": "string"},
                                             "option_by": {"type": "string", "enum": ["label", "value"]},
                                             "expect_text": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_ASSERTIONS},
