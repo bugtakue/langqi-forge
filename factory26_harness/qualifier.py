@@ -103,6 +103,19 @@ def _smoke_port(web_port: int) -> int:
     return port
 
 
+def _occupied_smoke_port(checks: list[CheckResult]) -> bool:
+    """Distinguish a port-allocation race from an application failure."""
+
+    return (
+        bool(checks)
+        and all(check.passed for check in checks[:-1])
+        and checks[-1].name == "startup_health"
+        and not checks[-1].passed
+        and checks[-1].summary.startswith("smoke port ")
+        and checks[-1].summary.endswith(" is already occupied")
+    )
+
+
 def _contextual_nodes(
     tree: dict[str, Any], nodes: list[RequirementNode]
 ) -> list[RequirementNode]:
@@ -474,9 +487,22 @@ def main(argv: list[str] | None = None) -> int:
         if arc_runtime is not None:
             arc_runtime.commit_scaffold()
         smoke_port = _smoke_port(args.web_port)
-        initial_checks = run_full_checks(output_dir, smoke_port)
-        report["initial_checks"] = _check_results(initial_checks)
-        trace.record("generic_scaffold_checked", checks=report["initial_checks"])
+        initial_checks: list[CheckResult] = []
+        report["initial_check_attempts"] = []
+        for check_attempt in (1, 2):
+            initial_checks = run_full_checks(output_dir, smoke_port)
+            evidence = _check_results(initial_checks)
+            report["initial_check_attempts"].append(evidence)
+            report["initial_checks"] = evidence
+            trace.record(
+                "generic_scaffold_checked",
+                attempt=check_attempt,
+                smoke_port=smoke_port,
+                checks=evidence,
+            )
+            if check_attempt == 2 or not _occupied_smoke_port(initial_checks):
+                break
+            smoke_port = _smoke_port(args.web_port)
         if not all(check.passed for check in initial_checks):
             raise RuntimeError("generic scaffold failed its own build/start checks")
 

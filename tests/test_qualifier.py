@@ -1143,6 +1143,46 @@ children:
             self.assertEqual(report["initial_checks"][0]["summary"], "smoke port occupied")
             self.assertFalse(report["initial_checks"][0]["passed"])
 
+    def test_initial_scaffold_retries_only_an_occupied_smoke_port(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = self._requirement_dir(root)
+            output = root / "output"
+            ports: list[int] = []
+            while len(ports) < 2:
+                candidate = qualifier._smoke_port(3000)
+                if candidate not in ports:
+                    ports.append(candidate)
+            actual_full_checks = qualifier.run_full_checks
+            checked_ports: list[int] = []
+
+            def first_port_is_taken(project: Path, port: int):
+                checked_ports.append(port)
+                if len(checked_ports) == 1:
+                    return [CheckResult(
+                        "startup_health", False,
+                        f"smoke port {port} is already occupied",
+                        ("backend/server.mjs",), 0.0,
+                    )]
+                return actual_full_checks(project, port)
+
+            with (
+                patch.object(qualifier, "_smoke_port", side_effect=ports),
+                patch.object(qualifier, "run_full_checks", side_effect=first_port_is_taken),
+                patch.object(qualifier, "OpenAIChatClient", ScriptedModel),
+            ):
+                status = qualifier.main(
+                    [str(requirement_dir), "--output-dir", str(output)]
+                )
+            report = json.loads(
+                (output / ".arc" / "harness-report.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(status, 0, report)
+            self.assertEqual(checked_ports[:2], ports)
+            self.assertEqual(len(report["initial_check_attempts"]), 2)
+            self.assertFalse(report["initial_check_attempts"][0][-1]["passed"])
+            self.assertTrue(all(item["passed"] for item in report["initial_checks"]))
+
     def test_model_writes_code_and_leaves_sealed_trace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
