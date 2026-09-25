@@ -96,3 +96,5 @@
 本轮完整回归：`.venv/bin/python -m unittest discover -s tests -q -b`，166 项 / 163 通过 / 3 浏览器环境跳过，56.637 秒，无失败；`git diff --check` 通过。固定响应夹具验证的是协议与回归，不是模型能力或正式 GUI 通过率。
 
 本轮最后读取官方运行时，页面时长 22m15s、仍处于生成阶段。06:51:29 日志确认拆批后的 `REQ-1-1-1` 在 20 回合内完成 harness 验收并晋升，`staged_changes_committed=true`；其 `browser_probe.calls=0`、`behavioral_probe_verified=false`，不能说通过浏览器行为验证或主办方 GUI 测试。后续 `REQ-1-1-2` 正在生成，新官方得分尚未产生。本地新修订未并行启动额外任务。
+
+本轮候选源码 `8da9d8229454e3ce3dbe6169134724f5c5588f1f` 已从干净工作树打包为 `dist/langqi-forge-prompt-contract.zip`：17 个白名单文件，70,146 字节，SHA-256 `99c69d324cfc82e56ccb3f60b52f604123a82a13c9a953eaab0daf71894e07df`，ZIP 完整性检查通过。包内包含源码版本及逐文件清单；没有上传、没有触发新评测，也没有推送 GitHub。
