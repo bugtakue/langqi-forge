@@ -10,6 +10,10 @@
 
 ## 当前证据快照
 
+**最新：12cc147已结束生成、进入Stage3官方评分。** 13:49:57 UTC导出完整封印证据，5/47内部原子需求、169编码响应/169HTTP尝试、报告3,878,545 Token，因输入预算3,600,000门在最后响应后触发而停止；不是余额耗尽或HTTP400。完整1136行链、清单、CRC与脱敏核验通过，精确归档见`diagnostics/12cc-generation-final-evidence.md`。尚无本轮官方GUI成绩/人民币费用/新综合排名，Sheet未运行，不并行、不取消。
+
+**本回合实质改进：源码范围分义，尚未封包上传。** 22次线上显式范围完整返回仍content_truncated=true，工具旧说明要求继续读；新增requested_range_complete区分请求范围与文件后文，保持实际正文、SHA、读写/完整需求/验收门不变。七项新测试，聚焦77通过、全量295项中292通过/3环境跳过（63.740秒）。完整轨迹另证实seq544的合法`/#/signin`误拒正是af7修订范围。当前本地包含阶段收尾/事务/hash/范围四项，不把旧af7包当成包含最新范围修订；必须重新封包。详情见`diagnostics/source-range-contract-2026-09-25.md`。
+
 **最新现场33m10s，内部5/47**：同一12cc147的退出/改密码seq713已通过并晋升，记录turns=25（包含后续候选修复口径，具体分解待封印报告）、3次探针且behavioral_probe_verified=true。seq716开始组织浏览/组织创建/团队创建，最新request116/seq757于13:38:32 UTC发出。仍Stage2 / Stage3 pending，没有新官方GUI成绩、人民币账单或综合排名。本回合有本地路由缺陷复现/修复/真实Chrome验证及新正式晋升证据，没有新增模型评测或取消运行。
 
 **最新待测包（未上传）**：干净源码`af7d4ad3212bf747e540d1b3fce81b50c16f9209` → `dist/langqi-forge-local-navigation.zip`，20文件/186,994字节，SHA-256 `5ac3f718d2b66858a61f71d302132ec5b196e15f9de91f46c937d80b0b9b5e24`。包含此前收尾/事务提示及本轮同源hash路由与观察路径修订；全套288项/285通过/3环境跳过，63.687秒。独立解包`/private/tmp/factory26-local-navigation.Fdpa7l`核验19runtime成员/哈希/大小/真实导入路径、合同SHA`028f9ae2f502868097dbc785ddfcdded2916a7eb0fe3fef79a9d07b2dadc174b`和本地路径接受/外部路径拒绝，ZIP CRC通过。未推送、未上传，不复跑旧候选；下方1628eea只保留历史。

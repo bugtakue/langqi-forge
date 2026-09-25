@@ -53,10 +53,10 @@ Hard rules:
   Throw on invalidity; send the HTTP response only after awaiting updateState. Persist once.
 - Make the smallest coherent change. Do not rewrite unrelated working features.
 - Batch independent calls; inspect related paths with read_files.
-- Source reads are paged. If read_file/read_files reports content_truncated, follow next_start_line
-  before relying on omitted code. If character_page_required, use read_file(start_char=next_start_char)
-  until its character pages are complete. An oversized batch may supply only file hashes and
-  re_read_files_individually=true; then read the relevant files separately before editing.
+- Read relevant source ranges, not every file to EOF. requested_range_complete means the requested
+  existing lines were supplied; content_truncated merely says later file text exists. Follow page
+  cursors only for needed omitted code; use start_char for oversized lines. If a batch supplies
+  only hashes with re_read_files_individually=true, read the relevant files separately.
 - A successful write is authoritative; reread only when a failure requires exact current text.
   Fix every reported validation location before revalidating. Never repeat no-op writes.
   Use the latest observed read/write SHA as `expected_sha256` for full-file replacement.
@@ -281,6 +281,8 @@ def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
         "last_line",
         "next_start_line",
         "content_truncated",
+        "requested_end_line",
+        "requested_range_complete",
         "character_page_required",
         "re_read_files_individually",
         "total_chars",
@@ -301,6 +303,8 @@ def _compact_tool_result(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
                 "path": str(item.get("path") or ""),
                 "next_start_line": item.get("next_start_line"),
                 "next_start_char": item.get("next_start_char"),
+                **({"requested_range_complete": item["requested_range_complete"]}
+                   if "requested_range_complete" in item else {}),
             }
             for item in files
             if isinstance(item, dict) and item.get("path") and item.get("content_truncated")
@@ -940,6 +944,7 @@ class CodingAgent:
                                     "next_start_line": result_payload.get("next_start_line"),
                                     "next_start_char": result_payload.get("next_start_char"),
                                     "sha256": result_sha256,
+                                    "requested_range_complete": result_payload.get("requested_range_complete"),
                                 }
                             else:
                                 unread_source_pages.pop(result_path, None)
@@ -957,6 +962,7 @@ class CodingAgent:
                                     "next_start_line": item.get("next_start_line"),
                                     "next_start_char": item.get("next_start_char"),
                                     "sha256": item_sha256,
+                                    "requested_range_complete": item.get("requested_range_complete"),
                                 }
                             else:
                                 unread_source_pages.pop(item_path, None)
@@ -1047,8 +1053,8 @@ class CodingAgent:
                         "Use prefilled originals; review only omitted specs with read_requirement_spec. "
                         if self.tools.requirement_specs else ""
                     )
-                    + "Do not repeat completed starter reads; follow unread_source_pages "
-                    "and read_file for omitted code. State:\n"
+                    + "Do not repeat completed starter reads. unread_source_pages lists file "
+                    "tails, not mandatory work; read omitted code only when relevant. State:\n"
                     + json.dumps(
                         checkpoint,
                         ensure_ascii=False,

@@ -260,7 +260,9 @@ class WorkspaceTools:
                     "name": "read_file",
                     "description": (
                         "Read up to 400 numbered lines from a UTF-8 project file. "
-                        "If content_truncated is true, continue from next_start_line. "
+                        "requested_range_complete distinguishes a complete requested range "
+                        "from a page cut by limits. content_truncated only means later file "
+                        "text exists; read it only when relevant, not automatically to EOF. "
                         "For an oversized single line, use the returned next_start_char "
                         "with start_char to page through exact source characters."
                     ),
@@ -607,6 +609,7 @@ class WorkspaceTools:
                             "sha256": entry.get("sha256"),
                             "total_lines": entry.get("total_lines"),
                             "content_truncated": True,
+                            "requested_range_complete": False,
                             "next_start_line": 1,
                         }
                         for entry in result["files"]
@@ -626,6 +629,7 @@ class WorkspaceTools:
             for key in (
                 "path", "sha256", "total_lines", "start_line", "last_line",
                 "next_start_line", "content_truncated", "next_start_char",
+                "requested_end_line", "requested_range_complete",
                 "character_page_required",
             ):
                 if key in result:
@@ -637,6 +641,7 @@ class WorkspaceTools:
                         for key in (
                             "path", "sha256", "total_lines", "start_line",
                             "last_line", "next_start_line", "content_truncated",
+                            "requested_end_line", "requested_range_complete",
                             "single_file_read_required", "next_start_char",
                             "character_page_required",
                         )
@@ -700,6 +705,7 @@ class WorkspaceTools:
                     "next_start_char": end_char if end_char < len(source) else None,
                     "total_chars": len(source),
                     "content_truncated": end_char < len(source),
+                    "requested_range_complete": end_char == len(source),
                 }
                 if len(json.dumps(result, ensure_ascii=False, sort_keys=True)) <= MAX_DIRECT_READ_RESULT_CHARS:
                     return result
@@ -728,6 +734,11 @@ class WorkspaceTools:
                 "total_lines": len(lines),
                 "start_line": start,
                 "last_line": shown_line,
+                "requested_end_line": requested_end,
+                "requested_range_complete": (
+                    start > len(lines)
+                    or (shown_line is not None and shown_line >= min(requested_end, len(lines)))
+                ),
                 "next_start_line": next_line,
                 "content_truncated": next_line is not None,
             }
@@ -830,6 +841,7 @@ class WorkspaceTools:
                     used += cost
                 file_result["content"] = "\n".join(kept)
                 file_result["content_truncated"] = True
+                file_result["requested_range_complete"] = False
                 file_result["last_line"] = (
                     file_result["start_line"] + len(kept) - 1 if kept else None
                 )
