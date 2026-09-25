@@ -10,6 +10,10 @@
 
 ## 当前证据快照
 
+**fb84f4e已结束生成并进入官方评分，内部4项，169响应后输入预算耗尽。** 北京时间02:41:30刷新、25m04s，465e25b12c29的seq754文件浏览额外晋升；seq1065 token budget exceeded熔断，seq1068三条最终保存流程重放通过，seq1070 local-contract-partial。Stage2已完成/Stage3 Evaluation in progress；尚未核验官方成绩、成本和最终封印包，不开并行Sheet、不加预算。
+
+本轮独立检查生成期副本：公开入口/筛选/README刷新可用，但合成账号登录后刷新丢身份，源码将session.userId交给username解析器；SSH切换后aria-selected也未更新。10个非数据源码与原包一致，本地服务/页已关闭；详见`diagnostics/nonthinking-partial-ui-2026-09-26.md`。不手改业务应用、不把局部自验当完整质量，下一步读取最终封印轨迹及正式分数再定后续版本。
+
 **465e25b12c29内部累计3项，仍未官方评分；本地失败现场回传候选全量复验通过，未封包/上传。** 北京时间02:31:23刷新，14m40s：组织仓库浏览seq299、公共仓库详情/克隆值seq511晋升，首批及注册拆项/仓库搜索仍失败；93响应无模型错误，req94在途。详见`diagnostics/nonthinking-comparison-2026-09-26.md`，不把速度或内部3项当GUI分数。
 
 本地新增动作异常回传原错误/步号/已有观察与同origin有界现场；异常仍失败、不重复动作、不增加次数、不放宽断言，跨origin不读取DOM，正常返回格式保持。7项新夹具+全量327项（324通过/3环境跳过，64.493秒）；详见`diagnostics/probe-failure-scene-2026-09-26.md`。当前主分支含b443和此修订但仍bounded策略，远端fb84f4e则d9+non-thinking，禁止混淆版本。继续等同一正式运行，若最终有有效产出再同快照Sheet，综合前三目标未完成。
