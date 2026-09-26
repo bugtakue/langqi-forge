@@ -1,0 +1,44 @@
+{
+  "evidence_kind": "local_public_practice_comparison_not_official_score",
+  "candidate_a": "804c4e8",
+  "candidate_b": "octos-arc@561e03d6fa5f4606901f8694d21f2182cb73538b/arc.17",
+  "model": "glm-5.3-flash",
+  "scored_trials": {
+    "A": {"counter": [1, 0], "dice": [0, 1], "ticket": [null, null]},
+    "B": {"counter": [1, 1], "dice": [1, 1], "ticket": [null, null]}
+  },
+  "score_denominators": {"counter": 1, "dice": 1, "ticket": 10},
+  "winner_selected": false,
+  "formal_upload_allowed": false,
+  "practice_meter_observation": {
+    "kind": "manual_transcription_from_authenticated_visible_meter_UI",
+    "url": "https://meter.arc-bench.com/user",
+    "synchronized_at_beijing": "2026-09-26 08:55:29",
+    "initial_gifted_balance_cny": "100.000000",
+    "current_balance_cny": "99.838926",
+    "charged_balance_difference_cny": "0.161074",
+    "latest_visible_request_finished_at_beijing": "2026-09-26 08:43:00",
+    "latest_visible_request_id": "2026092608414837939919593491",
+    "latest_visible_prompt_tokens": 5970,
+    "latest_visible_completion_tokens": 59,
+    "latest_visible_request_cost_cny": "0.003008"
+  },
+  "unsettled_call": {
+    "local_id": "db7578d75f9900b512f400ae642ec87b",
+    "trial": "a-ticket-booking--ticket-booking-1",
+    "full_reservation_retained_cny": "0.174823",
+    "provider_request_id": null,
+    "actual_cost_cny": null,
+    "state": "reserved_locked",
+    "note": "No returned usage or provider error body was retained by the original gateway. Absence from visible billing is not proof of zero cost. Do not retry, release, or reclassify as model capability failure."
+  },
+  "all_local_uncached_usage_upper_bounds_plus_reserved_cny": "0.534191",
+  "validator_sensitivity": {
+    "kind": "internal_validator_tests_not_candidate_business_acceptance",
+    "healthy_passed": true,
+    "defects_rejected": ["blank", "200-only", "session-loss", "overwrite-db", "volatile"],
+    "evidence": ".cache/ab-campaign/sensitivity/1790383850/summary.json"
+  },
+  "no_new_formal_upload_or_run": true,
+  "next_gate": "Reconcile uncertain request terminal state and bill; complete Ticket A/B twice each before selecting an engine."
+}
