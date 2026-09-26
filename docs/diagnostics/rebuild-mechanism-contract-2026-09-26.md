@@ -62,3 +62,21 @@ Source review/unit checks are not foundation acceptance. Native x86 compatibilit
 also remains open after the failed local emulation probe; see its separate record.
 No formal trial until all required gates pass, budget metering is enforceable,
 and the official active-run list is checked again at action time.
+
+## First compiler-only trial (registered before calling the model)
+
+`github-acceptance-v1`: GLM 5.3 Flash, mechanism budget, maximum ¥1 / 600s.
+Input is the official public GitHub YAML, selecting REQ-1-1-1, REQ-1-1-2,
+REQ-1-2, REQ-2-1-2, REQ-3-2-1 with all transitive prerequisites/ancestors.
+No application or foundation holdout is mounted; only six explicitly named
+compiler files, the public source, output directory and scoped gateway token.
+At most two model responses: the second only corrects schema/syntax/collection,
+before any app exists. No transport retry or relaxed test assertions.
+
+Offline compiler/catalog checks passed 8/8 with real Playwright collection,
+including forbidden imports/calls, fake constant assertions, undeclared test
+registration and inherited dependency coverage. After generation a separate
+no-network/no-key container must execute the frozen suite against an HTTP-200
+empty page: every case must fail with zero skips. This negative control is
+necessary but not proof of business correctness. Foundation holdouts remain
+frozen and untouched. No new formal upload or score is produced by this trial.
