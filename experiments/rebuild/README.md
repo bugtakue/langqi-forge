@@ -4,6 +4,12 @@ This directory implements the local A/B and acceptance gates. It does **not**
 replace the submitted runtime yet. Current state and authority live in
 `docs/REBUILD_EXECUTION_2026-09-26.md`; stop if its cost lock is active.
 
+Baseline selection is complete: `selection.json` records B as the only qualified
+candidate after all 12 valid trials. Do not rerun the baseline matrix. The next
+mechanism contract is `docs/diagnostics/rebuild-mechanism-contract-2026-09-26.md`.
+The current submitted/main runtime is still the old A implementation; selection
+does not mean the new kernel has been integrated, packaged or uploaded.
+
 ## Frozen dependencies
 
 - A: git archive of 804c4e8 at `.cache/ab-campaign/baseline-a`.
@@ -83,7 +89,8 @@ All generated accounts/state belong to disposable grade copies.
 Source tests, deliberate fault fixtures, keys, and experimental caches must not
 enter the eventual submitted agent. The current submission allowlist excludes
 this directory entirely. Do not package current main.py and describe it as the
-new Octos-based implementation: engine selection and mechanism work are pending.
+new Octos-based implementation: engine selection is complete, mechanism work and
+integration into the submission are pending.
 
 ## Offline candidate mechanisms (not enabled in A/B)
 
