@@ -1,6 +1,8 @@
 # Langqi Forge · Factory26 初赛候选
 
-> 当前目标：同一参赛快照完成两题并进入正式综合榜前三，尚未达到。最近一次2026-09-25 19:43 UTC附近（北京时间26日03:43）刷新正式赛/全部任务/全部模型：**c3887cd Pro综合第10/26，17/200、6.55分、¥25.0273**。fb84f4e非思考对照仅5/200、1.59分、¥18.9586，质量退步；8f30652 Pro在生成期HTTP400失败、0/0、¥0.5966，[封印已核验](docs/diagnostics/completion-control-official-run-2026-09-26.md)。现保持同一ZIP，仅换编码模型GLM并串行启动[2d8bb92545c0](https://arc-bench.com/runs/2d8bb92545c0)，尚无新成绩、Sheet未启动。见[同源码模型对照](docs/diagnostics/glm-same-source-comparison-2026-09-26.md)及[前三持续台账](docs/TOP3_CAMPAIGN_2026-09-25.md)。
+> 当前状态（2026-09-26）：正式综合前三目标未达到。旧 GLM 运行已结束，不再重跑。正在按[重建计划](docs/REBUILD_EXECUTION_2026-09-26.md)做串行对照：B/Octos 在十二次有效公开小题对照中胜出；GitHub 基础生成物已通过 runtime 11/11、基础回归 3/3、干净重启复验 3/3。以上均为本地证据，**没有新的正式成绩**。Sheet 正在冻结验收，具体在途操作以[持续台账首段](docs/TOP3_CAMPAIGN_2026-09-25.md)为准。`main.py` 仍为旧 A；实验内核尚未整合上传，不能把旧 ZIP 当作重建版本。
+
+> 旧正式记录：此前刷新正式赛/全部任务/全部模型，c3887cd Pro综合第10/26，17/200、6.55分、¥25.0273；这是历史排名，不是本次实时核验。fb84f4e非思考对照5/200、1.59分、¥18.9586，质量退步；8f30652 Pro生成期HTTP400失败，见[封印](docs/diagnostics/completion-control-official-run-2026-09-26.md)。后续[GLM同源码对照](docs/diagnostics/glm-same-source-comparison-2026-09-26.md)未证明改善。下方的“当前/下一候选”等旧版说明只描述旧 A 功能，不构成在途操作指令。
 
 琅岐岛民的 ARC-Bench 软件生成智能体。本分支采用**通用、模型驱动**的正式参赛路径：读取比赛提供的需求，生成可部署的前后端，留下可核验的生产轨迹。它不是循济产品本体。
 
