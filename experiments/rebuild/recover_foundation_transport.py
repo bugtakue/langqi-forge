@@ -62,6 +62,27 @@ def recovery_bundle(root, metadata):
     return bundle, hashes
 
 
+def recovery_slot(root, status, base):
+    rows = [t for t in status['trials'] if t['id'] == base]
+    if not rows and not (root / 'transport-recovery-1').exists():
+        return base, 'transport-recovery-1', 0
+    # Controller integration error: supplied 600s to the frozen CLI whose cap
+    # is 360s. It exited before a session/model call. Preserve that failure and
+    # permit exactly one corrected invocation, never an extra coding response.
+    failed = root / 'transport-recovery-1'
+    record = read_json(failed / 'result.json')
+    attempt = failed / 'attempt-3'
+    if (len(rows) != 1 or not rows[0]['closed'] or
+        any(c['trial'] == base for c in status['calls']) or (attempt / 'pass').exists() or
+        record['cost_upper_cny'] != 0 or record['active_seconds_used'] >= 5 or
+        not (attempt / 'kernel.log').read_text().rstrip().endswith('ValueError: bounded output/seconds required')):
+        raise ValueError('transport recovery already ran; no further attempt allowed')
+    name, directory = base + '-entry-retry', 'transport-recovery-1-entry-retry'
+    if any(t['id'] == name for t in status['trials']) or (root / directory).exists():
+        raise ValueError('corrected entry already exists; no further retry')
+    return name, directory, math.ceil(record['active_seconds_used'])
+
+
 def build_recovery(root, status, unused=()):
     root = root.resolve()
     metadata = read_json(root / 'manifest.json')
@@ -69,12 +90,10 @@ def build_recovery(root, status, unused=()):
     last, _, _, _ = verified_checkpoint(root, metadata, frozen)
     plan, result = previous_transport_failure(root)
     calls = terminal_request(plan, status)
-    name = metadata['name'] + '-transport-recovery-1'
-    if any(t['id'] == name for t in status['trials']) or (root / 'transport-recovery-1').exists():
-        raise ValueError('this transport recovery already exists; never retry it')
+    name, directory, entry_seconds = recovery_slot(root, status, metadata['name'] + '-transport-recovery-1')
     spent = sum(c['charged'] for c in calls)
     remaining = plan['remaining_cap_micro_cny'] - spent
-    seconds = plan['remaining_seconds'] - math.ceil(result['active_seconds_used'])
+    seconds = plan['remaining_seconds'] - math.ceil(result['active_seconds_used']) - entry_seconds
     passes = plan['remaining_passes'] - len(result['passes'])
     if remaining <= 0 or seconds < 1000 or passes != 1 or last['stagnant_rounds'] != 1:
         raise ValueError('original remaining budget/time/last-pass contract exhausted')
@@ -82,8 +101,8 @@ def build_recovery(root, status, unused=()):
     blockers = []
     if status['unresolved_cost_lock'] or any(not t['closed'] for t in status['trials']):
         blockers.append('active request/trial or uncharged unknown cost')
-    plan.update(resume_trial=name, continuation_directory='transport-recovery-1',
-        bundle_path=str(bundle), bundle_sha256=hashes, coding_seconds=600,
+    plan.update(resume_trial=name, continuation_directory=directory,
+        bundle_path=str(bundle), bundle_sha256=hashes, coding_seconds=360,
         remaining_cap_micro_cny=remaining, remaining_cap_cny=remaining/1e6,
         prior_charged_micro_cny=plan['prior_charged_micro_cny']+spent,
         remaining_seconds=seconds, remaining_passes=passes, prior_passes=2,

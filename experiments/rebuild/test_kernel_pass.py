@@ -1,13 +1,21 @@
 import json
 from pathlib import Path
+from unittest.mock import patch
 import tempfile
 import time
 import unittest
 
 from kernel_pass import build_prompt, dispatch_pipeline, graph, seed, upstream
+import kernel_pass
 
 
 class KernelPassTests(unittest.TestCase):
+    def test_actual_cli_accepts_recovery_360_second_bound_before_model_launch(self):
+        with patch('sys.argv', ['kernel_pass.py', '--output', '/unit-output', '--seconds', '360']), \
+             patch.object(kernel_pass, 'run', return_value=0) as launch:
+            self.assertEqual(kernel_pass.main(), 0)
+            launch.assert_called_once_with(Path('/unit-output'), 360)
+
     def test_dispatch_wait_matches_bounded_upstream_request_not_90_seconds(self):
         class Failed:
             def run_turn(self, text, timeout):
