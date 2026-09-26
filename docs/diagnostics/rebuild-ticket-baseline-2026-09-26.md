@@ -34,10 +34,27 @@ Evidence under `.cache/ab-campaign/runs/<run>/`:
 `evidence/playwright.json`, failure screenshots/traces, trusted controller export
 hash proof, and original `generated/`. No result was hand-corrected.
 
+## B repeat 1: independent 10/10
+
+Run: `b-ticket-booking--ticket-booking-1`. Generation exit=0, independent
+grading exit=0, **10/10**, no skipped/flaky/error cases. Source/tests unchanged,
+processes cleaned, trusted export proof verified. 32 settled model responses,
+291147 prompt tokens and 11436 completion tokens; conservative uncached cost
+**¥0.264947**, not the upstream agent's differently denominated cost summary
+and not a provider invoice. Manifest duration 464.904 seconds. The controller
+commit is `50f0987` (docs-only successor); its Python hash map is identical to
+the A1 map frozen at `b1d011e`.
+
+The pipeline log shows registration and login each using a failed check followed
+by repair and a new check, then the full suite. This is evidence that feedback
+was exercised, not yet proof of performance without public practice tests.
+B's explicit public-test access differs from A's native DSL probes; this is the
+registered full-system comparison, not an isolated kernel effect.
+
 ## Next action, unchanged experimental design
 
-B repeat1 is running in the same serial matrix (host exec session 76257), then
-A repeat2 and B repeat2. No official upload/run was launched. Finish both
+A repeat2 is running in the same serial matrix (host exec session 76257), then
+B repeat2. No official upload/run was launched. Finish both
 repeats before kernel selection. The common improvement to test later is
 independent acceptance that starts from each required user entry and preserves
 the required locator contract; do not patch a prebuilt Ticket answer into the
