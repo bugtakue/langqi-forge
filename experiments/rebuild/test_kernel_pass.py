@@ -8,6 +8,16 @@ from kernel_pass import build_prompt, dispatch_pipeline, graph, seed, upstream
 
 
 class KernelPassTests(unittest.TestCase):
+    def test_dispatch_wait_matches_bounded_upstream_request_not_90_seconds(self):
+        class Failed:
+            def run_turn(self, text, timeout):
+                self.timeout = timeout
+                return False, 'transport error'
+        session = Failed()
+        with self.assertRaisesRegex(RuntimeError, 'no transport/error retry'):
+            dispatch_pipeline(session, time.monotonic()+600, lambda:False, lambda:False, lambda *args:None)
+        self.assertEqual(session.timeout, 240)
+
     def test_dispatch_never_repeats_observed_tool_or_failed_request(self):
         class Fake:
             def __init__(self, result):

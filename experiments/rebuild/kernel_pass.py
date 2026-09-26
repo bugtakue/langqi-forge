@@ -75,7 +75,9 @@ def dispatch_pipeline(session, end, launched, tool_seen, record):
         f'{{"pipeline":"{PIPELINE}","input":"Implement runtime contract"}}. Do not use spawn.'
     ]
     for number, prompt in enumerate(prompts, 1):
-        ok, reply = session.run_turn(prompt, timeout=min(90, max(1, end-time.monotonic())))
+        # Match the bounded upstream request timeout; a 90s dispatch timer used
+        # to kill the caller while its 240s request could still be in flight.
+        ok, reply = session.run_turn(prompt, timeout=min(240, max(1, end-time.monotonic())))
         record('controller/dispatch_finished', {'attempt': number, 'ok': ok, 'reply': reply})
         if not ok:
             raise RuntimeError('dispatch failed; no transport/error retry')

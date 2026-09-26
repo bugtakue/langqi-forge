@@ -175,7 +175,7 @@ def store_for(root):
 def restore(plan, destination):
     """Can run without a key; never changes or discards the original snapshot."""
     root = Path(plan['root'])
-    if manifest(root / 'bundle') != plan['bundle_sha256']:
+    if manifest(Path(plan.get('bundle_path', root / 'bundle'))) != plan['bundle_sha256']:
         raise ValueError('candidate bundle drifted before restoration')
     source = root / 'checkpoints/snapshots' / plan['source_snapshot']
     if application_manifest(source) != plan['source_manifest']:
@@ -190,9 +190,9 @@ def restore(plan, destination):
     return destination / 'working'
 
 
-def execution_gate(plan, post_close_evidence):
+def execution_gate(plan, post_close_evidence, planner=build_plan):
     root = Path(plan['root'])
-    fresh = build_plan(root, control('/status', {'read': True}), post_close_evidence)
+    fresh = planner(root, control('/status', {'read': True}), post_close_evidence)
     if fresh != plan or not fresh['execution_allowed']:
         raise ValueError('resume plan drifted or live cost/serialization gate is closed')
     active = subprocess.check_output(['docker', 'ps', '--format', '{{.Names}}'], text=True).splitlines()
@@ -205,6 +205,7 @@ def execution_gate(plan, post_close_evidence):
 
 def repair_loop(plan, out, source, token, deadline, result, store):
     root = Path(plan['root'])
+    bundle = Path(plan.get('bundle_path', root / 'bundle'))
     acceptance = Path(plan['acceptance'])
     frozen = read_json(acceptance / 'frozen.json')
     last = None
@@ -220,8 +221,8 @@ def repair_loop(plan, out, source, token, deadline, result, store):
         record = {'attempt': number, 'input_snapshot': digest(application_manifest(source)),
                   'feedback_sha256': hashlib.sha256(feedback.read_bytes()).hexdigest()}
         result['passes'].append(record)
-        record['kernel_exit'] = coding_pass(root / 'bundle', source, acceptance, feedback, attempt, token, 360)
-        if manifest(root / 'bundle') != plan['bundle_sha256']:
+        record['kernel_exit'] = coding_pass(bundle, source, acceptance, feedback, attempt, token, plan.get('coding_seconds', 360))
+        if manifest(bundle) != plan['bundle_sha256']:
             raise RuntimeError('frozen candidate bundle changed')
         working = attempt / 'pass/working'
         if not working.exists():
@@ -230,7 +231,7 @@ def repair_loop(plan, out, source, token, deadline, result, store):
         last = working
         evidence = attempt / 'runtime-evidence'
         verdict, proof = grade_application(working, acceptance / 'suite', evidence,
-            frozen['expected'], min(850, max(1, deadline-time.monotonic()-300)), root / 'bundle/grader')
+            frozen['expected'], min(850, max(1, deadline-time.monotonic()-300)), bundle / 'grader')
         decision = store.record('foundation', working, evidence, proof)
         record.update(passed=verdict['passed'], total=verdict['total'], decision=decision)
         print(json.dumps({'attempt': number, 'passed': verdict['passed'], 'total': verdict['total'],
@@ -279,10 +280,10 @@ def independent_delivery(plan, out, last, deadline, result, store):
             result['foundation_gate'] = cold['gate']
 
 
-def execute(plan, post_close_evidence):
-    execution_gate(plan, post_close_evidence)
+def execute(plan, post_close_evidence, planner=build_plan):
+    execution_gate(plan, post_close_evidence, planner)
     root = Path(plan['root'])
-    out = root / 'continuation-1'
+    out = root / plan.get('continuation_directory', 'continuation-1')
     source = restore(plan, out)
     token = control('/trial', {'id': plan['resume_trial'], 'phase': 'mechanism',
         'cap_cny': plan['remaining_cap_cny'], 'seconds': plan['remaining_seconds']})['token']
