@@ -82,6 +82,43 @@ class ResumeTests(unittest.TestCase):
         self.assertFalse(plan['official_upload_allowed'])
         self.assertEqual(manifest(self.base), before)
 
+    def test_resume_keeps_deepseek_model_in_actual_coding_call(self):
+        import time
+        self.metadata['model'] = 'deepseek-v4-flash'
+        write_json(self.root / 'manifest.json', self.metadata)
+        plan = resume.build_plan(self.root, self.status)
+        out = self.base / 'resume-model-fixture'
+        out.mkdir()
+        (out / 'feedback.txt').write_text('actual frozen verifier feedback')
+        result = {'passes': []}
+        with patch.object(resume, 'control', return_value={'unresolved_cost_lock': False}), \
+             patch.object(resume, 'coding_pass', return_value=1) as launch:
+            resume.repair_loop(plan, out, self.work, 'unit-token', time.monotonic()+1800, result, self.store)
+        self.assertEqual(launch.call_args.kwargs['model'], 'deepseek-v4-flash')
+        self.assertEqual(result['stop_reason'], 'no working export; not an application score')
+
+    def test_browser_failure_feedback_includes_bounded_server_crash_log(self):
+        evidence = self.root / 'attempt-1/runtime-evidence'
+        (evidence / 'server.log').write_text('x'*9000+'\nERR_HTTP_HEADERS_SENT')
+        value = json.loads(run_foundation_trial.failure_feedback(evidence))
+        log = value['untrusted_application_server_log_tail']
+        self.assertEqual(len(log), 6000)
+        self.assertTrue(log.endswith('ERR_HTTP_HEADERS_SENT'))
+        self.assertIn('actual runtime failure', json.dumps(value['failing_steps']))
+
+    def test_missing_legacy_image_requires_explicit_review_without_changing_history(self):
+        (self.compiler / 'manifest.json').unlink()
+        with self.assertRaisesRegex(ValueError, 'explicit reviewed'):
+            resume.build_plan(self.root, self.status)
+        before = manifest(self.root)
+        image = 'sha256:' + 'a'*64
+        plan = resume.build_plan(self.root, self.status, expected_image=image)
+        self.assertEqual(plan['image'], image)
+        self.assertEqual(plan['image_record_source'], 'explicit_reviewed_recovery')
+        self.assertEqual(manifest(self.root), before)
+        with self.assertRaisesRegex(ValueError, 'exact SHA256'):
+            resume.build_plan(self.root, self.status, expected_image=image+'bad')
+
     def test_post_close_evidence_cannot_be_omitted_to_reset_clock(self):
         report = deepcopy(self.report)
         report['stats'] = {'startTime': datetime.fromtimestamp(1300, timezone.utc).isoformat(), 'duration': 100000}

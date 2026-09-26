@@ -6,10 +6,12 @@ Only the frozen candidate and runtime-test feedback may enter the resumed coder.
 """
 import argparse
 from datetime import datetime
+from functools import partial
 import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import time
@@ -45,7 +47,7 @@ def receipt_proof(evidence):
 def original_experiment(root, status):
     metadata = read_json(root / 'manifest.json')
     name = metadata['name']
-    if root.name != name or metadata['model'] != 'glm-5.3-flash' or metadata['phase'] != 'mechanism':
+    if root.name != name or metadata['model'] not in ('glm-5.3-flash', 'deepseek-v4-flash') or metadata['phase'] != 'mechanism':
         raise ValueError('not the recorded selected-kernel mechanism experiment')
     original = [t for t in status['trials'] if t['id'] == name]
     if len(original) != 1 or not original[0]['closed'] or 'finished' not in metadata:
@@ -136,7 +138,7 @@ def remaining_money(metadata, original, status):
     return original['cap'] - spent, spent, [c['id'] for c in calls]
 
 
-def build_plan(root, status, post_close_evidence=()):
+def build_plan(root, status, post_close_evidence=(), *, expected_image=None):
     """Read exact local evidence; never opens a new trial or changes a ledger."""
     root = root.resolve()
     metadata, original, resume_name = original_experiment(root, status)
@@ -152,6 +154,16 @@ def build_plan(root, status, post_close_evidence=()):
         blockers.append('unresolved upstream cost; authorization/reconciliation required')
     if any(not t['closed'] for t in status['trials']):
         blockers.append('another live trial exists')
+    compiler_manifest = compiler / 'manifest.json'
+    image = metadata.get('image') or (read_json(compiler_manifest).get('image') if compiler_manifest.is_file() else None)
+    recorded_image = image
+    if expected_image and not re.fullmatch(r'sha256:[0-9a-f]{64}', expected_image):
+        raise ValueError('expected image must be an exact SHA256 digest')
+    if expected_image and image and expected_image != image:
+        raise ValueError('reviewed image differs from recorded image')
+    image = image or expected_image
+    if not image:
+        raise ValueError('legacy trial lacks image record; explicit reviewed expected image required')
     return {'schema': 'foundation-resume-v1', 'root': str(root), 'original_trial': metadata['name'],
         'resume_trial': resume_name, 'source_snapshot': last['snapshot'],
         'source_manifest': hashes, 'stagnant_rounds': last['stagnant_rounds'],
@@ -159,10 +171,12 @@ def build_plan(root, status, post_close_evidence=()):
         'prior_charged_micro_cny': spent, 'prior_call_ids': call_ids,
         'remaining_seconds': seconds, 'remaining_passes': passes, 'prior_passes': attempted,
         'acceptance': str(acceptance), 'bundle_sha256': bundle,
-        'image': read_json(compiler / 'manifest.json')['image'],
+        'image': image,
+        'image_record_source': 'recorded' if recorded_image else 'explicit_reviewed_recovery',
         'parent_manifest_sha256': hashlib.sha256((root / 'manifest.json').read_bytes()).hexdigest(),
         'runtime_evidence': str(evidence), 'post_close_evidence': extra,
         'model': metadata['model'], 'phase': metadata['phase'],
+        'holdout_input_to_coder': metadata.get('holdout_input_to_coder', False),
         'execution_allowed': not blockers, 'blockers': blockers,
         'official_upload_allowed': False, 'accepted': False}
 
@@ -221,7 +235,8 @@ def repair_loop(plan, out, source, token, deadline, result, store):
         record = {'attempt': number, 'input_snapshot': digest(application_manifest(source)),
                   'feedback_sha256': hashlib.sha256(feedback.read_bytes()).hexdigest()}
         result['passes'].append(record)
-        record['kernel_exit'] = coding_pass(bundle, source, acceptance, feedback, attempt, token, plan.get('coding_seconds', 360))
+        record['kernel_exit'] = coding_pass(bundle, source, acceptance, feedback, attempt, token,
+                                           plan.get('coding_seconds', 360), model=plan['model'])
         if manifest(bundle) != plan['bundle_sha256']:
             raise RuntimeError('frozen candidate bundle changed')
         working = attempt / 'pass/working'
@@ -277,6 +292,7 @@ def independent_delivery(plan, out, last, deadline, result, store):
             store.export_accepted(out / 'clean-delivery')
             cold, _ = grade_application(out / 'clean-delivery', tests, out / 'cold-evidence', contract['expected_count'],
                 min(300, max(1, deadline-time.monotonic())), grader)
+            result['cold_delivery_gate'] = cold['gate']
             result['foundation_gate'] = cold['gate']
 
 
@@ -290,6 +306,9 @@ def execute(plan, post_close_evidence, planner=build_plan):
     started = time.time()
     deadline = time.monotonic() + plan['remaining_seconds']
     result = {'schema': 'foundation-resume-result-v1', 'resume_trial': plan['resume_trial'],
+        'model': plan['model'], 'holdout_input_to_coder': plan.get('holdout_input_to_coder', False),
+        'foundation_evidence_kind': ('frozen_internal_regression' if plan.get('holdout_input_to_coder')
+                                    else 'previously_unseen_internal_holdout'),
         'started': started, 'passes': [], 'runtime_accepted': False, 'foundation_gate': False,
         'official_upload_allowed': False, 'plan_sha256': digest(plan)}
     store = store_for(root)
@@ -319,14 +338,16 @@ def main():
     parser.add_argument('--post-close-evidence', type=Path, action='append', default=[])
     parser.add_argument('--restore-only', type=Path, help='offline proof copy; no model, no new trial')
     parser.add_argument('--execute', action='store_true')
+    parser.add_argument('--expected-image', help='explicit image digest for a reviewed legacy record missing image metadata')
     args = parser.parse_args()
     if args.execute and args.restore_only:
         raise ValueError('choose offline restoration or execution, not both')
-    plan = build_plan(args.experiment, control('/status', {'read': True}), args.post_close_evidence)
+    planner = partial(build_plan, expected_image=args.expected_image)
+    plan = planner(args.experiment, control('/status', {'read': True}), args.post_close_evidence)
     if args.restore_only:
         restore(plan, args.restore_only.resolve())
     print(json.dumps(plan, ensure_ascii=False, indent=2), flush=True)
-    return execute(plan, args.post_close_evidence) if args.execute else 0
+    return execute(plan, args.post_close_evidence, planner) if args.execute else 0
 
 
 if __name__ == '__main__':

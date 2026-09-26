@@ -86,6 +86,11 @@ def failure_feedback(evidence):
     value = {'summary': {k: verdict.get(k) for k in ('passed', 'total', 'gate', 'error')}, 'failing_steps': errors}
     if verdict.get('error') == 'build failed':
         value['build_log'] = (evidence / 'build.log').read_text()[-8000:]
+    # Browser connection failures alone conceal backend exceptions. These are
+    # logs from the isolated disposable app, never model/gateway credentials.
+    server_log = evidence / 'server.log'
+    if not verdict.get('gate') and server_log.is_file():
+        value['untrusted_application_server_log_tail'] = server_log.read_text(errors='replace')[-6000:]
     # Keep each concrete first failure and its page/error context, not a prose PASS.
     for item in value['failing_steps']:
         for attempts in item['errors']:
@@ -316,6 +321,7 @@ def main():
     checkpoints = Checkpoints(out / 'checkpoints', frozen['tests_sha256'], keys)
     manifest_before = manifest(out / 'bundle')
     metadata = {'name': args.name, 'model': args.model, 'phase': 'mechanism',
+        'image': subprocess.check_output(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}'], text=True).strip(),
         'cap_cny': args.cap_cny, 'deadline_seconds': args.seconds, 'max_passes': args.passes, 'started': time.time(),
         'runtime_tests': frozen['tests_sha256'], 'source_sha256': frozen['requirements_sha256'],
         'compiler_trial': str(compiler), 'bundle_sha256': manifest_before,
