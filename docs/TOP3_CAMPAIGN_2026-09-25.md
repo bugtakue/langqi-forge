@@ -2,6 +2,8 @@
 
 ## 当前执行路线（2026-09-26，优先于下方历史待上传安排）
 
+**停止继续修补自动验收编译器，下一唯一实跑 `sheet-foundation-direct-v1`。** V3两响应仍未交付合格套件；改用开发前已冻结的Sheet2项基础用例，原断言/源哈希不改，空页2/2拒绝。输入仍完整13原子依赖/祖先，无预置应用；源码向编码器可见所以仅称基础回归，不称未见holdout或完整需求覆盖。≤¥3/1800秒/最多3轮，失败保留、两轮无新增即停；不正式上传。启动前总保守¥4.809650、无在途。观察同名目录与factory26-trial/grade。见[路线决策与边界](diagnostics/rebuild-sheet-foundation-direct-2026-09-26.md)。
+
 **下一唯一串行 `sheet-acceptance-v3-batched`（≤¥1/900秒）。** V2原样恢复也传输断开，未生成应用；不再重复大请求。相同13原子需求按最多3项分批，完整保留各批前置/祖先正文，所有批次合并后才冻结、不得漏覆盖。8项离线检查通过但非业务成绩。累计预留上界¥4.790611、无开放试验/锁（启动前）。观察同名mechanism目录和factory26-acceptance，不并行启动；见[分批实验](diagnostics/rebuild-sheet-batched-acceptance-2026-09-26.md)。
 
 **Sheet V2为传输终态失败，不是业务0分。** 唯一请求93秒后RemoteDisconnected，0模型响应；已全额保留¥0.218804，累计保守¥4.571807，按成绩优先授权追加记账、实际用量仍未知。下一唯一串行 `sheet-acceptance-v2-transport-recovery` 使用完全相同编译器/公开范围，≤¥1/600秒/2响应，仅一次传输恢复；不得重复V2或开始应用生成。详见[终态证据](diagnostics/rebuild-sheet-acceptance-v2-2026-09-26.md)。

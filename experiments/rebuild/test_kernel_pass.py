@@ -5,7 +5,8 @@ import tempfile
 import time
 import unittest
 
-from kernel_pass import build_prompt, dispatch_pipeline, graph, seed, upstream
+from kernel_pass import build_prompt, dispatch_pipeline, frozen_test_text, graph, seed, upstream
+from grade import manifest
 import kernel_pass
 
 
@@ -78,6 +79,22 @@ class KernelPassTests(unittest.TestCase):
         self.assertIn('frozen-test-sentinel', prompt)
         self.assertIn('actual-failure-sentinel', prompt)
         self.assertNotIn('foundation/identity.spec.ts', prompt)
+
+    def test_only_explicit_frozen_specs_are_read_and_changes_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / 'suite').mkdir()
+            (root / 'suite/named.spec.ts').write_text('// behavior sentinel')
+            (root / 'suite/restart.ts').write_text('// controller helper')
+            (root / 'private.spec.ts').write_text('// forbidden discovery sentinel')
+            frozen = {'tests_sha256': manifest(root / 'suite')}
+            value = frozen_test_text(root, frozen)
+            self.assertIn('behavior sentinel', value)
+            self.assertNotIn('forbidden discovery', value)
+            self.assertNotIn('controller helper', value)
+            (root / 'suite/named.spec.ts').write_text('// edited')
+            with self.assertRaisesRegex(RuntimeError, 'changed'):
+                frozen_test_text(root, frozen)
 
 
 if __name__ == '__main__':

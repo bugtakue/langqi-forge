@@ -243,7 +243,10 @@ def main():
         'cap_cny': args.cap_cny, 'deadline_seconds': args.seconds, 'max_passes': args.passes, 'started': time.time(),
         'runtime_tests': frozen['tests_sha256'], 'source_sha256': frozen['requirements_sha256'],
         'compiler_trial': str(compiler), 'bundle_sha256': manifest_before,
-        'holdout_input_to_coder': bool(continuation and continuation['foundation_feedback_consumed']),
+        'holdout_input_to_coder': (frozen['tests_sha256'] == holdout['tests_sha256'] or
+                                  bool(continuation and continuation['foundation_feedback_consumed'])),
+        'acceptance_origin': frozen.get('schema'),
+        'coverage_claim': frozen.get('coverage_claim', 'generated internal tests, not official coverage'),
         'formal_upload_allowed': False, 'continuation': continuation}
     (out / 'manifest.json').write_text(json.dumps(metadata, indent=2))
     token = control('/trial', {'id': args.name, 'phase': 'mechanism', 'cap_cny': args.cap_cny, 'seconds': args.seconds})['token']

@@ -64,6 +64,17 @@ def build_prompt(catalog, tests, feedback):
     return (HERE / 'prompts/coding-pass.md').read_text() + '\n\nRUNTIME DATA:\n' + json.dumps(data, ensure_ascii=False)
 
 
+def frozen_test_text(acceptance, frozen):
+    """Read only explicitly frozen suite members, never discover other tests."""
+    suite = acceptance / 'suite'
+    if manifest(suite) != frozen['tests_sha256']:
+        raise RuntimeError('frozen acceptance changed')
+    names = sorted(name for name in frozen['tests_sha256'] if name.endswith('.spec.ts'))
+    if not names:
+        raise RuntimeError('no frozen behavior spec')
+    return '\n\n'.join('// ' + name + '\n' + (suite / name).read_text() for name in names)
+
+
 def dispatch_pipeline(session, end, launched, tool_seen, record):
     prompts = [
         f'Call the run_pipeline tool now with pipeline="{PIPELINE}" and '
@@ -96,10 +107,8 @@ def run(output, seconds):
         raise RuntimeError('experiment requires organizer cost gateway')
     output.mkdir(exist_ok=False)
     frozen = json.loads(Path('/acceptance/frozen.json').read_text())
-    if manifest(Path('/acceptance/suite')) != frozen['tests_sha256']:
-        raise RuntimeError('frozen acceptance changed')
     catalog = json.loads(Path('/acceptance/catalog.json').read_text())
-    tests = Path('/acceptance/suite/contract.spec.ts').read_text()
+    tests = frozen_test_text(Path('/acceptance'), frozen)
     feedback = Path('/feedback.txt').read_text()
     prompt = build_prompt(catalog, tests, feedback)
     (output / 'prompt.txt').write_text(prompt)
