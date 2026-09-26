@@ -236,6 +236,32 @@ class ResumeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'paused'):
             resume.build_plan(self.root, self.status)
 
+    def test_reviewed_blocker_keeps_raw_pause_history_and_is_not_repeatable(self):
+        evidence = self.root / 'attempt-2/runtime-evidence'
+        report = deepcopy(self.report)
+        report['stats']['duration'] = 2000
+        proof = self.evidence(evidence, report)
+        import shutil
+        shutil.copytree(self.work, self.root / 'attempt-2/pass/working')
+        decision = self.store.record('foundation', self.work, evidence, proof)
+        self.metadata['passes'].append({'attempt': 2, 'passed': 0, 'total': 1, 'decision': decision})
+        write_json(self.root / 'manifest.json', self.metadata)
+        frozen = json.loads((self.compiler / 'result/acceptance/frozen.json').read_text())
+        out = self.base / 'review-once'
+        out.mkdir()
+        with self.assertRaisesRegex(ValueError, 'paused'):
+            continue_working(self.root, out, frozen, self.status)
+        old = manifest(self.root)
+        diagnosis = 'Verified isolated bootstrap blocker; keep every assertion unchanged.'
+        lineage = continue_working(self.root, out, frozen, self.status, blocker_diagnosis=diagnosis)
+        self.assertEqual(lineage['stagnant_rounds'], 2)
+        self.assertEqual(Checkpoints(out / 'checkpoints', self.tests, list(case_outcomes(self.report))).history(), self.store.history())
+        self.assertEqual(manifest(self.root), old)
+        self.metadata['continuation'] = lineage
+        write_json(self.root / 'manifest.json', self.metadata)
+        with self.assertRaisesRegex(ValueError, 'only one'):
+            continue_working(self.root, self.base / 'cannot-repeat', frozen, self.status, blocker_diagnosis=diagnosis)
+
     def test_lifecycle_uses_remainder_and_holds_serial_lock_through_validation(self):
         self.status['unresolved_cost_lock'] = False
         plan = resume.build_plan(self.root, self.status)

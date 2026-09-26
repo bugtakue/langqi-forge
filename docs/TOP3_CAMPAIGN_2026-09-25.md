@@ -2,6 +2,8 @@
 
 ## 当前执行路线（2026-09-26，优先于下方历史待上传安排）
 
+**DeepSeek完成对照仍0/2，但失败推进到刷新；一次明确阻塞修复待跑。** 六文件checkpoint=`ae4a292b60fa7bdddfa9d196151d064a4b41995eca52705e5e873381c0d8603c`，创建/编辑/工作表切换已实执行；相对资源URL导致深网址刷新无页面。第二编码轮被本地最大费用预留门拦住，未改码；原pause2历史不改。复盘后只允许 `sheet-foundation-refresh-blocker-v1` 一次（≤¥3/900秒/1编码），同模型/源码/冻结2测试，给出已证实的资源路径现场；不能反复override或称新官方分数。累计保守¥7.345410、无不确定请求。见[结果与一次修复决策](diagnostics/rebuild-sheet-deepseek-result-2026-09-26.md)。
+
 **GLM Sheet路线两轮0/2已停止；下一唯一为DeepSeek模型对照。** `sheet-foundation-deepseek-compare-v1` 与small-writes-v2同起始5文件/同内核提示词/同冻结2用例/同¥2.60及1500秒2轮，只更换deepseek-v4-flash，保留旧pause=2，不是清零续跑。主办方目录已核输入3/输出9元每百万，网关记录逐调用模型；只重启本任务空闲网关并内存重载同主办方Key，7业务容器未动。启动前总保守¥5.565156，无费用锁/在途。官网可见综合第10/28、6.55、17/200；未上传新包。见[对照合同及终态](diagnostics/rebuild-sheet-model-comparison-2026-09-26.md)。
 
 **Sheet实跑首轮0/2：缺app.js，失败代码保留。** 下一唯一 `sheet-foundation-small-writes-v2` 从direct-v1的5文件checkpoint续修，仅更新小文件/先闭合基础流程的编码提示词；断言、模型、评分器不改。≤¥2.60/1500秒/剩余2轮，与首轮合计仍≤¥3/1800活动秒/3轮；继承无新增计数1，下一轮仍0则暂停路线。总保守¥5.201392，异常预留不释放，无在途（启动前）。观察同名目录与factory26-trial/grade，见[实际失败及续修](diagnostics/rebuild-sheet-small-writes-2026-09-26.md)。未正式上传。

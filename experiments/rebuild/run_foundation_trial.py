@@ -4,6 +4,7 @@ One module experiment, no extra agents. Private holdout source never enters
 model containers. Its final result is separate from generated internal tests.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -145,7 +146,7 @@ def foundation_feedback(previous, decision, frozen):
     return failure_feedback(evidence)
 
 
-def continue_working(previous, out, frozen, status, use_foundation_feedback=False):
+def continue_working(previous, out, frozen, status, use_foundation_feedback=False, blocker_diagnosis=None):
     """Continue a closed, independently graded repair; no unverified template.
 
     The host-owned checkpoint history is inherited so the six passed cases and
@@ -163,7 +164,11 @@ def continue_working(previous, out, frozen, status, use_foundation_feedback=Fals
     if contract['tests_sha256'] != frozen['tests_sha256']:
         raise ValueError('continuation cannot change frozen acceptance')
     store = Checkpoints(parent / 'checkpoints', contract['tests_sha256'], contract['case_keys'])
-    if (store.history()[-1] != decision or decision['pause_module'] or
+    reviewed = bool(blocker_diagnosis)
+    prior_review = (result.get('continuation') or {}).get('reviewed_blocker_diagnosis_sha256')
+    if reviewed and (not decision['pause_module'] or prior_review or not 20 <= len(blocker_diagnosis) <= 8000):
+        raise ValueError('only one explicit bounded blocker review after a paused route')
+    if (store.history()[-1] != decision or (decision['pause_module'] and not reviewed) or
         result.get('foundation_stagnant_rounds', 0) >= 2 or
         (decision['accepted'] and not use_foundation_feedback)):
         raise ValueError('checkpoint advanced/paused or accepted without new failure evidence')
@@ -185,13 +190,18 @@ def continue_working(previous, out, frozen, status, use_foundation_feedback=Fals
     if use_foundation_feedback:
         feedback += '\nAdditional frozen internal regression failure:\n' + foundation_feedback(previous, decision, frozen)
         feedback += '\nRepair only the observed UI ambiguity while preserving the public contract. Do not add unrelated features or change tests. Prefer minimal edits, then hand off to the independent verifier.'
+    if reviewed:
+        feedback += '\nController-reviewed concrete blocker (not permission to change tests):\n' + blocker_diagnosis
     (out / 'feedback-1.txt').write_text(feedback)
     return {'previous_trial': result['resume_trial'], 'checkpoint': decision['snapshot'],
+            'previous_model': result.get('model', 'glm-5.3-flash'),
             'previous_passed': record['passed'], 'previous_total': record['total'],
             'stagnant_rounds': decision['stagnant_rounds'],
             'foundation_feedback_consumed': bool(use_foundation_feedback or result.get('holdout_input_to_coder')),
             'previous_foundation_passed': result.get('holdout', {}).get('passed', 0),
-            'foundation_stagnant_rounds': result.get('foundation_stagnant_rounds', 0)}
+            'foundation_stagnant_rounds': result.get('foundation_stagnant_rounds', 0),
+            'reviewed_blocker_diagnosis_sha256': (hashlib.sha256(blocker_diagnosis.encode()).hexdigest()
+                                                  if reviewed else prior_review)}
 
 
 def parse_args():
@@ -204,6 +214,8 @@ def parse_args():
     parser.add_argument('--model', choices=('glm-5.3-flash', 'deepseek-v4-flash'), default='glm-5.3-flash')
     parser.add_argument('--foundation-feedback', action='store_true')
     parser.add_argument('--refresh-coder', action='store_true')
+    parser.add_argument('--reviewed-blocker', type=Path,
+                        help='one explicitly reviewed blocker after an automatic route pause; one coding pass only')
     parser.add_argument('--cap-cny', type=float, default=3)
     parser.add_argument('--seconds', type=int, default=1800)
     parser.add_argument('--passes', type=int, default=3)
@@ -218,6 +230,8 @@ def parse_args():
         raise ValueError('coder revision requires a verified retained checkpoint')
     if args.compare_from and args.continue_from:
         raise ValueError('a controlled model comparison is not an old-model continuation')
+    if args.reviewed_blocker and (not args.continue_from or args.passes != 1 or args.refresh_coder or args.foundation_feedback):
+        raise ValueError('reviewed blocker requires exact old coder/test/source, one pass, and no other experiment change')
     return args
 
 
@@ -285,7 +299,10 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     continuation, comparison = None, None
     if args.continue_from:
-        continuation = continue_working(args.continue_from, out, frozen, status, args.foundation_feedback)
+        diagnosis = args.reviewed_blocker.read_text() if args.reviewed_blocker else None
+        continuation = continue_working(args.continue_from, out, frozen, status, args.foundation_feedback, diagnosis)
+        if args.model != continuation['previous_model']:
+            raise ValueError('continuation cannot silently change model; use the controlled comparison path')
         if args.refresh_coder:
             continuation['explicit_coder_revision'] = refresh_coder(out / 'bundle')
     elif args.compare_from:
