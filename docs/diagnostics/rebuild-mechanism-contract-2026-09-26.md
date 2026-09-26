@@ -133,3 +133,23 @@ source/tests (`private-grader-check/1790391759`). Kernel/compiler/catalog checks
 12/12. One final separate 3-case foundation holdout is NOT fed back during this
 coding loop. Passing it plus clean cold export is required to claim this one
 foundation gate; full task/Sheet/official/x86 gates remain open.
+
+### Kernel V1 dispatch failure, no application score
+
+V1 made exactly one completed dispatch request (4,722 input / 3 output tokens,
+¥0.003786 upper cost). The model replied `ok` with no tool call; both the event
+trace and the exact own pipeline-run directory inventory confirmed no launch.
+The local idle container was stopped after this evidence; nothing was uploaded,
+no application was generated, and no foundation/holdout score was produced.
+This is an orchestration failure, not a 0/11 application result.
+
+V2 restores the explicit upstream-style dispatch instruction and checks actual
+tool/run evidence. Only when a completed, error-free reply made ZERO tool calls
+can one corrective dispatch instruction follow. An observed tool call, existing
+run or transport error forbids redispatch. Two no-op replies fail immediately,
+not after a full coding timeout. Four kernel controller tests pass, including
+no duplicate launch after observed action or transport failure.
+
+Register `github-foundation-kernel-v2` with the same frozen V2 acceptance,
+model/kernel/source, ≤¥3/1800s and unchanged coding/holdout/checkpoint rules.
+Do not rerun V1 or quietly rename its result as application quality.

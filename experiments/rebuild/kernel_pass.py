@@ -64,6 +64,28 @@ def build_prompt(catalog, tests, feedback):
     return (HERE / 'prompts/coding-pass.md').read_text() + '\n\nRUNTIME DATA:\n' + json.dumps(data, ensure_ascii=False)
 
 
+def dispatch_pipeline(session, end, launched, tool_seen, record):
+    prompts = [
+        f'Call the run_pipeline tool now with pipeline="{PIPELINE}" and '
+        'input="Build the application described by the supplied runtime requirements". '
+        'Call it exactly once and do not write any files yourself. After the tool call, finish.',
+        f'No tool call was observed in your completed response. Do not answer ok without acting. '
+        f'The run_pipeline schema explicitly lists {PIPELINE} as its permitted enum; its generic '
+        'deep_research prose is not relevant here. Invoke run_pipeline now with '
+        f'{{"pipeline":"{PIPELINE}","input":"Implement runtime contract"}}. Do not use spawn.'
+    ]
+    for number, prompt in enumerate(prompts, 1):
+        ok, reply = session.run_turn(prompt, timeout=min(90, max(1, end-time.monotonic())))
+        record('controller/dispatch_finished', {'attempt': number, 'ok': ok, 'reply': reply})
+        if not ok:
+            raise RuntimeError('dispatch failed; no transport/error retry')
+        if launched() or tool_seen():
+            # A tool call can be asynchronous or have failed validation.
+            # Never repeat it merely because its run directory is not ready.
+            return
+    raise RuntimeError('two completed dispatch replies without a tool call; nothing launched')
+
+
 def run(output, seconds):
     binary = Path('/runtime/octos')
     if hashlib.sha256(binary.read_bytes()).hexdigest() != PINNED_KERNEL:
@@ -95,7 +117,11 @@ def run(output, seconds):
         env['OCTOS_LLM_MAX_RETRIES'] = '0'
         meta = json.loads(env['_ARC'])
         events = output / 'events.jsonl'
+        tool_activity = []
         def record(method, params):
+            kind = str((params or {}).get('metadata', {}).get('kind', ''))
+            if str(method).startswith('tool/') or (method == 'progress/updated' and 'tool' in kind):
+                tool_activity.append(method)
             text = json.dumps({'time': time.time(), 'method': method, 'params': params}, ensure_ascii=False)
             if secret:
                 text = text.replace(secret, '[SCOPED_TOKEN_REDACTED]')
@@ -108,11 +134,9 @@ def run(output, seconds):
         try:
             session.bootstrap_profile(meta['provider'], meta['model'], meta['base_url'], meta['key_env'], timeout=30)
             session.open(timeout=30)
-            ok, reply = session.run_turn(
-                f'Call run_pipeline exactly once with pipeline="{PIPELINE}" and input="Implement runtime contract". '
-                'Do not call any other tool or call it again. After dispatch, answer ok and finish.',
-                timeout=min(90, max(1, end - time.monotonic())))
-            record('controller/dispatch_finished', {'ok': ok, 'reply': reply})
+            dispatch_pipeline(session, end,
+                lambda: bool(list(data.glob(f'profiles/*/data/pipeline-runs/{PIPELINE}-*'))),
+                lambda: bool(tool_activity), record)
             while time.monotonic() < end and session.proc.poll() is None:
                 summary = module.pipeline_summary(data, pol)
                 if summary is not None:

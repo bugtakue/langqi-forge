@@ -1,12 +1,34 @@
 import json
 from pathlib import Path
 import tempfile
+import time
 import unittest
 
-from kernel_pass import build_prompt, graph, seed, upstream
+from kernel_pass import build_prompt, dispatch_pipeline, graph, seed, upstream
 
 
 class KernelPassTests(unittest.TestCase):
+    def test_dispatch_never_repeats_observed_tool_or_failed_request(self):
+        class Fake:
+            def __init__(self, result):
+                self.calls, self.result = 0, result
+            def run_turn(self, text, timeout):
+                self.calls += 1
+                return self.result
+        for has_tool in (True, False):
+            session = Fake((True, 'ok'))
+            if has_tool:
+                dispatch_pipeline(session, time.monotonic()+60, lambda:False, lambda:True, lambda *args:None)
+                self.assertEqual(session.calls, 1)
+            else:
+                with self.assertRaisesRegex(RuntimeError, 'nothing launched'):
+                    dispatch_pipeline(session, time.monotonic()+60, lambda:False, lambda:False, lambda *args:None)
+                self.assertEqual(session.calls, 2)
+        session = Fake((False, 'transport error'))
+        with self.assertRaisesRegex(RuntimeError, 'no transport/error retry'):
+            dispatch_pipeline(session, time.monotonic()+60, lambda:False, lambda:False, lambda *args:None)
+        self.assertEqual(session.calls, 1)
+
     def test_graph_has_one_bounded_coder_no_self_grading_or_repair_loop(self):
         module = upstream()
         dot = graph(module, 'runtime data {page} "quote"', 360)
