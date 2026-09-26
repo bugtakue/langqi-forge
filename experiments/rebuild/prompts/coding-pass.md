@@ -10,6 +10,15 @@ package manifests and entry files. Keep the working code after a failed check;
 repair the actual failing step and preserve previously working journeys. Never
 replace a partially working app with an empty rewrite just to finish a turn.
 
+Keep each write small and independently useful. First ensure every script and
+stylesheet referenced by the HTML actually exists and serves the connected
+foundation workflow. Do not leave the main UI for one enormous final tool call:
+upstream non-streaming replies can disconnect before any of its code is saved.
+Use small modules and incremental edit_file calls, aiming below 8KB of new text
+per call. Deliver the frozen foundation journeys first, then extend the wider
+public requirements without breaking them. Uncovered features remain incomplete;
+never claim that a passing foundation proves the entire task is implemented.
+
 Build the connected workflow before polishing independent pages: navigation,
 server persistence, session identity and authorization must agree across every
 step. Reuse one storage contract and separate HTTP response values from database

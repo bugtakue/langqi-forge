@@ -136,6 +136,25 @@ class ResumeTests(unittest.TestCase):
         self.assertEqual(plan['root'], str(self.root))
         self.assertEqual(plan['bundle_sha256'], manifest(self.root / 'bundle'))
 
+    def test_explicit_coder_revision_cannot_change_grader_or_old_snapshot(self):
+        bundle = self.base / 'next-bundle'
+        code = self.base / 'updated-coder'
+        for name in run_foundation_trial.MODULE_FILES:
+            target = bundle / 'candidate' / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text('old code')
+            updated = code / name
+            updated.parent.mkdir(parents=True, exist_ok=True)
+            updated.write_text('new code')
+        (bundle / 'grader').mkdir()
+        (bundle / 'grader/frozen.py').write_text('independent unchanged')
+        old_snapshot = manifest(self.root)
+        with patch.object(run_foundation_trial, 'CODE', code):
+            changed = run_foundation_trial.refresh_coder(bundle)
+        self.assertEqual(set(changed), {'candidate/' + n for n in run_foundation_trial.MODULE_FILES})
+        self.assertEqual((bundle / 'grader/frozen.py').read_text(), 'independent unchanged')
+        self.assertEqual(manifest(self.root), old_snapshot)
+
     def test_foundation_feedback_is_bound_to_unchanged_failed_receipt(self):
         evidence = self.root / 'holdout-evidence'
         self.evidence(evidence, self.report)

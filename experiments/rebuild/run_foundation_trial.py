@@ -31,6 +31,19 @@ def prepare_controller(destination):
         shutil.copy2(source, target)
 
 
+def refresh_coder(bundle):
+    """An explicit candidate revision, never a mutation of old frozen bytes."""
+    before = manifest(bundle)
+    for name in MODULE_FILES:
+        shutil.copy2(CODE / name, bundle / 'candidate' / name)
+    after = manifest(bundle)
+    changes = {name: {'before': before.get(name), 'after': digest}
+               for name, digest in after.items() if before.get(name) != digest}
+    if any(not name.startswith('candidate/') for name in changes):
+        raise ValueError('a coder revision cannot change the independent grader/upstream')
+    return changes
+
+
 def grade_application(source, tests, output, expected, seconds, grader=CODE):
     output.mkdir(parents=True, exist_ok=False)
     cmd = ['docker', 'run', '--rm', '--name', 'factory26-grade', '--network', 'none',
@@ -188,6 +201,7 @@ def parse_args():
     parser.add_argument('--holdout', choices=['github', 'sheet'], required=True)
     parser.add_argument('--continue-from', type=Path)
     parser.add_argument('--foundation-feedback', action='store_true')
+    parser.add_argument('--refresh-coder', action='store_true')
     parser.add_argument('--cap-cny', type=float, default=3)
     parser.add_argument('--seconds', type=int, default=1800)
     parser.add_argument('--passes', type=int, default=3)
@@ -198,6 +212,8 @@ def parse_args():
         raise ValueError('simple experiment name required')
     if args.foundation_feedback and not args.continue_from:
         raise ValueError('foundation feedback requires a verified previous run')
+    if args.refresh_coder and not args.continue_from:
+        raise ValueError('coder revision requires a verified retained checkpoint')
     return args
 
 
@@ -231,6 +247,8 @@ def main():
     continuation = None
     if args.continue_from:
         continuation = continue_working(args.continue_from, out, frozen, status, args.foundation_feedback)
+        if args.refresh_coder:
+            continuation['explicit_coder_revision'] = refresh_coder(out / 'bundle')
     else:
         prepare_controller(out / 'bundle')
         shutil.copytree(CACHE / 'octos-upstream/arc/template', out / 'initial-working')
