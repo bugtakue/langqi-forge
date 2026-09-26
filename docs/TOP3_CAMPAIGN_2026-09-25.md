@@ -2,6 +2,8 @@
 
 ## 当前执行路线（2026-09-26，优先于下方历史待上传安排）
 
+**当前最新终态：runtime已0→6→11/11；独立基础验收2/3，尚无正式提分/上传。** `github-foundation-repair-v3`已结束，0跳过/0 flaky，runtime真实重启5次。剩余验收卡在用户名于按钮/菜单重复展示导致严格文本定位匹配两项，不等于会话丢失；不改断言造分，下一修复消除UI歧义后完整回归和冷交付。最新runtime-accepted checkpoint为`92b0abe0571c10229e5b42b9c730d03d71ed5fb959313e08c7d1336b04f6d569`；别恢复旧0/11代码。当前0开放试验、费用锁false，总保守¥4.238474。用户最新要求成绩优先：已结束、最大费用明确且已全额预留的小额异常按上限追加记账继续，不再反复问账；总¥120/主办方额度/单并发不变，不能在请求未结束时重试。V3不是resume格式，续修先适配其manifest和runtime已验收但foundation未全过状态，不重置检查点或从模板重建。完整证据与下一动作见[本轮结果](diagnostics/rebuild-foundation-repair-v3-2026-09-26.md)。Goal仍active，未完成；无需新费用授权。
+
 **实测推进：最新真实编码使冻结runtime从0/11→6/11，0跳过/0 flaky，真实重启2次，源码/测试不变且评分进程清理。** `transport-recovery-1-entry-retry`已终态：¥0.703887、420.174秒，累计保守¥3.320192、无费用锁/开放试验；不是正式成绩。五项剩余失败：四项账户菜单链接被覆盖为menuitem，另一项深路径刷新后的相对脚本路径。checkpoint保存了新6文件并继承已通过集合，stagnant=0，accepted=false。基于新增6项通过的具体收益，下一唯一有界修复 `github-foundation-repair-v3`，≤¥1.5/900秒/1次编码；同模型、同冻结候选/测试，只输入实际runtime失败，继承原工作代码和检查点历史，不从模板重建、不给智能体holdout。继续单次回归→未见holdout→干净交付复验，三个结果分开。观察 `.cache/ab-campaign/mechanism/github-foundation-repair-v3/`，不得重复旧恢复任务。
 
 最新入口修正：transport-recovery-1传入600秒超过冻结CLI允许360秒，在任何session/模型调用前退出，0响应/¥0，原记录保留。只允许一次明确的 `github-foundation-kernel-v2-transport-recovery-1-entry-retry`，改为CLI支持的360秒，扣除1.067秒启动损失后总剩余1142秒，最后1次真实编码机会不增加；原失败快照与唯一90→240秒内核差异不变。实际入口参数已用同一main函数离线验证。不得把零调用入口错误记为业务0分，也不得无条件放开其他重试。
