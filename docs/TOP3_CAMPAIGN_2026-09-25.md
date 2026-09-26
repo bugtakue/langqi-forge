@@ -2,6 +2,8 @@
 
 ## 当前执行路线（2026-09-26，优先于下方历史待上传安排）
 
+01:53:58 UTC 实证：Ticket 串行矩阵已启动，控制器提交 b1d011e，主机 exec session 76257；当前 A1 技术重试容器 `8618c8ab5390b372cba7dd64b1888290798b871c41c43f1c6f0fba054ad7e761` 为 running、01:50:47 UTC 启动。源目录 `.cache/ab-campaign/runs/a-ticket-booking--ticket-booking-1-environment-retry/`，前三个模型响应正常，seq19/24 已写后端和前端，request4 在途；尚未评分。矩阵接下来自动串行 B1/A2/B2，各 ¥1.50/900秒。不要再启动矩阵/单题，也不要在矩阵结束前修改 experiments/rebuild 的 Python 文件（控制器哈希冻结校验）；新计费异常会阻断后续试验。先读取同一 session/容器状态与 manifest 终态，不根据空输出重开。
+
 Docker 已按用户授权恢复；全部离线防假通过、冷交付、无跳过浏览器/SDK 门通过，隔离评分器重测八个旧小题成绩一致。网关已加载新代码和原内存密钥，账本哈希不变、0 开放试验、费用锁=false、总保守占用 ¥0.534191。允许按预注册映射对 A Ticket 第一轮做一次明确的 environment-retry，然后串行 B1/A2/B2；不重复原失败目录，不访问正式隐藏测试、不上传。以下停止状态是恢复前历史；证据见运行时恢复记录。
 
 维护授权更新：用户已回复“允许你重启”，已通过 Docker Desktop 自带 Troubleshoot → Restart 发起一次保留数据的重启，界面 Engine stopping；尚未验证恢复。不选 Clean/Purge、重置或磁盘修复；先观察同一次重启，不能因超时重复发起。以下“未取得授权”为此前诊断记录。
