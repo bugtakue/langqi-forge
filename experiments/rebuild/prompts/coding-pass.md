@@ -27,6 +27,11 @@ Provision only seeds declared by runtime requirements. Every required accessible
 name/role is an API contract. Duplicate controls and wrong scope are real bugs.
 When an expected interaction fails, inspect the state, not just its screenshot.
 
+A deep URL must work as a fresh browser entry, not only after client navigation.
+Keep script/stylesheet URLs valid when the document is served at nested routes;
+load the required saved entity and selected view from the URL/persisted state.
+Do not rely on in-memory navigation state surviving page reload or process restart.
+
 Environment: frontend `npm run build`; backend `npm run start`; HTTP port 3000.
 Use the existing dependency-free template unless an installed dependency is
 necessary. No package downloads, external services, personal keys or task-specific

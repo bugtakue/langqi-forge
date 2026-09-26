@@ -220,7 +220,7 @@ def parse_args():
     parser.add_argument('--seconds', type=int, default=1800)
     parser.add_argument('--passes', type=int, default=3)
     args = parser.parse_args()
-    if not (0 < args.cap_cny <= 3 and 800 <= args.seconds <= 1800 and 1 <= args.passes <= 3):
+    if not (0 < args.cap_cny <= 5 and 800 <= args.seconds <= 1800 and 1 <= args.passes <= 3):
         raise ValueError('bounded mechanism tranche required')
     if not args.name.replace('-', '').isalnum():
         raise ValueError('simple experiment name required')

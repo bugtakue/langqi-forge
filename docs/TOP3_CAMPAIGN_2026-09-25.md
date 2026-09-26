@@ -2,6 +2,8 @@
 
 ## 当前执行路线（2026-09-26，优先于下方历史待上传安排）
 
+**Sheet基础已从0/2到完整2/2，冷交付亦2/2；现在检验空模板独立生成。** `sheet-foundation-refresh-blocker-v1` 的3套复验各2/2、各1次实际重启、0跳过/不稳定；模型仅改两处资源URL，保留其余源码和全部断言。checkpoint=`5c7f0bd4432c89be2c7c744a336e62564b5e261084ef9bc77dce1025da639d65`。人工根因提示已明示，不能称自主生成已可重复。下一固定通用提示词，从空模板串行跑`sheet-foundation-fresh-v1-1`和`-2`，各≤¥5/1800秒/3轮，两轮无新增仍停，不手工救场。累计保守¥8.323356、无在途/费用锁；正式旧成绩不变。见[通过证据和重复实验合同](diagnostics/rebuild-sheet-foundation-passed-2026-09-26.md)。
+
 **DeepSeek完成对照仍0/2，但失败推进到刷新；一次明确阻塞修复待跑。** 六文件checkpoint=`ae4a292b60fa7bdddfa9d196151d064a4b41995eca52705e5e873381c0d8603c`，创建/编辑/工作表切换已实执行；相对资源URL导致深网址刷新无页面。第二编码轮被本地最大费用预留门拦住，未改码；原pause2历史不改。复盘后只允许 `sheet-foundation-refresh-blocker-v1` 一次（≤¥3/900秒/1编码），同模型/源码/冻结2测试，给出已证实的资源路径现场；不能反复override或称新官方分数。累计保守¥7.345410、无不确定请求。见[结果与一次修复决策](diagnostics/rebuild-sheet-deepseek-result-2026-09-26.md)。
 
 **GLM Sheet路线两轮0/2已停止；下一唯一为DeepSeek模型对照。** `sheet-foundation-deepseek-compare-v1` 与small-writes-v2同起始5文件/同内核提示词/同冻结2用例/同¥2.60及1500秒2轮，只更换deepseek-v4-flash，保留旧pause=2，不是清零续跑。主办方目录已核输入3/输出9元每百万，网关记录逐调用模型；只重启本任务空闲网关并内存重载同主办方Key，7业务容器未动。启动前总保守¥5.565156，无费用锁/在途。官网可见综合第10/28、6.55、17/200；未上传新包。见[对照合同及终态](diagnostics/rebuild-sheet-model-comparison-2026-09-26.md)。
