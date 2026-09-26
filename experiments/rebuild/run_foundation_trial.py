@@ -95,12 +95,12 @@ def failure_feedback(evidence):
     return json.dumps(value, ensure_ascii=False)
 
 
-def coding_pass(bundle, source, acceptance, feedback, output, token, seconds):
+def coding_pass(bundle, source, acceptance, feedback, output, token, seconds, model='glm-5.3-flash'):
     cmd = ['docker', 'run', '--rm', '--name', 'factory26-trial', '--network', 'factory26-ab-internal',
            '--memory', '3g', '--cpus', '2', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
            '--env', 'OPENAI_API_KEY', '--env', 'OPENAI_BASE_URL=http://factory26-gateway:8021/v1',
-           '--env', 'OCTOS_PROVIDER=custom', '--env', 'OCTOS_MODEL=glm-5.3-flash',
-           '--env', 'MODEL=glm-5.3-flash', '--env', 'PYTHONDONTWRITEBYTECODE=1']
+           '--env', 'OCTOS_PROVIDER=custom', '--env', 'OCTOS_MODEL=' + model,
+           '--env', 'MODEL=' + model, '--env', 'PYTHONDONTWRITEBYTECODE=1']
     output.mkdir(exist_ok=False)
     cmd += bind(bundle / 'candidate', '/candidate') + bind(bundle / 'upstream', '/upstream')
     cmd += bind(CACHE / 'runtime', '/runtime') + bind(source, '/source') + bind(acceptance, '/acceptance')
@@ -200,6 +200,8 @@ def parse_args():
     parser.add_argument('acceptance_trial', type=Path)
     parser.add_argument('--holdout', choices=['github', 'sheet'], required=True)
     parser.add_argument('--continue-from', type=Path)
+    parser.add_argument('--compare-from', type=Path)
+    parser.add_argument('--model', choices=('glm-5.3-flash', 'deepseek-v4-flash'), default='glm-5.3-flash')
     parser.add_argument('--foundation-feedback', action='store_true')
     parser.add_argument('--refresh-coder', action='store_true')
     parser.add_argument('--cap-cny', type=float, default=3)
@@ -214,7 +216,44 @@ def parse_args():
         raise ValueError('foundation feedback requires a verified previous run')
     if args.refresh_coder and not args.continue_from:
         raise ValueError('coder revision requires a verified retained checkpoint')
+    if args.compare_from and args.continue_from:
+        raise ValueError('a controlled model comparison is not an old-model continuation')
     return args
+
+
+def comparison_seed(previous, out, frozen, status, args):
+    """Repeat the exact starting checkpoint/feedback with a different model.
+
+    This new comparison keeps the old failed/paused route intact. It is not a
+    reset or continuation of its no-gain counter and cannot use extra allowances.
+    """
+    prior = json.loads((previous / 'manifest.json').read_text())
+    closed = [t for t in status['trials'] if t['id'] == prior['name'] and t['closed']]
+    if (len(closed) != 1 or prior['model'] == args.model or not prior.get('finished_with_validation') or
+            prior['runtime_tests'] != frozen['tests_sha256'] or prior['source_sha256'] != frozen['requirements_sha256'] or
+            args.cap_cny != prior['cap_cny'] or args.seconds != prior['deadline_seconds'] or args.passes != prior['max_passes']):
+        raise ValueError('model comparison requires same frozen inputs/allowances and a closed different-model trial')
+    if manifest(previous / 'bundle') != prior['bundle_sha256']:
+        raise ValueError('comparison controller changed')
+    checkpoint = prior.get('continuation', {}).get('checkpoint')
+    if not isinstance(checkpoint, str) or len(checkpoint) != 64:
+        raise ValueError('comparison needs an explicit verified starting checkpoint')
+    expected = application_manifest(previous / 'checkpoints/snapshots' / checkpoint)
+    if not expected or application_manifest(previous / 'initial-working') != expected:
+        raise ValueError('comparison starting source differs from original verified checkpoint')
+    feedback = (previous / 'feedback-1.txt').read_text()
+    original_input = json.loads((previous / 'attempt-1/pass/prompt.txt').read_text().split('\n\nRUNTIME DATA:\n')[-1])
+    if feedback != original_input['previous_independent_verifier_feedback']:
+        raise ValueError('comparison feedback differs from the original model input')
+    shutil.copytree(previous / 'initial-working', out / 'initial-working')
+    shutil.copytree(previous / 'bundle', out / 'bundle')
+    shutil.copy2(previous / 'feedback-1.txt', out / 'feedback-1.txt')
+    return {'kind': 'model_only_controlled_comparison_not_old_route_resume',
+            'previous_trial': prior['name'], 'previous_model': prior['model'], 'model': args.model,
+            'foundation_feedback_consumed': prior.get('holdout_input_to_coder', False),
+            'starting_checkpoint': checkpoint, 'starting_source_manifest': expected,
+            'previous_passed': prior['passes'][-1]['passed'], 'previous_total': prior['passes'][-1]['total'],
+            'feedback_sha256': manifest(out).get('feedback-1.txt')}
 
 
 def trial_inputs(args):
@@ -244,11 +283,13 @@ def main():
     status, compiler, acceptance, frozen, blank, holdout, holdout_path = trial_inputs(args)
     out = CACHE / 'mechanism' / args.name
     out.mkdir(parents=True, exist_ok=False)
-    continuation = None
+    continuation, comparison = None, None
     if args.continue_from:
         continuation = continue_working(args.continue_from, out, frozen, status, args.foundation_feedback)
         if args.refresh_coder:
             continuation['explicit_coder_revision'] = refresh_coder(out / 'bundle')
+    elif args.compare_from:
+        comparison = comparison_seed(args.compare_from.resolve(), out, frozen, status, args)
     else:
         prepare_controller(out / 'bundle')
         shutil.copytree(CACHE / 'octos-upstream/arc/template', out / 'initial-working')
@@ -257,15 +298,16 @@ def main():
     keys = list(case_outcomes(json.loads((blank / 'playwright.json').read_text())))
     checkpoints = Checkpoints(out / 'checkpoints', frozen['tests_sha256'], keys)
     manifest_before = manifest(out / 'bundle')
-    metadata = {'name': args.name, 'model': 'glm-5.3-flash', 'phase': 'mechanism',
+    metadata = {'name': args.name, 'model': args.model, 'phase': 'mechanism',
         'cap_cny': args.cap_cny, 'deadline_seconds': args.seconds, 'max_passes': args.passes, 'started': time.time(),
         'runtime_tests': frozen['tests_sha256'], 'source_sha256': frozen['requirements_sha256'],
         'compiler_trial': str(compiler), 'bundle_sha256': manifest_before,
         'holdout_input_to_coder': (frozen['tests_sha256'] == holdout['tests_sha256'] or
+                                  bool(comparison and comparison['foundation_feedback_consumed']) or
                                   bool(continuation and continuation['foundation_feedback_consumed'])),
         'acceptance_origin': frozen.get('schema'),
         'coverage_claim': frozen.get('coverage_claim', 'generated internal tests, not official coverage'),
-        'formal_upload_allowed': False, 'continuation': continuation}
+        'formal_upload_allowed': False, 'continuation': continuation, 'comparison': comparison}
     (out / 'manifest.json').write_text(json.dumps(metadata, indent=2))
     token = control('/trial', {'id': args.name, 'phase': 'mechanism', 'cap_cny': args.cap_cny, 'seconds': args.seconds})['token']
     deadline = time.monotonic() + args.seconds
@@ -278,7 +320,7 @@ def main():
             if control('/status', {'read': True})['unresolved_cost_lock']:
                 raise RuntimeError('uncertain upstream cost; no next model call')
             attempt = out / f'attempt-{number}'
-            rc = coding_pass(out / 'bundle', source, acceptance, out / f'feedback-{number}.txt', attempt, token, 360)
+            rc = coding_pass(out / 'bundle', source, acceptance, out / f'feedback-{number}.txt', attempt, token, 360, args.model)
             if manifest(out / 'bundle') != manifest_before:
                 raise RuntimeError('frozen coding controller changed')
             working = attempt / 'pass/working'

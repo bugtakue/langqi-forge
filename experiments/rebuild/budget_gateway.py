@@ -24,6 +24,9 @@ import urllib.error
 import urllib.request
 
 MODEL = "glm-5.3-flash"
+# Verified organizer model directory, 2026-09-26 12:53 Beijing. Tenths of
+# micro-CNY per token; no cache discounts are used in the reservation/receipt.
+PRICES = {"glm-5.3-flash": (8, 28), "deepseek-v4-flash": (30, 90)}
 UPSTREAM = "https://api.arc-bench.com/v1/chat/completions"
 PHASES = {"baseline": 20, "mechanism": 20, "formal": 60, "reserve": 20}
 MICRO = 1_000_000
@@ -34,7 +37,7 @@ class BudgetDenied(ValueError):
 
 
 def request_bound(payload: dict) -> tuple[bytes, int, int]:
-    if payload.get("model") != MODEL or payload.get("stream") is True:
+    if payload.get("model") not in PRICES or payload.get("stream") is True:
         raise BudgetDenied("unpriced model or streaming request")
     messages = payload.get("messages")
     if not isinstance(messages, list) or not 1 <= len(messages) <= 600:
@@ -57,9 +60,11 @@ def request_bound(payload: dict) -> tuple[bytes, int, int]:
     return body, prompt_bound, maximum
 
 
-def micro_cost(prompt: int, completion: int) -> int:
-    # 0.8 / 2.8 CNY per million => 0.8 / 2.8 micro-CNY per token.
-    return (prompt * 8 + completion * 28 + 9) // 10
+def micro_cost(prompt: int, completion: int, model=MODEL) -> int:
+    if model not in PRICES:
+        raise BudgetDenied('unpriced model')
+    input_rate, output_rate = PRICES[model]
+    return (prompt * input_rate + completion * output_rate + 9) // 10
 
 
 class Ledger:
@@ -90,6 +95,10 @@ class Ledger:
                   BEFORE DELETE ON worst_case_authorizations BEGIN
                   SELECT RAISE(ABORT, 'authorization is append-only'); END;
             """)
+            if 'model' not in {r[1] for r in db.execute('PRAGMA table_info(calls)')}:
+                # Historical trials all used GLM. Keep every original amount,
+                # reservation, exception and token unchanged during migration.
+                db.execute("ALTER TABLE calls ADD COLUMN model TEXT NOT NULL DEFAULT 'glm-5.3-flash'")
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=10, isolation_level="IMMEDIATE")
@@ -158,7 +167,7 @@ class Ledger:
 
     def reserve(self, token: str, payload: dict) -> tuple[str, bytes]:
         body, prompt, output = request_bound(payload)
-        reserve = micro_cost(prompt, output)
+        reserve = micro_cost(prompt, output, payload['model'])
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             trial = db.execute("SELECT * FROM trials WHERE token_hash=? AND closed=0",
@@ -175,8 +184,8 @@ class Ledger:
             if total + reserve > min(120, 100) * MICRO or phase + reserve > PHASES[trial["phase"]] * MICRO or local + reserve > trial["cap"]:
                 raise BudgetDenied("maximum request cost cannot be reserved")
             rid = secrets.token_hex(16)
-            db.execute("INSERT INTO calls(id,trial,status,reserve,charged,prompt_bound,output_bound,created,payload_sha) VALUES(?,?,?,?,?,?,?,?,?)",
-                       (rid, trial["id"], "reserved", reserve, reserve, prompt, output, time.time(), hashlib.sha256(body).hexdigest()))
+            db.execute("INSERT INTO calls(id,trial,status,reserve,charged,prompt_bound,output_bound,created,payload_sha,model) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                       (rid, trial["id"], "reserved", reserve, reserve, prompt, output, time.time(), hashlib.sha256(body).hexdigest(), payload['model']))
         return rid, body
 
     def settle(self, rid: str, response: dict):
@@ -195,7 +204,7 @@ class Ledger:
                 # Transaction rollback leaves the full reservation charged.
                 raise BudgetDenied("usage missing or exceeds bound; locked for reconciliation")
             db.execute("UPDATE calls SET status='settled', charged=?, prompt_tokens=?, completion_tokens=?, finished=? WHERE id=?",
-                       (micro_cost(prompt, output), prompt, output, time.time(), rid))
+                       (micro_cost(prompt, output, row['model']), prompt, output, time.time(), rid))
 
     def close_trial(self, name: str):
         with self.connect() as db:
@@ -212,7 +221,7 @@ class Ledger:
         with self.connect() as db:
             return {"currency": "CNY", "cost_kind": "uncached_usage_upper_bound_not_official_bill",
                     "total_cny": db.execute("SELECT COALESCE(SUM(charged),0)/1000000.0 FROM calls").fetchone()[0],
-                    "calls": [dict(r) for r in db.execute("SELECT id,trial,status,reserve,charged,prompt_tokens,completion_tokens FROM calls")],
+                    "calls": [dict(r) for r in db.execute("SELECT id,trial,status,reserve,charged,prompt_tokens,completion_tokens,model FROM calls")],
                     "failures": [dict(r) for r in db.execute('SELECT * FROM call_failures')],
                     "worst_case_authorizations": [dict(r) for r in db.execute('SELECT * FROM worst_case_authorizations')],
                     "unresolved_cost_lock": bool(self.has_unresolved(db)),

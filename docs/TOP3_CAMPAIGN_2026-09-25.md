@@ -2,6 +2,8 @@
 
 ## 当前执行路线（2026-09-26，优先于下方历史待上传安排）
 
+**GLM Sheet路线两轮0/2已停止；下一唯一为DeepSeek模型对照。** `sheet-foundation-deepseek-compare-v1` 与small-writes-v2同起始5文件/同内核提示词/同冻结2用例/同¥2.60及1500秒2轮，只更换deepseek-v4-flash，保留旧pause=2，不是清零续跑。主办方目录已核输入3/输出9元每百万，网关记录逐调用模型；只重启本任务空闲网关并内存重载同主办方Key，7业务容器未动。启动前总保守¥5.565156，无费用锁/在途。官网可见综合第10/28、6.55、17/200；未上传新包。见[对照合同及终态](diagnostics/rebuild-sheet-model-comparison-2026-09-26.md)。
+
 **Sheet实跑首轮0/2：缺app.js，失败代码保留。** 下一唯一 `sheet-foundation-small-writes-v2` 从direct-v1的5文件checkpoint续修，仅更新小文件/先闭合基础流程的编码提示词；断言、模型、评分器不改。≤¥2.60/1500秒/剩余2轮，与首轮合计仍≤¥3/1800活动秒/3轮；继承无新增计数1，下一轮仍0则暂停路线。总保守¥5.201392，异常预留不释放，无在途（启动前）。观察同名目录与factory26-trial/grade，见[实际失败及续修](diagnostics/rebuild-sheet-small-writes-2026-09-26.md)。未正式上传。
 
 **停止继续修补自动验收编译器，下一唯一实跑 `sheet-foundation-direct-v1`。** V3两响应仍未交付合格套件；改用开发前已冻结的Sheet2项基础用例，原断言/源哈希不改，空页2/2拒绝。输入仍完整13原子依赖/祖先，无预置应用；源码向编码器可见所以仅称基础回归，不称未见holdout或完整需求覆盖。≤¥3/1800秒/最多3轮，失败保留、两轮无新增即停；不正式上传。启动前总保守¥4.809650、无在途。观察同名目录与factory26-trial/grade。见[路线决策与边界](diagnostics/rebuild-sheet-foundation-direct-2026-09-26.md)。

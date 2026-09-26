@@ -23,6 +23,23 @@ class BudgetTests(unittest.TestCase):
         self.ledger.settle(rid, {'usage': {'prompt_tokens': 100, 'completion_tokens': 200}, 'choices': [{}]})
         self.assertEqual(self.ledger.status()['total_cny'], micro_cost(100, 200)/1e6)
 
+    def test_comparison_model_uses_its_own_verified_price_for_reserve_and_settlement(self):
+        payload = dict(self.payload, model='deepseek-v4-flash')
+        _, prompt, output = request_bound(payload)
+        rid, _ = self.ledger.reserve(self.trial(), payload)
+        call = self.ledger.status()['calls'][0]
+        self.assertEqual(call['model'], 'deepseek-v4-flash')
+        self.assertEqual(call['reserve'], prompt * 3 + output * 9)
+        self.ledger.settle(rid, {'usage': {'prompt_tokens': 100, 'completion_tokens': 200}, 'choices': [{}]})
+        self.assertEqual(self.ledger.status()['calls'][0]['charged'], 2100)
+
+    def test_schema_reopen_preserves_original_amounts_and_models(self):
+        rid, _ = self.ledger.reserve(self.trial(), self.payload)
+        self.ledger.close_trial('a1')
+        self.ledger.authorize_worst_case(self.authorize(rid))
+        state = self.ledger.status()
+        self.assertEqual(Ledger(self.ledger.path).status(), state)
+
     def test_unresolved_call_blocks_retry_and_next_trial(self):
         token = self.trial()
         self.ledger.reserve(token, self.payload)
