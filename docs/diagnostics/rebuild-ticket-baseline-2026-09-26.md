@@ -51,12 +51,48 @@ was exercised, not yet proof of performance without public practice tests.
 B's explicit public-test access differs from A's native DSL probes; this is the
 registered full-system comparison, not an isolated kernel effect.
 
+## A repeat 2: independent 5/10, below the 9/10 threshold
+
+Run: `a-ticket-booking--ticket-booking-2`. Generation exit=0, grading exit=1,
+**5/10**; no skipped/flaky/error cases, source/tests unchanged, processes cleaned.
+20 normal responses, 307608 prompt tokens and 10461 completion tokens;
+conservative uncached cost **¥0.275386**, duration 367.440 seconds.
+
+Three negative registration and two invalid-login cases pass. The registration
+success case first fails to find the exact section text `账户信息`; four other
+cases fail in their registration/setup step looking for the exact signed-in
+username. Those failures do not establish whether later duplicate or valid-login
+assertions would pass. Internal seq118 again claims `AUDIT PASS`, seq122 accepts
+its self-selected capsule; the independent result remains 5/10. A's two Ticket
+results are therefore 0/10 and 5/10, both below the predeclared threshold.
+
+The four saved failure-page snapshots show `当前用户：<the test username>`.
+`frontend/src/app.js:68` renders the prefix and username in one span. The test
+requires exact text equal to the username, so this is a demonstrated presentation
+contract mismatch; it is not evidence that registration created no account.
+The internal probe accepted the prefixed string and therefore missed the mismatch.
+
 ## Next action, unchanged experimental design
 
-A repeat2 is running in the same serial matrix (host exec session 76257), then
-B repeat2. No official upload/run was launched. Finish both
+B repeat2 is running as the last trial in the same serial matrix (host exec
+session 76257; container `406f2092d92f`). No official upload/run was launched. Finish both
 repeats before kernel selection. The common improvement to test later is
 independent acceptance that starts from each required user entry and preserves
 the required locator contract; do not patch a prebuilt Ticket answer into the
 agent or relax public assertions. Independent tests must not conceal ambiguous
 entry actions by automatically choosing `.first()` or by bypassing navigation.
+
+## Official/meter boundary, 2026-09-26 10:09–10:12 Beijing
+
+Meter overview at its visible sync time 10:09:11: balance **¥99.547259**, so
+**¥0.452741** has actually been posted against the original ¥100 practice
+gift. This is a mid-matrix snapshot (A2 was still active), NOT final trial cost.
+It does not resolve the original uncertain request; its authorized ¥0.174823
+remains permanently charged to the conservative campaign ledger.
+
+Refreshed official Hackathon leaderboard with All tasks / All models: bugtakue
+still **10/26, 6.55, 8.5% (17/200), ¥25.0273**, from the old Pro snapshot.
+Third place remains 29.17 (29.5%, ¥24.9800); first place is now 55.37 (52.0%,
+¥22.2067). The official Running page shows **0 active runs**. These UI facts
+were checked live, not inferred from local model calls or cached standings.
+No official snapshot/upload/run was created.
