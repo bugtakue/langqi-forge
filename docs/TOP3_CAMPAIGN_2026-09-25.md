@@ -2,6 +2,8 @@
 
 ## 当前执行路线（2026-09-26，优先于下方历史待上传安排）
 
+**GitHub基础首次完整通过：V4 runtime 11/11、基础回归3/3、干净冷交付3/3，均0跳过/0 flaky。** 该3项因已给过失败反馈，明确只算内部回归，不称未见holdout。代码由智能体删除一处重复用户名展示完成，冻结断言未变；checkpoint=`169c3750a8d8bec97878588abed827e172c3a4578442281d82e2a91ccf86e2cb`。V4费用¥0.064945，总保守¥4.303419，0开放/无锁。下一唯一串行试验为`sheet-acceptance-v1`：仅公开Sheet5个入口ID及13原子依赖生成冻结验收，≤¥1/600秒/最多2个schema响应，先空页负对照，再生成应用；不输入旧Sheet holdout，不上传正式。观察`.cache/ab-campaign/mechanism/sheet-acceptance-v1/`和`factory26-acceptance`，不要重复V4/重生成GitHub。完整证据见[GitHub V4](diagnostics/rebuild-github-foundation-v4-2026-09-26.md)。Goal仍active，正式名次未核验更新。
+
 **下一唯一串行运行 `github-foundation-repair-v4`：≤¥1.5/900秒/1次编码。** 从V3已验证11/11的6文件checkpoint继续，将已见的用户名定位歧义失败反馈提供给编码器，不提供整份独立测试源码、不改断言。此后该3项套件标为冻结内部回归，不能再宣称未见holdout；需11/11、3/3及干净冷交付一起过。续跑适配已实证原样恢复/保留历史/账本不变，15项离线检查通过（非业务成绩）。观察 `.cache/ab-campaign/mechanism/github-foundation-repair-v4/` 与本任务容器，不重复启动。若基础套件连续两轮无新增通过也暂停该路线，不因runtime已满分而重置无进展次数。
 
 **当前最新终态：runtime已0→6→11/11；独立基础验收2/3，尚无正式提分/上传。** `github-foundation-repair-v3`已结束，0跳过/0 flaky，runtime真实重启5次。剩余验收卡在用户名于按钮/菜单重复展示导致严格文本定位匹配两项，不等于会话丢失；不改断言造分，下一修复消除UI歧义后完整回归和冷交付。最新runtime-accepted checkpoint为`92b0abe0571c10229e5b42b9c730d03d71ed5fb959313e08c7d1336b04f6d569`；别恢复旧0/11代码。当前0开放试验、费用锁false，总保守¥4.238474。用户最新要求成绩优先：已结束、最大费用明确且已全额预留的小额异常按上限追加记账继续，不再反复问账；总¥120/主办方额度/单并发不变，不能在请求未结束时重试。V3不是resume格式，续修先适配其manifest和runtime已验收但foundation未全过状态，不重置检查点或从模板重建。完整证据与下一动作见[本轮结果](diagnostics/rebuild-foundation-repair-v3-2026-09-26.md)。Goal仍active，未完成；无需新费用授权。
