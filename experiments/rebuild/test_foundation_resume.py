@@ -10,7 +10,8 @@ from unittest.mock import patch
 from checkpoints import Checkpoints, application_manifest, case_outcomes
 from grade import manifest
 import foundation_resume as resume
-from run_foundation_trial import continue_working
+from run_foundation_trial import continue_working, foundation_feedback, previous_run
+import run_foundation_trial
 
 
 def write_json(path, value):
@@ -128,6 +129,25 @@ class ResumeTests(unittest.TestCase):
         copied = Checkpoints(out / 'checkpoints', self.tests, list(case_outcomes(self.report)))
         self.assertEqual(copied.history(), self.store.history())
         self.assertEqual(manifest(out / 'bundle'), manifest(self.root / 'bundle'))
+
+    def test_normal_manifest_continuation_preserves_identity(self):
+        plan, result = previous_run(self.root)
+        self.assertEqual(result['resume_trial'], self.root.name)
+        self.assertEqual(plan['root'], str(self.root))
+        self.assertEqual(plan['bundle_sha256'], manifest(self.root / 'bundle'))
+
+    def test_foundation_feedback_is_bound_to_unchanged_failed_receipt(self):
+        evidence = self.root / 'holdout-evidence'
+        self.evidence(evidence, self.report)
+        frozen = json.loads((self.compiler / 'result/acceptance/frozen.json').read_text())
+        write_json(self.base / 'foundation-v1.json', {'suites': {'unit': {
+            'requirement_source_sha256': frozen['requirements_sha256'], 'tests_sha256': self.tests}}})
+        with patch.object(run_foundation_trial, 'CACHE', self.base):
+            feedback = foundation_feedback(self.root, self.store.history()[-1], frozen)
+            self.assertIn('actual runtime failure', feedback)
+            (evidence / 'playwright.json').write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'source-bound'):
+                foundation_feedback(self.root, self.store.history()[-1], frozen)
 
     def test_bundle_test_source_and_checkpoint_drift_are_rejected(self):
         targets = [self.root / 'bundle/unit.py', self.suite / 'unit.spec.ts',

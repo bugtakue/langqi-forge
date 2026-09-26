@@ -103,15 +103,43 @@ def coding_pass(bundle, source, acceptance, feedback, output, token, seconds):
             return 124
 
 
-def continue_working(previous, out, frozen, status):
+def previous_run(previous):
+    if (previous / 'resume-plan.json').is_file():
+        return (json.loads((previous / 'resume-plan.json').read_text()),
+                json.loads((previous / 'result.json').read_text()))
+    result = json.loads((previous / 'manifest.json').read_text())
+    plan = {'root': str(previous), 'bundle_sha256': result['bundle_sha256']}
+    return plan, dict(result, resume_trial=result['name'])
+
+
+def foundation_feedback(previous, decision, frozen):
+    """Visible failure evidence only; original test source stays unmounted.
+
+    Once used, this suite is internal regression, no longer unseen holdout.
+    """
+    evidence = previous / 'holdout-evidence'
+    proof = json.loads((evidence / 'raw-controller.log').read_text().strip().splitlines()[-1])['export_manifest']
+    actual = manifest(evidence)
+    actual.pop('raw-controller.log')
+    verdict = json.loads((evidence / 'verdict.json').read_text())
+    suites = json.loads((CACHE / 'foundation-v1.json').read_text())['suites'].values()
+    matching = [s for s in suites if s['requirement_source_sha256'] == frozen['requirements_sha256']]
+    if (actual != proof or len(matching) != 1 or verdict['gate'] or
+        verdict['passed'] >= verdict['total'] or verdict['test_manifest'] != matching[0]['tests_sha256'] or
+        verdict['source_manifest'] != decision['source_manifest'] or
+        not all(verdict.get(k) for k in ('source_unchanged', 'tests_unchanged', 'process_cleaned'))):
+        raise ValueError('foundation feedback lacks a frozen source-bound failed receipt')
+    return failure_feedback(evidence)
+
+
+def continue_working(previous, out, frozen, status, use_foundation_feedback=False):
     """Continue a closed, independently graded repair; no unverified template.
 
     The host-owned checkpoint history is inherited so the six passed cases and
     no-gain counter cannot be reset by opening another bounded repair tranche.
     """
     previous = previous.resolve()
-    plan = json.loads((previous / 'resume-plan.json').read_text())
-    result = json.loads((previous / 'result.json').read_text())
+    plan, result = previous_run(previous)
     rows = [t for t in status['trials'] if t['id'] == result['resume_trial']]
     if len(rows) != 1 or not rows[0]['closed'] or result.get('foundation_gate') or not result['passes']:
         raise ValueError('continuation needs an exact closed unaccepted trial')
@@ -122,8 +150,10 @@ def continue_working(previous, out, frozen, status):
     if contract['tests_sha256'] != frozen['tests_sha256']:
         raise ValueError('continuation cannot change frozen acceptance')
     store = Checkpoints(parent / 'checkpoints', contract['tests_sha256'], contract['case_keys'])
-    if store.history()[-1] != decision or decision['accepted'] or decision['pause_module']:
-        raise ValueError('checkpoint advanced, accepted or paused; inspect instead of retrying')
+    if (store.history()[-1] != decision or decision['pause_module'] or
+        result.get('foundation_stagnant_rounds', 0) >= 2 or
+        (decision['accepted'] and not use_foundation_feedback)):
+        raise ValueError('checkpoint advanced/paused or accepted without new failure evidence')
     attempt = previous / f'attempt-{record["attempt"]}'
     evidence = attempt / 'runtime-evidence'
     proof = json.loads((evidence / 'raw-controller.log').read_text().strip().splitlines()[-1])['export_manifest']
@@ -138,10 +168,17 @@ def continue_working(previous, out, frozen, status):
     copied.restore_working('foundation', source)
     if application_manifest(source) != decision['source_manifest']:
         raise ValueError('continuation lost graded source bytes')
-    (out / 'feedback-1.txt').write_text(failure_feedback(evidence))
+    feedback = failure_feedback(evidence)
+    if use_foundation_feedback:
+        feedback += '\nAdditional frozen internal regression failure:\n' + foundation_feedback(previous, decision, frozen)
+        feedback += '\nRepair only the observed UI ambiguity while preserving the public contract. Do not add unrelated features or change tests. Prefer minimal edits, then hand off to the independent verifier.'
+    (out / 'feedback-1.txt').write_text(feedback)
     return {'previous_trial': result['resume_trial'], 'checkpoint': decision['snapshot'],
             'previous_passed': record['passed'], 'previous_total': record['total'],
-            'stagnant_rounds': decision['stagnant_rounds']}
+            'stagnant_rounds': decision['stagnant_rounds'],
+            'foundation_feedback_consumed': bool(use_foundation_feedback or result.get('holdout_input_to_coder')),
+            'previous_foundation_passed': result.get('holdout', {}).get('passed', 0),
+            'foundation_stagnant_rounds': result.get('foundation_stagnant_rounds', 0)}
 
 
 def parse_args():
@@ -150,6 +187,7 @@ def parse_args():
     parser.add_argument('acceptance_trial', type=Path)
     parser.add_argument('--holdout', choices=['github', 'sheet'], required=True)
     parser.add_argument('--continue-from', type=Path)
+    parser.add_argument('--foundation-feedback', action='store_true')
     parser.add_argument('--cap-cny', type=float, default=3)
     parser.add_argument('--seconds', type=int, default=1800)
     parser.add_argument('--passes', type=int, default=3)
@@ -158,6 +196,8 @@ def parse_args():
         raise ValueError('bounded mechanism tranche required')
     if not args.name.replace('-', '').isalnum():
         raise ValueError('simple experiment name required')
+    if args.foundation_feedback and not args.continue_from:
+        raise ValueError('foundation feedback requires a verified previous run')
     return args
 
 
@@ -190,7 +230,7 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     continuation = None
     if args.continue_from:
-        continuation = continue_working(args.continue_from, out, frozen, status)
+        continuation = continue_working(args.continue_from, out, frozen, status, args.foundation_feedback)
     else:
         prepare_controller(out / 'bundle')
         shutil.copytree(CACHE / 'octos-upstream/arc/template', out / 'initial-working')
@@ -203,7 +243,8 @@ def main():
         'cap_cny': args.cap_cny, 'deadline_seconds': args.seconds, 'max_passes': args.passes, 'started': time.time(),
         'runtime_tests': frozen['tests_sha256'], 'source_sha256': frozen['requirements_sha256'],
         'compiler_trial': str(compiler), 'bundle_sha256': manifest_before,
-        'holdout_input_to_coder': False, 'formal_upload_allowed': False, 'continuation': continuation}
+        'holdout_input_to_coder': bool(continuation and continuation['foundation_feedback_consumed']),
+        'formal_upload_allowed': False, 'continuation': continuation}
     (out / 'manifest.json').write_text(json.dumps(metadata, indent=2))
     token = control('/trial', {'id': args.name, 'phase': 'mechanism', 'cap_cny': args.cap_cny, 'seconds': args.seconds})['token']
     deadline = time.monotonic() + args.seconds
@@ -246,8 +287,16 @@ def main():
         metadata.update(finished=time.time(), passes=records, runtime_accepted=accepted,
             cost_upper_cny=sum(c['charged'] for c in budget['calls'] if c['trial']==args.name)/1e6)
         (out / 'manifest.json').write_text(json.dumps(metadata, indent=2))
-    # Unseen internal holdout is evaluated ONCE after the bounded coding loop;
-    # never mounted into a candidate or used to soften generated assertions.
+    finalize_foundation(metadata, last, accepted, checkpoints, holdout_path, holdout, out, deadline)
+    print(json.dumps({k: metadata.get(k) for k in ('foundation_gate', 'runtime_accepted','holdout','cold_delivery_gate','cost_upper_cny')}), flush=True)
+    return 0 if metadata['foundation_gate'] else 1
+
+
+def finalize_foundation(metadata, last, accepted, checkpoints, holdout_path, holdout, out, deadline):
+    # Test source is never mounted in the coder. Visible failure feedback is
+    # explicitly tracked; after it is used this is regression, not unseen data.
+    metadata['foundation_evidence_kind'] = ('frozen_internal_regression' if metadata['holdout_input_to_coder']
+                                            else 'previously_unseen_internal_holdout')
     if last is not None:
         independent, _ = grade_application(last, holdout_path, out / 'holdout-evidence', holdout['expected_count'],
                                            max(1, min(300, deadline-time.monotonic())), out / 'bundle/grader')
@@ -258,9 +307,12 @@ def main():
                                         max(1, min(300, deadline-time.monotonic())), out / 'bundle/grader')
             metadata['cold_delivery_gate'] = cold['gate']
     metadata['foundation_gate'] = bool(accepted and metadata.get('holdout', {}).get('gate') and metadata.get('cold_delivery_gate'))
+    prior = metadata.get('continuation') or {}
+    gain = metadata.get('holdout', {}).get('passed', 0) > prior.get('previous_foundation_passed', 0)
+    metadata['foundation_stagnant_rounds'] = (0 if gain or metadata['foundation_gate']
+                                              else prior.get('foundation_stagnant_rounds', 0)+1)
+    metadata['finished_with_validation'] = time.time()
     (out / 'manifest.json').write_text(json.dumps(metadata, indent=2))
-    print(json.dumps({k: metadata.get(k) for k in ('foundation_gate', 'runtime_accepted','holdout','cold_delivery_gate','cost_upper_cny')}), flush=True)
-    return 0 if metadata['foundation_gate'] else 1
 
 
 if __name__ == '__main__':
