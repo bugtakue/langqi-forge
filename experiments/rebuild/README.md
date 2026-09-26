@@ -33,14 +33,14 @@ replace the submitted runtime yet. Current state and authority live in
 
 The last two require the downloaded public YAMLs and existing ledger. The freeze
 command refuses to overwrite changed tests. The sensitivity command uses an
-explicit internal positive fixture plus five deliberate defects and never
+explicit internal positive fixture plus six deliberate defects and never
 calls a model. Its success is validator evidence, not candidate business quality.
 
-## Billable commands — LOCKED pending reconciliation
+## Billable commands — wait for runtime recovery and gateway reload
 
 `run_trial.py A|B task 1|2` creates one fresh trial; `run_matrix.py --stage
 smoke|ticket` runs serially. Neither should run while an unresolved reservation
-exists. Do not manually mark a reservation settled, release it based on absence
+exists without a specific human-authorized full-cost exception. Do not manually mark a reservation settled, release it based on absence
 from a bill, automatically retry, or use a personal key.
 
 The local gateway accepts the organizer key through its loopback-only memory
@@ -54,6 +54,15 @@ Each request reserves uncached input/output maxima in persistent SQLite before
 transmission. Incomplete usage or transport ambiguity locks all further calls.
 Error metadata does not settle money. Formal platform bills still require a
 separate verified import and aggregate ¥120 check before formal work is allowed.
+
+One exact exception was explicitly approved by the user in
+`authorizations/2026-09-26-db7578d7.json`. `authorize_worst_case.py` applied it to
+the existing ledger: the entire bound is permanently counted, actual bill and
+usage remain unknown, the original call is not rewritten as settled. This
+local-only administration has no gateway endpoint and is not available to the
+candidate. Every future uncertain call still locks. The live gateway must be
+reloaded before it recognizes the new append-only authorization; do not bypass
+the old process or replace the ledger. The total ceiling remains ¥120.
 
 ## Evidence and test boundaries
 
@@ -75,3 +84,25 @@ Source tests, deliberate fault fixtures, keys, and experimental caches must not
 enter the eventual submitted agent. The current submission allowlist excludes
 this directory entirely. Do not package current main.py and describe it as the
 new Octos-based implementation: engine selection and mechanism work are pending.
+
+## Offline candidate mechanisms (not enabled in A/B)
+
+`requirement_catalog.py <public-yaml> --output <fresh-json>` retains ancestor
+contracts and expands inherited folder dependencies. `checkpoints.py` separates
+working and accepted snapshots, checks source/test/report hashes against the
+controller's trusted export proof, pauses after two no-gain attempts, and never
+exports raw failed work when no accepted snapshot exists.
+
+`replay_checkpoints.py <successful-sensitivity-run>` reuses real grader receipts
+and then performs a fresh cold browser/restart run on the exported accepted
+snapshot. `--state-only` is debugging only and explicitly leaves gate=false.
+Neither module supplies prebuilt application answers or changes the A/B source.
+
+The strengthened foundation grader runs generated build/server as UID 65534,
+keeps tests/reports on the native private container filesystem, and checks
+export hashes outside the container. The grader parent requires exactly CHOWN,
+SETUID, SETGID, KILL, DAC_OVERRIDE capabilities after dropping all others;
+generated child processes drop identity/capabilities and keep no-new-privileges.
+No external network is needed. Do not rely on chmod on macOS bind mounts to
+protect assertions or report files. The final deliberate-tamper and cold
+delivery gate is currently incomplete because Docker startup is blocked.

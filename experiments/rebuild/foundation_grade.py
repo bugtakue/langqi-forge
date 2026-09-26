@@ -10,30 +10,59 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+import subprocess
+import uuid
 
 from grade import manifest, run, summarize
 from restart_control import AppProcess, RestartControl
+
+APP_UID = 65534
+
+
+def prepare_app_identity(work, evidence):
+    # Only disposable app copies are writable by generated build/server code.
+    # Root-owned tests, report paths, restart controller and grading code are not.
+    work.chmod(0o755)
+    evidence.chmod(0o700)
+    for part in ('frontend', 'backend'):
+        root = work/part
+        for path in [root, *root.rglob('*')]:
+            if path.is_symlink():
+                raise RuntimeError('application symlinks cannot cross the grader boundary')
+            os.chown(path, APP_UID, APP_UID)
+
+
+def build_app(work, env, evidence):
+    with (evidence/'build.log').open('w') as log:
+        try:
+            return subprocess.run(['npm','run','build'],cwd=work/'frontend',env=env,
+                user=APP_UID,group=APP_UID,extra_groups=[],stdout=log,stderr=subprocess.STDOUT,timeout=90).returncode
+        except subprocess.TimeoutExpired:
+            return 124
 
 
 def grade(work, tests, evidence, result, expected):
     env = {k: v for k, v in os.environ.items() if k in ('PATH', 'HOME', 'LANG', 'PLAYWRIGHT_BROWSERS_PATH')}
     env.update(PORT='3000', HOST='127.0.0.1', CI='1', E2E_BASE_URL='http://127.0.0.1:3000',
                NODE_PATH='/opt/arcbench/node_modules')
-    if run(['npm', 'run', 'build'], work/'frontend', env, evidence/'build.log'):
+    prepare_app_identity(work,evidence)
+    if build_app(work,env,evidence):
         result['error'] = 'build failed'
         return
     suite = work/'suite'
     shutil.copytree(tests, suite)
+    suite.chmod(0o700)
     (suite/'node_modules').symlink_to('/opt/arcbench/node_modules', target_is_directory=True)
     config = suite/'playwright.config.cjs'
     config.write_text("module.exports={testDir:'.',testMatch:'**/*.spec.ts',timeout:60000,retries:0,workers:1,"
-        "reporter:[['json']],outputDir:'/evidence/test-results',use:{headless:true,baseURL:process.env.E2E_BASE_URL,"
+        "reporter:[['json']],outputDir:process.env.E2E_RESULTS_DIR,use:{headless:true,baseURL:process.env.E2E_BASE_URL,"
         "actionTimeout:10000,trace:'retain-on-failure',screenshot:'only-on-failure'}}")
-    process = AppProcess(work/'backend', env, evidence/'server.log')
+    process = AppProcess(work/'backend', env, evidence/'server.log', identity=APP_UID)
     try:
         process.start()
         with RestartControl(process) as control:
-            test_env = dict(env, **control, PLAYWRIGHT_JSON_OUTPUT_NAME=str(evidence/'playwright.json'))
+            test_env = dict(env, **control, PLAYWRIGHT_JSON_OUTPUT_NAME=str(evidence/'playwright.json'),
+                            E2E_RESULTS_DIR=str(evidence/'test-results'))
             rc = run(['/opt/arcbench/node_modules/.bin/playwright', 'test', '-c', str(config)],
                      suite, test_env, evidence/'playwright.log', seconds=max(90, expected*65))
             result['test_exit'] = rc
@@ -54,15 +83,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--expected', type=int, required=True)
     args = parser.parse_args()
-    source, tests, evidence = Path('/generated'), Path('/public-tests'), Path('/evidence')
+    source, tests, exported = Path('/generated'), Path('/public-tests'), Path('/evidence')
+    # Native Linux filesystem enforces UID isolation. macOS bind mounts can
+    # ignore guest chmod; never trust them as the scoring security boundary.
+    private = tempfile.TemporaryDirectory(prefix='private-grade-evidence-')
+    evidence = Path(private.name)
     before, tests_before = manifest(source), manifest(tests)
-    result = {'evidence_kind': 'internal_foundation_not_official_score', 'gate': False,
+    result = {'evidence_kind': 'internal_foundation_not_official_score', 'run_id':str(uuid.uuid4()), 'gate': False,
               'passed': 0, 'total': args.expected, 'source_manifest': before, 'test_manifest': tests_before}
     evidence.mkdir(exist_ok=True)
+    evidence.chmod(0o700)
     try:
         with tempfile.TemporaryDirectory(prefix='foundation-grade-') as td:
             work = Path(td)
             for part in ('frontend', 'backend'):
+                if any(p.is_symlink() for p in (source/part).rglob('*')):
+                    raise RuntimeError('source contains symlink; reject before copying')
                 shutil.copytree(source/part, work/part, symlinks=False,
                                ignore=shutil.ignore_patterns('node_modules', '.git', 'dist'))
             grade(work, tests, evidence, result, args.expected)
@@ -74,7 +110,14 @@ def main():
     result['gate'] = bool(result['gate'] and all(result[k] for k in
         ('source_unchanged', 'tests_unchanged', 'process_cleaned')))
     (evidence/'verdict.json').write_text(json.dumps(result, indent=2))
-    print(json.dumps({k:v for k,v in result.items() if not k.endswith('manifest')}), flush=True)
+    proof = manifest(evidence)
+    exported.mkdir(exist_ok=True)
+    shutil.copytree(evidence,exported,dirs_exist_ok=True)
+    # Only the root controller's stdout carries this proof. Generated build and
+    # app stdout are redirected to logs; parent checks after container exit.
+    print(json.dumps({**{k:v for k,v in result.items() if not k.endswith('manifest')},
+                      'export_manifest':proof}), flush=True)
+    private.cleanup()
     return 0 if result['gate'] else 1
 
 

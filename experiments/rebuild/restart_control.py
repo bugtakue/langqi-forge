@@ -12,8 +12,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class AppProcess:
-    def __init__(self, cwd: Path, env: dict, log: Path):
+    def __init__(self, cwd: Path, env: dict, log: Path, identity=None):
         self.cwd, self.env, self.log = cwd, env, log
+        self.identity = identity
         self.process = None
         self.restarts = 0
         self.lock = threading.Lock()
@@ -27,8 +28,9 @@ class AppProcess:
         if self.port_open():
             raise RuntimeError('port already occupied before controlled start')
         with self.log.open('a') as stream:
+            privileges = {'user':self.identity, 'group':self.identity, 'extra_groups':[]} if self.identity else {}
             self.process = subprocess.Popen(['npm', 'run', 'start'], cwd=self.cwd, env=self.env,
-                stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+                stdout=stream, stderr=subprocess.STDOUT, start_new_session=True, **privileges)
         for _ in range(80):
             if self.process.poll() is not None:
                 raise RuntimeError('application exited during startup')

@@ -1,0 +1,8 @@
+{
+  "call_id": "db7578d75f9900b512f400ae642ec87b",
+  "reserve_micro_cny": 174823,
+  "authority": "user",
+  "decision": "charge_full_reserve_actual_unknown",
+  "user_reply": "按最坏费用全额记账后继续",
+  "source_question_id": "request_user_input_async/call_wiGWOCNCbIElUzzoKNa4RKMt/0"
+}

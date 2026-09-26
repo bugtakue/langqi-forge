@@ -4,7 +4,9 @@ Only the organizer's fixed Chat Completions endpoint is reachable. Run agents
 on a Docker internal network, this gateway on both internal and bridge networks.
 The control token is NOT supplied to agents. SQLite transactions reserve money
 before outbound IO; a crash/ambiguous result retains the reservation and locks
-the campaign. Costs here are conservative uncached bounds, not official bills.
+the campaign. A specific human-authorized exception may permanently charge the
+full bound without pretending the provider bill is known. Costs here are
+conservative uncached bounds, not official bills.
 """
 from __future__ import annotations
 
@@ -77,12 +79,68 @@ class Ledger:
                 CREATE TABLE IF NOT EXISTS call_failures (
                   call_id TEXT NOT NULL, created REAL NOT NULL, error_type TEXT NOT NULL,
                   http_status INTEGER, evidence_saved INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS worst_case_authorizations (
+                  call_id TEXT PRIMARY KEY, created REAL NOT NULL,
+                  reserve INTEGER NOT NULL, payload_sha TEXT NOT NULL,
+                  authorization_sha TEXT NOT NULL, authorization_json TEXT NOT NULL);
+                CREATE TRIGGER IF NOT EXISTS authorization_no_update
+                  BEFORE UPDATE ON worst_case_authorizations BEGIN
+                  SELECT RAISE(ABORT, 'authorization is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS authorization_no_delete
+                  BEFORE DELETE ON worst_case_authorizations BEGIN
+                  SELECT RAISE(ABORT, 'authorization is append-only'); END;
             """)
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=10, isolation_level="IMMEDIATE")
         db.row_factory = sqlite3.Row
         return db
+
+    @staticmethod
+    def has_unresolved(db):
+        # A permission is exact-call, exact-payload, full-bound and additive.
+        # It never makes future unknown-cost requests eligible automatically.
+        return db.execute("""SELECT 1 FROM calls c WHERE c.status!='settled'
+            AND NOT (c.status='reserved' AND c.charged=c.reserve AND EXISTS (
+              SELECT 1 FROM worst_case_authorizations a WHERE a.call_id=c.id
+              AND a.reserve=c.reserve AND a.payload_sha=c.payload_sha))""").fetchone()
+
+    def authorize_worst_case(self, authorization: dict):
+        """Local controller only; no HTTP endpoint and no candidate capability.
+
+        Caller must have an explicit human instruction for this exact request.
+        Preserve that instruction in the append-only record; leave the original
+        call reserved, its actual usage null and its entire charge untouched.
+        """
+        required = {'call_id', 'reserve_micro_cny', 'authority', 'decision',
+                    'user_reply', 'source_question_id'}
+        if (set(authorization) != required or authorization['authority'] != 'user'
+                or authorization['decision'] != 'charge_full_reserve_actual_unknown'
+                or type(authorization['reserve_micro_cny']) is not int
+                or any(not isinstance(authorization[k], str) or not authorization[k].strip()
+                       for k in required - {'reserve_micro_cny'})):
+            raise BudgetDenied('specific human authorization is required')
+        raw = json.dumps(authorization, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        digest = hashlib.sha256(raw.encode()).hexdigest()
+        rid = authorization['call_id']
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM calls WHERE id=?', (rid,)).fetchone()
+            if (not row or row['status'] != 'reserved'
+                    or row['charged'] != row['reserve']
+                    or row['reserve'] != authorization['reserve_micro_cny']
+                    or row['prompt_tokens'] is not None or row['completion_tokens'] is not None):
+                raise BudgetDenied('authorization does not match an unknown full reservation')
+            if db.execute('SELECT 1 FROM trials WHERE closed=0').fetchone():
+                raise BudgetDenied('close all trials and stop their processes before authorization')
+            existing = db.execute('SELECT authorization_sha FROM worst_case_authorizations WHERE call_id=?', (rid,)).fetchone()
+            if existing:
+                if existing[0] != digest:
+                    raise BudgetDenied('conflicting authorization for the same call')
+                return False
+            db.execute('INSERT INTO worst_case_authorizations VALUES(?,?,?,?,?,?)',
+                       (rid, time.time(), row['reserve'], row['payload_sha'], digest, raw))
+        return True
 
     def create_trial(self, name: str, phase: str, cap: float, seconds: int) -> str:
         if phase not in PHASES or not 0 < cap <= PHASES[phase] or not 1 <= seconds <= 3600:
@@ -92,7 +150,7 @@ class Ledger:
             db.execute("BEGIN IMMEDIATE")
             if db.execute("SELECT 1 FROM trials WHERE closed=0").fetchone():
                 raise BudgetDenied("another trial remains open")
-            if db.execute("SELECT 1 FROM calls WHERE status!='settled'").fetchone():
+            if self.has_unresolved(db):
                 raise BudgetDenied("unsettled reservation; reconcile before continuing")
             db.execute("INSERT INTO trials(id,phase,cap,deadline,token_hash) VALUES(?,?,?,?,?)",
                        (name, phase, round(cap * MICRO), time.time() + seconds, hashlib.sha256(token.encode()).hexdigest()))
@@ -107,7 +165,7 @@ class Ledger:
                                (hashlib.sha256(token.encode()).hexdigest(),)).fetchone()
             if not trial or time.time() >= trial["deadline"]:
                 raise BudgetDenied("unknown, closed or expired trial")
-            if db.execute("SELECT 1 FROM calls WHERE status!='settled'").fetchone():
+            if self.has_unresolved(db):
                 raise BudgetDenied("another request active or unresolved; no retries")
             total = db.execute("SELECT COALESCE(SUM(charged),0) FROM calls").fetchone()[0]
             phase = db.execute("SELECT COALESCE(SUM(c.charged),0) FROM calls c JOIN trials t ON t.id=c.trial WHERE t.phase=?", (trial["phase"],)).fetchone()[0]
@@ -129,6 +187,8 @@ class Ledger:
             row = db.execute("SELECT * FROM calls WHERE id=? AND status='reserved'", (rid,)).fetchone()
             if not row:
                 raise BudgetDenied("reservation not active")
+            if db.execute('SELECT 1 FROM worst_case_authorizations WHERE call_id=?', (rid,)).fetchone():
+                raise BudgetDenied('human-authorized worst-case charge is permanent, not a reconciled bill')
             if (type(prompt) is not int or type(output) is not int or min(prompt, output) < 0
                     or prompt > row["prompt_bound"] or output > row["output_bound"]
                     or not response.get("choices")):
@@ -154,6 +214,8 @@ class Ledger:
                     "total_cny": db.execute("SELECT COALESCE(SUM(charged),0)/1000000.0 FROM calls").fetchone()[0],
                     "calls": [dict(r) for r in db.execute("SELECT id,trial,status,reserve,charged,prompt_tokens,completion_tokens FROM calls")],
                     "failures": [dict(r) for r in db.execute('SELECT * FROM call_failures')],
+                    "worst_case_authorizations": [dict(r) for r in db.execute('SELECT * FROM worst_case_authorizations')],
+                    "unresolved_cost_lock": bool(self.has_unresolved(db)),
                     "trials": [dict(r) for r in db.execute("SELECT id,phase,cap,deadline,closed FROM trials")]}
 
 
