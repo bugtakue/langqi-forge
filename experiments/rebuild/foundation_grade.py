@@ -85,8 +85,13 @@ def main():
     parser.add_argument('--expected', type=int, required=True)
     parser.add_argument('--public-suite', action='store_true',
                         help='explicit public practice tests; retain original 10s/180s timeouts, no added restart requirement')
+    parser.add_argument('--private-tests', action='store_true',
+                        help='tests are mounted under /private-input/tests; lock parent against application UID reads')
     args = parser.parse_args()
     source, tests, exported = Path('/generated'), Path('/public-tests'), Path('/evidence')
+    if args.private_tests:
+        Path('/private-input').chmod(0o700)
+        tests = Path('/private-input/tests')
     # Native Linux filesystem enforces UID isolation. macOS bind mounts can
     # ignore guest chmod; never trust them as the scoring security boundary.
     private = tempfile.TemporaryDirectory(prefix='private-grade-evidence-')

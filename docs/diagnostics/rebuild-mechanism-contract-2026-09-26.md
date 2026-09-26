@@ -103,3 +103,33 @@ two-response maximum, before any application generation. This is one explained
 compiler revision, not a retry to select a better application score. Preserve
 both original V1 responses, rejections and charges. If V2 still cannot produce
 valid acceptance, diagnose it before any further model call.
+
+### V2 compiler result / first kernel-foundation experiment
+
+V2 completed with one response: 11 frozen cases, all collected; all 11 reject
+the reachable empty page, zero skipped/flaky/report errors, tests unchanged and
+server cleaned. Upper cost ¥0.019094; combined baseline + compiler upper cost
+¥2.165868, no open trial or new billing error. Frozen source:
+`.cache/ab-campaign/mechanism/github-acceptance-v2/result/acceptance`.
+This validates execution and a negative control only. It is NOT official test
+equivalence, and its incomplete coverage is still judged by the unseen holdout.
+
+Register `github-foundation-kernel-v1`: same GLM/model kernel, ≤¥3 / 1800s,
+at most three serial coding passes. Each pass has one bounded codergen node
+(20 iterations / ≤315s within 360s graph); only file read/write/edit/search.
+No model-owned shell, test execution, test edits or test-generated verdicts.
+The fixed seed node restores failed WORKING source. Independent private browser
+receipts drive checkpoints; two no-gain rounds pause the module; only fully
+accepted state can be exported. The previous B smoke-script loop is explicitly
+disallowed. No node-count expansion of the global deadline.
+
+Coder mounts only explicit pinned upstream glue/license, candidate glue/prompt,
+kernel, working source, frozen generated tests and previous actual failure steps.
+Foundation holdout, budget ledger/control credential and personal keys are not
+mounted. Grader mounts only three trusted code files, no model network/key;
+original test source is behind a root-only parent, proved unreadable by app UID.
+The private-grader healthy control passed with actual restart and unchanged
+source/tests (`private-grader-check/1790391759`). Kernel/compiler/catalog checks
+12/12. One final separate 3-case foundation holdout is NOT fed back during this
+coding loop. Passing it plus clean cold export is required to claim this one
+foundation gate; full task/Sheet/official/x86 gates remain open.
