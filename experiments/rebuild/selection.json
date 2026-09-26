@@ -1,0 +1,24 @@
+{
+  "selected_at": "2026-09-26T02:25:01Z",
+  "selected_baseline": "B",
+  "scope": "Full-system public-practice comparison, not isolated kernel causality or official score",
+  "source": "https://github.com/octos-org/octos-arc",
+  "commit": "561e03d6fa5f4606901f8694d21f2182cb73538b",
+  "release": "v2.0.3-rc.11-arc.17",
+  "binary_sha256": "86c8bd509e2c566ae9b37c54f60911c3e4f1d5a1429aff2419e03b0b843b4578",
+  "license": "Apache-2.0",
+  "model_unchanged": "glm-5.3-flash",
+  "comparison": "docs/diagnostics/rebuild-baseline-complete-2026-09-26.json",
+  "comparison_sha256": "89f8f8cb3fb3c8822bc4b16e4c9f30b1286d08c139cdc3822b703005f249ee1d",
+  "reason": "Only candidate passing Counter and Dice twice, and Ticket at least 9/10 twice; B Ticket 10/10 and 10/10, A 0/10 and 5/10",
+  "phase_baseline_conservative_cny": 2.110234,
+  "original_a_retained_as_frozen_control": true,
+  "official_upload_allowed": false,
+  "remaining_gates": [
+    "runtime public specification to frozen independent behavior acceptance",
+    "working vs accepted checkpoints in the selected execution path",
+    "two-round no-progress handoff and no public-practice regression",
+    "real GitHub and Sheet foundation generation",
+    "clean delivery and runtime compatibility"
+  ]
+}

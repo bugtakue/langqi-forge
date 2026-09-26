@@ -72,11 +72,35 @@ requires exact text equal to the username, so this is a demonstrated presentatio
 contract mismatch; it is not evidence that registration created no account.
 The internal probe accepted the prefixed string and therefore missed the mismatch.
 
-## Next action, unchanged experimental design
+## B repeat 2: independent 10/10; baseline selected
 
-B repeat2 is running as the last trial in the same serial matrix (host exec
-session 76257; container `406f2092d92f`). No official upload/run was launched. Finish both
-repeats before kernel selection. The common improvement to test later is
+Run: `b-ticket-booking--ticket-booking-2`. Generation and grading exit=0;
+**10/10**, zero skipped/flaky/error cases, source/tests unchanged, processes
+cleaned. 68 settled responses, 993212 prompt tokens, 17980 completion tokens;
+conservative uncached **¥0.844944**, duration 787.891 seconds.
+
+The first coding node repeatedly rewrote smoke scripts despite NO PROGRESS
+tool warnings, then handed off to acceptance. Registration was repaired before
+login and the full-suite check. This inefficiency is retained, not erased by
+the final pass. It motivates a bounded coding-to-acceptance handoff, not more
+agents or a claim of zero-shot reliability.
+
+The serial matrix/session 76257 has **finished**. No trial/grading containers or
+open ledger trials remain. No new call failures; the sole raw reserved row is
+the original exact user-authorized ¥0.174823 unknown-cost exception. The current
+unresolved-cost lock is false. All 12 prespecified valid trials are scored.
+`summarize.py` selects **B only**, with total conservative campaign cost
+**¥2.110234**, including all excluded infrastructure costs and the exception.
+Immutable comparison: `rebuild-baseline-complete-2026-09-26.json`; explicit
+decision: `experiments/rebuild/selection.json`. A is not developed further.
+
+Meter sync 10:25:52 Beijing: balance **¥99.213048**, posted total **¥0.786952**
+from the original gift. This is an account-level observed bill, not per-trial
+allocation. The unknown original call remains conservatively retained.
+
+## Next action after selection
+
+No official upload/run was launched. The common improvement to test next is
 independent acceptance that starts from each required user entry and preserves
 the required locator contract; do not patch a prebuilt Ticket answer into the
 agent or relax public assertions. Independent tests must not conceal ambiguous

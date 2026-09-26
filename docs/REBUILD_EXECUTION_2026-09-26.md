@@ -29,6 +29,16 @@
 
 ## 当前状态
 
+**基线阶段完成，选择 B（Octos arc.17）作为后续执行内核，不再修补 A。**
+12 次有效对照全部终态；B 的 Counter/Dice 各两次全过、Ticket 10/10 两次；
+A 的 Counter 1/0、Dice 0/1、Ticket 0/5。整个基线保守费用 ¥2.110234，
+其中未知原请求 ¥0.174823 永久保留；10:25:52 主办方账单余额 ¥99.213048，
+实际已记账 ¥0.786952。当前 0 开放试验、0 新计费异常、费用锁=false。
+正式榜仍旧成绩，不具备正式上传资格。准确快照和选择见
+[完成对照](diagnostics/rebuild-baseline-complete-2026-09-26.json)、
+[Ticket 结果](diagnostics/rebuild-ticket-baseline-2026-09-26.md) 与
+`experiments/rebuild/selection.json`。下方“未选定/待补齐”为历史，不再作当前操作依据。
+
 用户已授权重启 Docker；现已恢复容器启动、7 个原业务容器、网关新代码与同一内存密钥，账本 SHA 不变。完整防假通过门、冷交付检查点重放、浏览器/SDK 无跳过环境门均通过。隔离评分器复测八个旧应用，A=2/4、B=4/4 全部保持，不改断言与时限。见 [恢复记录](diagnostics/docker-storage-blocker-2026-09-26.md)。接下来串行补齐 Ticket，仍未选定内核、未达到正式上传条件。
 
 下列为恢复前的历史与局部 A/B 结果：

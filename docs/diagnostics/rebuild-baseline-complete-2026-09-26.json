@@ -1,0 +1,255 @@
+{
+  "evidence_kind": "public_source_tests_local_not_official_score",
+  "qualifying_candidates": [
+    "B"
+  ],
+  "selection_allowed": true,
+  "charged_upper_with_unsettled_cny": 2.110234,
+  "unsettled_count": 1,
+  "authorized_worst_case_count": 1,
+  "unresolved_cost_lock": false,
+  "excluded_infrastructure": {
+    "a-smoke--counter-1": "EXDEV output-parent mount error; cost retained",
+    "b-smoke--counter-2": "Unix socket on macOS bind mount; zero model calls",
+    "b-smoke--dice-1": "Unix socket on macOS bind mount; zero model calls",
+    "a-ticket-booking--ticket-booking-1": "upstream response uncertain; exact user authorization permanently charges full bound; NOT a capability result"
+  },
+  "rows": [
+    {
+      "candidate": "A",
+      "task": "smoke--counter",
+      "repeat": 1,
+      "run": "a-smoke--counter-1-environment-retry",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.044285,
+      "requests": 6,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "a6e82f80dbbfc8a19d6d6ff59d884d365cadc2caf86eee4341d58da4b412fa3e",
+      "tests_sha256": {
+        "REQ-1.spec.ts": "de5d8c9124640d6c2ab7ceef7201b34cf8bbe6c70a6345769c24c3b2e3ee45d6"
+      },
+      "passed": 1,
+      "total": 1,
+      "qualified": true,
+      "seconds": 37.805
+    },
+    {
+      "candidate": "A",
+      "task": "smoke--counter",
+      "repeat": 2,
+      "run": "a-smoke--counter-2",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.045807,
+      "requests": 6,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "a6e82f80dbbfc8a19d6d6ff59d884d365cadc2caf86eee4341d58da4b412fa3e",
+      "tests_sha256": {
+        "REQ-1.spec.ts": "de5d8c9124640d6c2ab7ceef7201b34cf8bbe6c70a6345769c24c3b2e3ee45d6"
+      },
+      "passed": 0,
+      "total": 1,
+      "qualified": false,
+      "seconds": 51.238
+    },
+    {
+      "candidate": "A",
+      "task": "smoke--dice",
+      "repeat": 1,
+      "run": "a-smoke--dice-1",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.056181,
+      "requests": 8,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "43c0808f5402289e5b866ff73e0ea06f4fa50323cdcdc65bb88a07bb6d94e316",
+      "tests_sha256": {
+        "REQ-1.spec.ts": "446cc5d2b9634fd168fde498fcf73e740605a787b36a5693a1dd33a50effb3b8"
+      },
+      "passed": 0,
+      "total": 1,
+      "qualified": false,
+      "seconds": 52.709
+    },
+    {
+      "candidate": "A",
+      "task": "smoke--dice",
+      "repeat": 2,
+      "run": "a-smoke--dice-2",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.068052,
+      "requests": 10,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "43c0808f5402289e5b866ff73e0ea06f4fa50323cdcdc65bb88a07bb6d94e316",
+      "tests_sha256": {
+        "REQ-1.spec.ts": "446cc5d2b9634fd168fde498fcf73e740605a787b36a5693a1dd33a50effb3b8"
+      },
+      "passed": 1,
+      "total": 1,
+      "qualified": true,
+      "seconds": 70.708
+    },
+    {
+      "candidate": "A",
+      "task": "ticket-booking--ticket-booking",
+      "repeat": 1,
+      "run": "a-ticket-booking--ticket-booking-1-environment-retry",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.190766,
+      "requests": 12,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "96d81f85c66ae833b20208a982c53d935dba77c926e709958f55f5c6dbedc467",
+      "tests_sha256": {
+        "REQ-1.2-user-login.spec.ts": "701eb9af146a1cf6d650ff3df7de48e4e6da978f244dc8963708dadf72b2daab",
+        "REQ-1.1-user-registration.spec.ts": "effc7a98a0da5f18f95aa3c188bafb7264ccc089e6e9fc319f529b410f83d2b3",
+        "support/e2e.ts": "ca5eaacd8bc4477d93ed45b0f46fe86cdb26b5ed7cc4e9816fd324f592c40795"
+      },
+      "passed": 0,
+      "total": 10,
+      "qualified": false,
+      "seconds": 422.515
+    },
+    {
+      "candidate": "A",
+      "task": "ticket-booking--ticket-booking",
+      "repeat": 2,
+      "run": "a-ticket-booking--ticket-booking-2",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.275386,
+      "requests": 20,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "96d81f85c66ae833b20208a982c53d935dba77c926e709958f55f5c6dbedc467",
+      "tests_sha256": {
+        "REQ-1.2-user-login.spec.ts": "701eb9af146a1cf6d650ff3df7de48e4e6da978f244dc8963708dadf72b2daab",
+        "REQ-1.1-user-registration.spec.ts": "effc7a98a0da5f18f95aa3c188bafb7264ccc089e6e9fc319f529b410f83d2b3",
+        "support/e2e.ts": "ca5eaacd8bc4477d93ed45b0f46fe86cdb26b5ed7cc4e9816fd324f592c40795"
+      },
+      "passed": 5,
+      "total": 10,
+      "qualified": false,
+      "seconds": 367.44
+    },
+    {
+      "candidate": "B",
+      "task": "smoke--counter",
+      "repeat": 1,
+      "run": "b-smoke--counter-1",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.020499,
+      "requests": 7,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "a6e82f80dbbfc8a19d6d6ff59d884d365cadc2caf86eee4341d58da4b412fa3e",
+      "tests_sha256": {
+        "REQ-1.spec.ts": "de5d8c9124640d6c2ab7ceef7201b34cf8bbe6c70a6345769c24c3b2e3ee45d6"
+      },
+      "passed": 1,
+      "total": 1,
+      "qualified": true,
+      "seconds": 35.961
+    },
+    {
+      "candidate": "B",
+      "task": "smoke--counter",
+      "repeat": 2,
+      "run": "b-smoke--counter-2-environment-retry",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.019037,
+      "requests": 6,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "a6e82f80dbbfc8a19d6d6ff59d884d365cadc2caf86eee4341d58da4b412fa3e",
+      "tests_sha256": {
+        "REQ-1.spec.ts": "de5d8c9124640d6c2ab7ceef7201b34cf8bbe6c70a6345769c24c3b2e3ee45d6"
+      },
+      "passed": 1,
+      "total": 1,
+      "qualified": true,
+      "seconds": 34.481
+    },
+    {
+      "candidate": "B",
+      "task": "smoke--dice",
+      "repeat": 1,
+      "run": "b-smoke--dice-1-environment-retry",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.018043,
+      "requests": 6,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "43c0808f5402289e5b866ff73e0ea06f4fa50323cdcdc65bb88a07bb6d94e316",
+      "tests_sha256": {
+        "REQ-1.spec.ts": "446cc5d2b9634fd168fde498fcf73e740605a787b36a5693a1dd33a50effb3b8"
+      },
+      "passed": 1,
+      "total": 1,
+      "qualified": true,
+      "seconds": 34.944
+    },
+    {
+      "candidate": "B",
+      "task": "smoke--dice",
+      "repeat": 2,
+      "run": "b-smoke--dice-2",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.01817,
+      "requests": 6,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "43c0808f5402289e5b866ff73e0ea06f4fa50323cdcdc65bb88a07bb6d94e316",
+      "tests_sha256": {
+        "REQ-1.spec.ts": "446cc5d2b9634fd168fde498fcf73e740605a787b36a5693a1dd33a50effb3b8"
+      },
+      "passed": 1,
+      "total": 1,
+      "qualified": true,
+      "seconds": 31.674
+    },
+    {
+      "candidate": "B",
+      "task": "ticket-booking--ticket-booking",
+      "repeat": 1,
+      "run": "b-ticket-booking--ticket-booking-1",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.264947,
+      "requests": 32,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "96d81f85c66ae833b20208a982c53d935dba77c926e709958f55f5c6dbedc467",
+      "tests_sha256": {
+        "REQ-1.2-user-login.spec.ts": "701eb9af146a1cf6d650ff3df7de48e4e6da978f244dc8963708dadf72b2daab",
+        "REQ-1.1-user-registration.spec.ts": "effc7a98a0da5f18f95aa3c188bafb7264ccc089e6e9fc319f529b410f83d2b3",
+        "support/e2e.ts": "ca5eaacd8bc4477d93ed45b0f46fe86cdb26b5ed7cc4e9816fd324f592c40795"
+      },
+      "passed": 10,
+      "total": 10,
+      "qualified": true,
+      "seconds": 464.904
+    },
+    {
+      "candidate": "B",
+      "task": "ticket-booking--ticket-booking",
+      "repeat": 2,
+      "run": "b-ticket-booking--ticket-booking-2",
+      "state": "scored",
+      "cost_uncached_upper_cny": 0.844944,
+      "requests": 68,
+      "unsettled": false,
+      "cost_locked": false,
+      "requirements_sha256": "96d81f85c66ae833b20208a982c53d935dba77c926e709958f55f5c6dbedc467",
+      "tests_sha256": {
+        "REQ-1.2-user-login.spec.ts": "701eb9af146a1cf6d650ff3df7de48e4e6da978f244dc8963708dadf72b2daab",
+        "REQ-1.1-user-registration.spec.ts": "effc7a98a0da5f18f95aa3c188bafb7264ccc089e6e9fc319f529b410f83d2b3",
+        "support/e2e.ts": "ca5eaacd8bc4477d93ed45b0f46fe86cdb26b5ed7cc4e9816fd324f592c40795"
+      },
+      "passed": 10,
+      "total": 10,
+      "qualified": true,
+      "seconds": 787.891
+    }
+  ]
+}
