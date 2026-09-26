@@ -235,8 +235,8 @@ def parse_args():
         raise ValueError('coder revision requires a verified retained checkpoint')
     if args.compare_from and args.continue_from:
         raise ValueError('a controlled model comparison is not an old-model continuation')
-    if args.reviewed_blocker and (not args.continue_from or args.passes != 1 or args.refresh_coder or args.foundation_feedback):
-        raise ValueError('reviewed blocker requires exact old coder/test/source, one pass, and no other experiment change')
+    if args.reviewed_blocker and (not args.continue_from or args.passes != 1 or args.foundation_feedback):
+        raise ValueError('reviewed blocker requires exact old test/source/model and one pass; coder changes require explicit --refresh-coder and recorded hashes')
     return args
 
 

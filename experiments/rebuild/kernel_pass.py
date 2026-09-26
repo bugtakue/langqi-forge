@@ -42,7 +42,7 @@ def graph(module, prompt, seconds):
     # No verification/shell command is supplied by the model. The only shell
     # node is this fixed controller-owned initial source copy.
     body = module.dot_quote(module.untemplate(prompt))
-    command = module.dot_quote(f'{sys.executable} {HERE}/kernel_pass.py --seed /source')
+    command = module.dot_quote(f'{sys.executable} {HERE}/kernel_pass.py --seed /source --feedback /feedback.txt')
     return '\n'.join([
         f'digraph {PIPELINE} {{',
         f'graph [default_timeout_secs="{seconds}"]',
@@ -62,6 +62,19 @@ def build_prompt(catalog, tests, feedback):
     data = {'public_runtime_catalog': catalog, 'frozen_internal_acceptance': tests,
             'previous_independent_verifier_feedback': feedback}
     return (HERE / 'prompts/coding-pass.md').read_text() + '\n\nRUNTIME DATA:\n' + json.dumps(data, ensure_ascii=False)
+
+
+def seed_task(source, feedback):
+    """The fixed seed stdout becomes the worker's actual task, not just a receipt.
+
+    Source paths and verifier logs are runtime data. No generated source patch
+    or task-specific implementation is added by this controller.
+    """
+    files = sorted(name for name in manifest(source) if name.startswith(('frontend/', 'backend/')))
+    if len(feedback) > 24000:
+        raise ValueError('verifier feedback exceeds bounded worker task')
+    return json.dumps({'task': 'Read the verifier feedback first. If it reports a failure, make the smallest source repair that addresses it, preserving passing behavior. Do not restart directory discovery when this inventory already identifies the files. Stop after the focused repair so the independent browser verifier can run. If this is a first pass, implement the supplied foundation from the blank template.',
+                       'source_files': files, 'untrusted_verifier_feedback': feedback}, ensure_ascii=False)
 
 
 def frozen_test_text(acceptance, frozen):
@@ -179,12 +192,15 @@ def run(output, seconds):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=Path)
+    parser.add_argument('--feedback', type=Path)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--seconds', type=int, default=360)
     args = parser.parse_args()
     if args.seed:
         seed(args.seed, Path.cwd())
-        print('Working source copied; not verified', flush=True)
+        if not args.feedback:
+            raise ValueError('seed requires explicit verifier feedback')
+        print(seed_task(Path.cwd(), args.feedback.read_text()), flush=True)
         return 0
     if not args.output or not 60 <= args.seconds <= 360:
         raise ValueError('bounded output/seconds required')

@@ -5,7 +5,7 @@ import tempfile
 import time
 import unittest
 
-from kernel_pass import build_prompt, dispatch_pipeline, frozen_test_text, graph, seed, upstream
+from kernel_pass import build_prompt, dispatch_pipeline, frozen_test_text, graph, seed, seed_task, upstream
 from grade import manifest
 import kernel_pass
 
@@ -79,6 +79,20 @@ class KernelPassTests(unittest.TestCase):
         self.assertIn('frozen-test-sentinel', prompt)
         self.assertIn('actual-failure-sentinel', prompt)
         self.assertNotIn('foundation/identity.spec.ts', prompt)
+
+    def test_seed_task_exposes_actual_failure_and_inventory_without_source_answers(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for part in ('frontend', 'backend'):
+                (root / part).mkdir()
+                (root / part / 'own.js').write_text('private implementation bytes')
+            (root / 'outside.txt').write_text('not an app input')
+            value = json.loads(seed_task(root, 'ERR_HTTP_HEADERS_SENT from independent verifier'))
+            self.assertEqual(value['source_files'], ['backend/own.js', 'frontend/own.js'])
+            self.assertIn('ERR_HTTP_HEADERS_SENT', value['untrusted_verifier_feedback'])
+            self.assertNotIn('private implementation bytes', json.dumps(value))
+            with self.assertRaisesRegex(ValueError, 'bounded'):
+                seed_task(root, 'x'*24001)
 
     def test_only_explicit_frozen_specs_are_read_and_changes_rejected(self):
         with tempfile.TemporaryDirectory() as td:
