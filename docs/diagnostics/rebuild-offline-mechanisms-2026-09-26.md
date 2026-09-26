@@ -23,6 +23,11 @@ The user also asked this task to consult the existing task named “循济因果
 read-only coordination question was sent to thread
 `019ea4f3-03f4-7dc2-be91-e2b8ccbcb301` about container ownership, dependencies
 and maintenance windows. It expressly excludes restart/stop/deployment actions.
+The coordination turn `01a0db51-cba5-79a1-937b-6896ebd02236` later reported
+completed, but both wait/read returned no assistant message and an empty items
+array. This is NOT evidence of approval or of container ownership. No maintenance
+window was obtained. Explicit user permission is still required for a Docker
+Desktop restart affecting all local containers.
 
 ## Runtime requirements: fixed candidate module, not yet selected engine
 
