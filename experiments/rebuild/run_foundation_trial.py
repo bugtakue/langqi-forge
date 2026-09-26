@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import time
 
-from checkpoints import Checkpoints, case_outcomes
+from checkpoints import Checkpoints, application_manifest, case_outcomes
 from grade import manifest
 from run_trial import CACHE, IMAGE, ROOT, bind, control
 
@@ -103,14 +103,65 @@ def coding_pass(bundle, source, acceptance, feedback, output, token, seconds):
             return 124
 
 
-def main():
+def continue_working(previous, out, frozen, status):
+    """Continue a closed, independently graded repair; no unverified template.
+
+    The host-owned checkpoint history is inherited so the six passed cases and
+    no-gain counter cannot be reset by opening another bounded repair tranche.
+    """
+    previous = previous.resolve()
+    plan = json.loads((previous / 'resume-plan.json').read_text())
+    result = json.loads((previous / 'result.json').read_text())
+    rows = [t for t in status['trials'] if t['id'] == result['resume_trial']]
+    if len(rows) != 1 or not rows[0]['closed'] or result.get('foundation_gate') or not result['passes']:
+        raise ValueError('continuation needs an exact closed unaccepted trial')
+    record = result['passes'][-1]
+    decision = record['decision']
+    parent = Path(plan['root'])
+    contract = json.loads((parent / 'checkpoints/frozen.json').read_text())
+    if contract['tests_sha256'] != frozen['tests_sha256']:
+        raise ValueError('continuation cannot change frozen acceptance')
+    store = Checkpoints(parent / 'checkpoints', contract['tests_sha256'], contract['case_keys'])
+    if store.history()[-1] != decision or decision['accepted'] or decision['pause_module']:
+        raise ValueError('checkpoint advanced, accepted or paused; inspect instead of retrying')
+    attempt = previous / f'attempt-{record["attempt"]}'
+    evidence = attempt / 'runtime-evidence'
+    proof = json.loads((evidence / 'raw-controller.log').read_text().strip().splitlines()[-1])['export_manifest']
+    store.validated_evidence(attempt / 'pass/working', evidence, proof)
+    bundle = Path(plan.get('bundle_path', parent / 'bundle'))
+    if manifest(bundle) != plan['bundle_sha256']:
+        raise ValueError('frozen kernel/grader changed')
+    shutil.copytree(bundle, out / 'bundle')
+    shutil.copytree(parent / 'checkpoints', out / 'checkpoints')
+    copied = Checkpoints(out / 'checkpoints', contract['tests_sha256'], contract['case_keys'])
+    source = out / 'initial-working'
+    copied.restore_working('foundation', source)
+    if application_manifest(source) != decision['source_manifest']:
+        raise ValueError('continuation lost graded source bytes')
+    (out / 'feedback-1.txt').write_text(failure_feedback(evidence))
+    return {'previous_trial': result['resume_trial'], 'checkpoint': decision['snapshot'],
+            'previous_passed': record['passed'], 'previous_total': record['total'],
+            'stagnant_rounds': decision['stagnant_rounds']}
+
+
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('name')
     parser.add_argument('acceptance_trial', type=Path)
     parser.add_argument('--holdout', choices=['github', 'sheet'], required=True)
+    parser.add_argument('--continue-from', type=Path)
+    parser.add_argument('--cap-cny', type=float, default=3)
+    parser.add_argument('--seconds', type=int, default=1800)
+    parser.add_argument('--passes', type=int, default=3)
     args = parser.parse_args()
+    if not (0 < args.cap_cny <= 3 and 800 <= args.seconds <= 1800 and 1 <= args.passes <= 3):
+        raise ValueError('bounded mechanism tranche required')
     if not args.name.replace('-', '').isalnum():
         raise ValueError('simple experiment name required')
+    return args
+
+
+def trial_inputs(args):
     status = control('/status', {'read': True})
     if status['unresolved_cost_lock'] or any(not t['closed'] for t in status['trials']):
         raise RuntimeError('another trial/unknown cost exists')
@@ -129,27 +180,37 @@ def main():
     holdout_path = CODE / 'foundation' / args.holdout
     if manifest(holdout_path) != holdout['tests_sha256'] or frozen['requirements_sha256'] != holdout['requirement_source_sha256']:
         raise RuntimeError('holdout/public-source freeze differs')
+    return status, compiler, acceptance, frozen, blank, holdout, holdout_path
+
+
+def main():
+    args = parse_args()
+    status, compiler, acceptance, frozen, blank, holdout, holdout_path = trial_inputs(args)
     out = CACHE / 'mechanism' / args.name
     out.mkdir(parents=True, exist_ok=False)
-    prepare_controller(out / 'bundle')
-    shutil.copytree(CACHE / 'octos-upstream/arc/template', out / 'initial-working')
+    continuation = None
+    if args.continue_from:
+        continuation = continue_working(args.continue_from, out, frozen, status)
+    else:
+        prepare_controller(out / 'bundle')
+        shutil.copytree(CACHE / 'octos-upstream/arc/template', out / 'initial-working')
+        (out / 'feedback-1.txt').write_text('First coding pass. No application has been tested. Implement the complete selected foundation.')
     source = out / 'initial-working'
-    (out / 'feedback-1.txt').write_text('First coding pass. No application has been tested. Implement the complete selected foundation.')
     keys = list(case_outcomes(json.loads((blank / 'playwright.json').read_text())))
     checkpoints = Checkpoints(out / 'checkpoints', frozen['tests_sha256'], keys)
     manifest_before = manifest(out / 'bundle')
     metadata = {'name': args.name, 'model': 'glm-5.3-flash', 'phase': 'mechanism',
-        'cap_cny': 3.0, 'deadline_seconds': 1800, 'max_passes': 3, 'started': time.time(),
+        'cap_cny': args.cap_cny, 'deadline_seconds': args.seconds, 'max_passes': args.passes, 'started': time.time(),
         'runtime_tests': frozen['tests_sha256'], 'source_sha256': frozen['requirements_sha256'],
         'compiler_trial': str(compiler), 'bundle_sha256': manifest_before,
-        'holdout_input_to_coder': False, 'formal_upload_allowed': False}
+        'holdout_input_to_coder': False, 'formal_upload_allowed': False, 'continuation': continuation}
     (out / 'manifest.json').write_text(json.dumps(metadata, indent=2))
-    token = control('/trial', {'id': args.name, 'phase': 'mechanism', 'cap_cny': 3.0, 'seconds': 1800})['token']
-    deadline = time.monotonic() + 1800
+    token = control('/trial', {'id': args.name, 'phase': 'mechanism', 'cap_cny': args.cap_cny, 'seconds': args.seconds})['token']
+    deadline = time.monotonic() + args.seconds
     last, accepted, records = None, False, []
-    print(f'Start {args.name}: max CNY3 / 1800s / three passes; serial only', flush=True)
+    print(f'Start {args.name}: max CNY{args.cap_cny} / {args.seconds}s / {args.passes} pass(es); serial only', flush=True)
     try:
-        for number in range(1, 4):
+        for number in range(1, args.passes+1):
             if deadline - time.monotonic() < 800:
                 break
             if control('/status', {'read': True})['unresolved_cost_lock']:

@@ -10,6 +10,7 @@ from unittest.mock import patch
 from checkpoints import Checkpoints, application_manifest, case_outcomes
 from grade import manifest
 import foundation_resume as resume
+from run_foundation_trial import continue_working
 
 
 def write_json(path, value):
@@ -105,6 +106,28 @@ class ResumeTests(unittest.TestCase):
         self.assertEqual(manifest(self.root), before)
         with self.assertRaises(FileExistsError):
             resume.restore(plan, copy)
+
+    def test_new_bounded_repair_inherits_source_tests_and_no_gain_history(self):
+        # A new explicitly bounded mechanism tranche, not a silent retry or a
+        # fresh template. No actual model call occurs in this fixture.
+        plan = resume.build_plan(self.root, self.status)
+        previous = self.root / 'completed-repair'
+        previous.mkdir()
+        import shutil
+        shutil.copytree(self.root / 'attempt-1', previous / 'attempt-1')
+        write_json(previous / 'resume-plan.json', plan)
+        decision = self.store.history()[-1]
+        write_json(previous / 'result.json', {'resume_trial': self.root.name, 'foundation_gate': False,
+            'passes': [{'attempt': 1, 'passed': 0, 'total': 1, 'decision': decision}]})
+        out = self.base / 'next-tranche'
+        out.mkdir()
+        frozen = json.loads((self.compiler / 'result/acceptance/frozen.json').read_text())
+        lineage = continue_working(previous, out, frozen, self.status)
+        self.assertEqual(lineage['stagnant_rounds'], 1)
+        self.assertEqual(application_manifest(out / 'initial-working'), application_manifest(self.work))
+        copied = Checkpoints(out / 'checkpoints', self.tests, list(case_outcomes(self.report)))
+        self.assertEqual(copied.history(), self.store.history())
+        self.assertEqual(manifest(out / 'bundle'), manifest(self.root / 'bundle'))
 
     def test_bundle_test_source_and_checkpoint_drift_are_rejected(self):
         targets = [self.root / 'bundle/unit.py', self.suite / 'unit.spec.ts',
