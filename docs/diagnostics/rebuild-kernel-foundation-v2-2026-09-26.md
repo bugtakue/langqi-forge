@@ -1,5 +1,30 @@
 # Kernel foundation V2: real dispatch, incomplete app, new billing stop
 
+## Superseding user direction and bounded continuation
+
+User subsequently said: “费用别管那么多，重要的是成绩啊！！！！！”
+The exact pending ¥0.226807 was authorized as permanently charged at its upper
+bound; raw reserved status and unknown usage remain unchanged. Authorization
+is in `rebuild-worst-case-9a1ce726-2026-09-26.json`, appended through the ledger's
+existing controller. Total conservative cost remains ¥2.512969; zero active
+trials and no cost lock were reverified before the continuation.
+
+Continuation is `github-foundation-kernel-v2-resume-1`, not a fresh generation.
+It retains the five original source files, frozen runtime suite, same selected
+kernel/model and stagnant counter=1. Remaining limits: ¥2.656685, 1238 active
+seconds, at most two coding passes. Post-close offline holdout time is included;
+omitting its CLI flag cannot reclaim that time. No new funds/key/official upload.
+
+Offline restoration under `.cache/ab-campaign/resume-preflight/20260926-offline-1`
+matched all original hashes, did not change original evidence or the 210-call
+ledger, and did not create a continuation trial. Controller regression: 38/38,
+zero skips, no network/key. An initial test mount used an invalid shallow path
+and failed import; the corrected repo-shaped mount passed. Max new-function
+cyclomatic complexity 14. These are safety checks, NOT application improvement.
+
+Only `continuation-1/result.json` plus independent behavior receipts may provide
+the next outcome. Do not repeat the old trial or reset its stop criteria.
+
 ## Current decision
 
 **No next model call, no new formal upload.** A NEW unknown-cost call is locked:
