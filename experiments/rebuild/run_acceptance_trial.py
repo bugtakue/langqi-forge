@@ -10,7 +10,7 @@ import time
 from grade import manifest
 from run_trial import CACHE, IMAGE, ROOT, bind, control
 
-FILES = ('acceptance_compiler.py', 'acceptance_syntax.cjs', 'runtime_restart.ts',
+FILES = ('acceptance_compiler.py', 'acceptance_syntax.cjs', 'runtime_restart.ts', 'runtime_io.ts',
          'requirement_catalog.py', 'grade.py', 'prompts/acceptance.md')
 
 

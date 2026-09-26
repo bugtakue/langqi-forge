@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from acceptance_compiler import freeze, render, select_catalog, syntax_check, validate_plan
+from acceptance_compiler import compiler_input, correction_feedback, freeze, render, select_catalog, syntax_check, validate_plan
 from grade import manifest
 from requirement_catalog import compile_tree
 
@@ -59,6 +59,12 @@ class AcceptanceCompilerTests(unittest.TestCase):
         self.assertEqual([n['id'] for n in selected['nodes']], ['a','b'])
         self.assertEqual(set(selected['contracts']), {'ROOT','a','b'})
         self.assertEqual(selected['full_atomic_count'], 3)
+        model_input = compiler_input(selected)
+        self.assertEqual(model_input['mandatory_atomic_ids'], ['a', 'b'])
+        self.assertNotIn('requested_ids', model_input)
+        self.assertNotIn('full_atomic_count', model_input)
+        self.assertEqual(model_input['contracts'], selected['contracts'])
+        self.assertIn('["a", "b"]', correction_feedback(ValueError('case lacks UI assertion'), selected))
 
     def test_successful_persistence_is_positive_coverage_without_duplicate_tests(self):
         plan = copy.deepcopy(self.plan)
@@ -74,9 +80,23 @@ class AcceptanceCompilerTests(unittest.TestCase):
             self.assertEqual(result['tests_sha256'], manifest(Path(tmp)/'suite'))
             self.assertEqual(result['evidence_kind'], 'internal_not_official_tests')
             self.assertEqual(result['expected'], 1)
+            self.assertIn('io.ts', result['tests_sha256'])
             self.assertEqual(json.loads((Path(tmp)/'frozen.json').read_text()), result)
             with self.assertRaises(FileExistsError):
                 freeze(self.plan, self.catalog, Path(tmp))
+
+    def test_bounded_csv_helpers_allowed_without_raw_filesystem_surface(self):
+        plan = copy.deepcopy(self.plan)
+        plan['cases'][0]['body'] += "\nawait uploadCsv(page.getByLabel('CSV file',{exact:true}), 'unit.csv', 'A,B\\n1,2');\nconst file = await downloadCsv(page, page.getByRole('button',{name:'Export CSV',exact:true}));\nawait expect(file.text).toContain('1,2');"
+        syntax_check(render(plan))
+        for statement in ("await page.getByLabel('CSV file').setInputFiles('/etc/passwd');",
+                          "const bytes = Buffer.from('private');",
+                          "const path = await file.path();",
+                          "async function uploadCsv() { return 'fake'; }"):
+            bad = copy.deepcopy(self.plan)
+            bad['cases'][0]['body'] += '\n' + statement
+            with self.subTest(statement=statement), self.assertRaises(ValueError):
+                syntax_check(render(bad))
 
 
 if __name__ == '__main__':

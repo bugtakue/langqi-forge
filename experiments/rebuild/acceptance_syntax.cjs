@@ -21,12 +21,12 @@ const members = new Set(['goto', 'reload', 'goBack', 'url', 'getByRole', 'getByL
   'newContext', 'newPage', 'close', 'context', 'waitForURL',
   'toHaveText', 'toContainText', 'toBeVisible', 'toBeHidden', 'toHaveValue',
   'toHaveAttribute', 'toHaveURL', 'toHaveCount', 'toBeChecked', 'toBeEnabled',
-  'toBeDisabled', 'toEqual', 'toBe', 'toBeTruthy', 'toBeFalsy', 'not',
+  'toBeDisabled', 'toEqual', 'toBe', 'toContain', 'toMatch', 'toBeTruthy', 'toBeFalsy', 'not',
   'now', 'random', 'floor', 'ceil', 'min', 'max', 'abs', 'round',
   'toString', 'slice', 'substring', 'replace', 'replaceAll', 'trim',
   'toLowerCase', 'toUpperCase', 'startsWith', 'endsWith', 'includes',
   'split', 'join', 'length', 'map', 'forEach', 'push', 'stringify', 'parse',
-  'keys', 'values', 'entries', 'pathname', 'href', 'origin']);
+  'keys', 'values', 'entries', 'pathname', 'href', 'origin', 'filename', 'text']);
 
 function reject(message) { throw new Error(message); }
 function member(path) {
@@ -47,7 +47,7 @@ function validate(source) {
   }
   babel.traverse(ast, {
     ImportDeclaration(path) {
-      if (!['@playwright/test', './restart'].includes(path.node.source.value))
+      if (!['@playwright/test', './restart', './io'].includes(path.node.source.value))
         reject('unapproved import');
     },
     ReferencedIdentifier(path) {
@@ -57,7 +57,7 @@ function validate(source) {
         reject('unbound global: ' + name);
     },
     BindingIdentifier(path) {
-      if (['test','expect','restart'].includes(path.node.name) && !path.parentPath.isImportSpecifier())
+      if (['test','expect','restart','uploadCsv','downloadCsv'].includes(path.node.name) && !path.parentPath.isImportSpecifier())
         reject('cannot rebind acceptance primitives');
     },
     MemberExpression: member,

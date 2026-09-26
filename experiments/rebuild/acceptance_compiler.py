@@ -54,7 +54,7 @@ def validate_plan(plan, catalog):
         source_for_case(case, catalog)
         body = case['body']
         if not isinstance(body, str) or len(body) > 20000 or len(UI_ASSERT.findall(body)) < 2:
-            raise ValueError('case requires at least two awaited UI assertions')
+            raise ValueError('case requires at least two awaited UI assertions: ' + case['id'])
         if case['kind'] == 'persistence' and 'await restart(request)' not in body:
             raise ValueError('persistence case must include a real restart and recheck: ' + case['id'])
         # A successful create/change followed by restart is both a positive
@@ -69,7 +69,7 @@ def validate_plan(plan, catalog):
 
 def render(plan):
     parts = ["// GENERATED FROM PUBLIC REQUIREMENTS; INTERNAL, NOT OFFICIAL TESTS.\n",
-             "import {test, expect} from '@playwright/test';\nimport {restart} from './restart';\n",
+             "import {test, expect} from '@playwright/test';\nimport {restart} from './restart';\nimport {uploadCsv, downloadCsv} from './io';\n",
              plan['helpers'], '\n']
     for case in plan['cases']:
         title = 'contract:' + case['id'] + ':' + ','.join(case['requirement_ids'])
@@ -153,6 +153,22 @@ def completion(messages, destination):
     return choice['message']['content']
 
 
+def compiler_input(catalog):
+    # Selection roots are an experiment-control detail. Exposing them alongside
+    # the expanded nodes made the model ignore 8 required dependency atoms.
+    value = {k: v for k, v in catalog.items() if k not in ('requested_ids', 'full_atomic_count')}
+    value['mandatory_atomic_ids'] = [n['id'] for n in catalog['nodes']]
+    value['coverage_rule'] = 'Every mandatory_atomic_ids entry needs a successful positive/persistence journey, including all dependency nodes. None are optional.'
+    return value
+
+
+def correction_feedback(error, catalog):
+    return ('Fix the compiler contract error without dropping coverage; no app exists: ' + str(error) +
+            '\nAll mandatory atomic IDs (including dependencies): ' +
+            json.dumps([n['id'] for n in catalog['nodes']]) +
+            '\nBefore returning, recheck ALL cases for two awaited UI assertions, source quotes, syntax, and complete positive coverage, not only the first reported error.')
+
+
 def freeze(plan, catalog, output):
     validate_plan(plan, catalog)
     source = render(plan)
@@ -162,11 +178,13 @@ def freeze(plan, catalog, output):
         pending = Path(tmp)
         (pending / 'contract.spec.ts').write_text(source)
         shutil.copy2(HERE / 'runtime_restart.ts', pending / 'restart.ts')
+        shutil.copy2(HERE / 'runtime_io.ts', pending / 'io.ts')
         collection = collect_suite(pending, plan)
     suite = output / 'suite'
     suite.mkdir(exist_ok=False)
     (suite / 'contract.spec.ts').write_text(source)
     shutil.copy2(HERE / 'runtime_restart.ts', suite / 'restart.ts')
+    shutil.copy2(HERE / 'runtime_io.ts', suite / 'io.ts')
     spec = {'schema': 'generated-acceptance-v1', 'evidence_kind': 'internal_not_official_tests',
             'requirements_sha256': catalog['source_sha256'], 'tests_sha256': manifest(suite),
             'case_ids': [c['id'] for c in plan['cases']], 'expected': len(plan['cases']),
@@ -187,7 +205,7 @@ def compile_acceptance(requirements, output, included=None):
     (output / 'catalog.json').write_text(json.dumps(catalog, ensure_ascii=False, indent=2))
     prompt = (HERE / 'prompts/acceptance.md').read_text()
     messages = [{'role': 'system', 'content': prompt},
-                {'role': 'user', 'content': json.dumps(catalog, ensure_ascii=False)}]
+                {'role': 'user', 'content': json.dumps(compiler_input(catalog), ensure_ascii=False)}]
     # One schema/syntax correction is allowed before any application exists.
     # Never change frozen assertions based on application performance.
     for attempt in (1, 2):
@@ -203,7 +221,7 @@ def compile_acceptance(requirements, output, included=None):
             if attempt == 2:
                 raise
             messages += [{'role': 'assistant', 'content': body},
-                         {'role': 'user', 'content': 'Fix only this compiler contract error; no app exists: ' + str(exc)}]
+                         {'role': 'user', 'content': correction_feedback(exc, catalog)}]
             continue
 
 

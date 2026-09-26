@@ -8,7 +8,9 @@ persistence, permission), `requirement_ids` (nonempty array of atomic IDs),
 `source_quote` (an exact 20+ character substring of one cited public contract),
 and `body` (JavaScript statements for a Playwright test function).
 
-Cover every atomic ID with at least one successful positive OR persistence case; combine related IDs into
+`mandatory_atomic_ids` is the COMPLETE required coverage list. Dependencies are
+required behaviors, not background context. Cover every listed atomic ID with
+at least one successful positive OR persistence case; combine related IDs into
 complete user journeys when useful. Use at most three cases per atomic ID. Do
 not just check page visibility: perform the required action and assert its
 observable business result. Test rejection when specified, and check unchanged
@@ -18,7 +20,8 @@ the saved state. Use a fresh browser context for permission isolation. Do not
 invent persistence requirements for stateless tasks. Preserve root/ancestor
 constraints, exact names, roles, declared seeds and post-action states.
 
-Available imports are supplied by the controller: `test`, `expect`, `restart`.
+Available imports are supplied by the controller: `test`, `expect`, `restart`,
+`uploadCsv`, `downloadCsv`.
 Each body receives `{page, browser, request}`. `restart(request)` is a trusted
 grader helper which actually restarts the app. Never call request methods
 directly: all business actions MUST use the visible UI. Helpers may define
@@ -61,3 +64,16 @@ Helpers must be function declarations (not top-level const/let expressions).
 Use only the ordinary Playwright locator, UI action, assertion, newContext,
 newPage and close methods. No browser launch, CDP, network, filesystem, or
 test-runner hooks. Do not register additional tests inside helpers or bodies.
+
+For requirements that include CSV file UI, these trusted bounded helpers are
+available (do not define or import them yourself):
+- `await uploadCsv(page.getByLabel('CSV file', {exact:true}), filename, csvText)`
+  supplies declared UTF-8 text to the visible file control, never a disk path.
+- `const file = await downloadCsv(page, visibleExportButton)` clicks that exact
+  UI control and returns `{filename, text}` from the resulting download.
+  Assert real contents with `await expect(file.text).toBe(expectedCsv)` or
+  `.toContain(...)`; also assert visible UI state before and after export.
+Use ordinary JS strings, with correct quoting and newline escapes. No Buffer,
+setInputFiles, filesystem, download paths or direct network calls in your code.
+Do not substitute visibility of the import/export button for exercising the
+actual file operation, and do not omit its public dependency coverage.

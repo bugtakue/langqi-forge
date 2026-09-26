@@ -2,6 +2,8 @@
 
 ## 当前执行路线（2026-09-26，优先于下方历史待上传安排）
 
+**Sheet V1验收编译已终态拒绝，未生成应用：** 两个完整响应分别有UI断言不足/漏8项依赖，保守¥0.049584，总¥4.353003，无开放任务/费用锁。下一唯一串行`sheet-acceptance-v2`，≤¥1/600秒/最多2响应；公开输入显式列全部13个必需原子ID，去掉容易被当作完整范围的requested_ids；新增受限内存CSV上传/下载帮助，绝不开放任意文件读取。10项编译检查、3项真实浏览器CSV工具正负对照通过，均不是Sheet业务成绩。冻结GitHub套件不改，旧V1不重跑；观察 `.cache/ab-campaign/mechanism/sheet-acceptance-v2/`。详情见[Sheet V1证据及修订](diagnostics/rebuild-sheet-acceptance-v1-2026-09-26.md)。
+
 **GitHub基础首次完整通过：V4 runtime 11/11、基础回归3/3、干净冷交付3/3，均0跳过/0 flaky。** 该3项因已给过失败反馈，明确只算内部回归，不称未见holdout。代码由智能体删除一处重复用户名展示完成，冻结断言未变；checkpoint=`169c3750a8d8bec97878588abed827e172c3a4578442281d82e2a91ccf86e2cb`。V4费用¥0.064945，总保守¥4.303419，0开放/无锁。下一唯一串行试验为`sheet-acceptance-v1`：仅公开Sheet5个入口ID及13原子依赖生成冻结验收，≤¥1/600秒/最多2个schema响应，先空页负对照，再生成应用；不输入旧Sheet holdout，不上传正式。观察`.cache/ab-campaign/mechanism/sheet-acceptance-v1/`和`factory26-acceptance`，不要重复V4/重生成GitHub。完整证据见[GitHub V4](diagnostics/rebuild-github-foundation-v4-2026-09-26.md)。Goal仍active，正式名次未核验更新。
 
 **下一唯一串行运行 `github-foundation-repair-v4`：≤¥1.5/900秒/1次编码。** 从V3已验证11/11的6文件checkpoint继续，将已见的用户名定位歧义失败反馈提供给编码器，不提供整份独立测试源码、不改断言。此后该3项套件标为冻结内部回归，不能再宣称未见holdout；需11/11、3/3及干净冷交付一起过。续跑适配已实证原样恢复/保留历史/账本不变，15项离线检查通过（非业务成绩）。观察 `.cache/ab-campaign/mechanism/github-foundation-repair-v4/` 与本任务容器，不重复启动。若基础套件连续两轮无新增通过也暂停该路线，不因runtime已满分而重置无进展次数。
