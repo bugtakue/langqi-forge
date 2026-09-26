@@ -36,7 +36,7 @@ command refuses to overwrite changed tests. The sensitivity command uses an
 explicit internal positive fixture plus six deliberate defects and never
 calls a model. Its success is validator evidence, not candidate business quality.
 
-## Billable commands — wait for runtime recovery and gateway reload
+## Billable commands — serialized baseline, original acceptance gates apply
 
 `run_trial.py A|B task 1|2` creates one fresh trial; `run_matrix.py --stage
 smoke|ticket` runs serially. Neither should run while an unresolved reservation
@@ -60,9 +60,9 @@ One exact exception was explicitly approved by the user in
 the existing ledger: the entire bound is permanently counted, actual bill and
 usage remain unknown, the original call is not rewritten as settled. This
 local-only administration has no gateway endpoint and is not available to the
-candidate. Every future uncertain call still locks. The live gateway must be
-reloaded before it recognizes the new append-only authorization; do not bypass
-the old process or replace the ledger. The total ceiling remains ¥120.
+candidate. Every future uncertain call still locks. The live gateway has now
+reloaded the append-only authorization after the user-approved Docker restart;
+the ledger hash was unchanged. Never replace that ledger. Total ceiling ¥120.
 
 ## Evidence and test boundaries
 
@@ -105,4 +105,7 @@ SETUID, SETGID, KILL, DAC_OVERRIDE capabilities after dropping all others;
 generated child processes drop identity/capabilities and keep no-new-privileges.
 No external network is needed. Do not rely on chmod on macOS bind mounts to
 protect assertions or report files. The final deliberate-tamper and cold
-delivery gate is currently incomplete because Docker startup is blocked.
+delivery gates completed after the user-authorized Docker restart. See the
+dated recovery record for exact evidence. `regrade_public.py` regraded all eight
+existing smoke apps under the same isolation; every original result remained
+unchanged. This is grader continuity, not eight new model generations.

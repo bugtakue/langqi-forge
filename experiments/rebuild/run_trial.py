@@ -30,6 +30,11 @@ def bind(source, target, writable=False):
     return ['--mount', f'type=bind,source={source},target={target}' + ('' if writable else ',readonly')]
 
 
+def controller_fingerprint():
+    return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted((ROOT/'experiments/rebuild').rglob('*.py'))}
+
+
 def adapter():
     dest = CACHE / 'adapter'
     dest.mkdir(exist_ok=True)
@@ -63,6 +68,8 @@ def main():
     checksums = {str(p.relative_to(tests)): hashlib.sha256(p.read_bytes()).hexdigest() for p in tests.rglob('*') if p.is_file()}
     manifest = {'candidate': args.candidate, 'task': args.task, 'repeat': args.repeat,
                 'config': config, 'tests_sha256': checksums,
+                'controller_commit': subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+                'controller_sha256': controller_fingerprint(),
                 'requirements_sha256': hashlib.sha256((task/'requirements.yaml').read_bytes()).hexdigest(),
                 'image': subprocess.check_output(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}'], text=True).strip(),
                 'started': time.time()}
@@ -110,12 +117,22 @@ def main():
     finally:
         control('/close', {'id': name})
         (out / 'budget.json').write_text(json.dumps(control('/status', {'read': True}), indent=2))
+    if controller_fingerprint() != manifest['controller_sha256']:
+        raise RuntimeError('controller changed during generation; preserve evidence, do not score silently')
     grade = ['docker', 'run', '--rm', '--name', 'factory26-grade', '--network', 'none', '--memory', '2g',
-             '--cpus', '2', '--shm-size', '512m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges']
+             '--cpus', '2', '--shm-size', '512m', '--cap-drop', 'ALL',
+             '--cap-add', 'CHOWN', '--cap-add', 'SETUID', '--cap-add', 'SETGID',
+             '--cap-add', 'KILL', '--cap-add', 'DAC_OVERRIDE', '--security-opt', 'no-new-privileges']
     grade += bind(generated, '/generated') + bind(tests, '/public-tests') + bind(evidence, '/evidence', True)
     grade += bind(ROOT / 'experiments/rebuild', '/grader')
-    grade += ['--entrypoint', 'python', IMAGE, '/grader/grade.py', '--expected', str(config['public_tasks'][args.task])]
-    graded = subprocess.run(grade, timeout=240)
+    grade += ['--entrypoint', 'python', IMAGE, '/grader/foundation_grade.py', '--public-suite',
+              '--expected', str(config['public_tasks'][args.task])]
+    graded = subprocess.run(grade, timeout=240, capture_output=True, text=True)
+    from grade import manifest as evidence_manifest
+    proof = json.loads(graded.stdout.strip().splitlines()[-1])['export_manifest']
+    if evidence_manifest(evidence) != proof:
+        raise RuntimeError('public grade export differs from private controller proof')
+    (evidence / 'controller.log').write_text(graded.stdout + graded.stderr)
     manifest.update(generation_exit=rc, grading_exit=graded.returncode, finished=time.time())
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2))
     print(f'Completed {name}; evidence: {out}', flush=True)

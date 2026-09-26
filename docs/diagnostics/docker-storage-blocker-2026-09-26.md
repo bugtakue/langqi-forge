@@ -41,7 +41,41 @@ USB/storage fault. No repair or active-image copying was attempted.
 
 ## Required next action
 
-The user has not yet approved the previously requested Docker Desktop restart.
+Recovery verified after the authorized restart: old Docker processes exited,
+the installed app relaunched, and the daemon API was serving at 01:42 UTC.
+Seven previously running business containers automatically returned to Up;
+Redis subsequently reported healthy. Previously exited fuguai/xunji development
+containers were not started. A disposable no-network container successfully
+wrote a temporary file, exited and was auto-removed.
+
+The existing gateway restarted with updated mounted source. Its original ledger
+SHA256 stayed `f8d2831eaa7697d3a46f709282ef37b31d7207b64104e39767b6df0136d0e383`.
+The same organizer key was reloaded through the loopback-only form; ready=true,
+authorization count=1, open trials=0, cost lock=false, conservative occupation
+¥0.534191. Network internal=true. Meter at 09:45:19 still showed ¥99.838926.
+
+Recovery gates (all no-model):
+
+- Full seven-sample sensitivity passed: `.cache/ab-campaign/sensitivity/1790387037/summary.json`.
+- Checkpoint replay INCLUDING cold delivery passed: `.cache/ab-campaign/checkpoint-replay/1790387166/summary.json`.
+- Browser/kernel/SDK no-skip environment passed: `.cache/ab-campaign/preflight/1790387183/environment.json`.
+- Private low-UID public grader regraded all eight original apps with unchanged
+  scores A=2/4, B=4/4: `.cache/ab-campaign/regrade-private/1790387221/summary.json`.
+  Public assertions and original 10s-test/180s-suite timeouts remain unchanged.
+
+These prove recovered local execution, not hardware health, a new generated
+application or an official score. All original source/receipts remain untouched.
+
+The following approval/start observations precede the verified recovery above:
+
+Update: the user explicitly replied “允许你重启”. Docker Desktop's native
+Troubleshoot → Restart button was clicked once; its UI changed to Engine
+stopping with Restart disabled. No Clean/Purge, factory reset, disk repair or
+data removal was selected. The original organizer key remains only in browser
+automation memory for the same authorized local handoff after restart. Recovery
+is not yet verified; do not start a second restart merely because polling times out.
+
+Before that approval, the user had not approved the Docker Desktop restart.
 That action can interrupt unrelated local containers and erase the gateway's
 memory-only credential, so do not infer permission from the general goal.
 Do not use factory reset, prune, remove Docker.raw, remount storage writable,

@@ -28,9 +28,12 @@ def main():
                     print('Retain existing result:', out.name, flush=True)
                     continue
                 state = control('/status', {'read': True})
-                if any(c['status'] != 'settled' for c in state['calls']):
+                if state.get('unresolved_cost_lock', True):
                     raise RuntimeError('unsettled cost: stop, reconcile with meter')
-                proc = subprocess.run([sys.executable, str(ROOT/'experiments/rebuild/run_trial.py'), candidate, task, str(repeat)])
+                command = [sys.executable, str(ROOT/'experiments/rebuild/run_trial.py'), candidate, task, str(repeat)]
+                if name in REPLACEMENTS:
+                    command.append('--environment-retry')
+                proc = subprocess.run(command)
                 print(name, 'exit', proc.returncode, flush=True)
                 if not (out/'manifest.json').is_file() or 'finished' not in json.loads((out/'manifest.json').read_text()):
                     raise RuntimeError('trial controller did not finish; no automatic retry')
