@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from acceptance_compiler import compiler_input, correction_feedback, freeze, render, select_catalog, syntax_check, validate_plan
+from acceptance_compiler import compiler_input, correction_feedback, freeze, merge_plans, partition_catalog, render, select_catalog, syntax_check, validate_plan
 from grade import manifest
 from requirement_catalog import compile_tree
 
@@ -97,6 +97,30 @@ class AcceptanceCompilerTests(unittest.TestCase):
             bad['cases'][0]['body'] += '\n' + statement
             with self.subTest(statement=statement), self.assertRaises(ValueError):
                 syntax_check(render(bad))
+
+    def test_partition_preserves_complete_coverage_and_prerequisite_text(self):
+        catalog = compile_tree({'id':'ROOT','type':'FOLDER','description':'Root contract', 'children':[
+            {'id':'a','type':'ATOMIC','description':'A contract'},
+            {'id':'b','type':'ATOMIC','description':'B contract','dependencies':['a']},
+            {'id':'c','type':'ATOMIC','description':'C contract','dependencies':['b']}]})
+        batches = list(partition_catalog(catalog, 1))
+        self.assertEqual([n['id'] for b in batches for n in b['nodes']], ['a','b','c'])
+        self.assertEqual(set(batches[-1]['contracts']), {'ROOT','a','b','c'})
+        self.assertEqual([n['id'] for n in batches[-1]['context_nodes']], ['a','b'])
+        for key, value in batches[-1]['contracts'].items():
+            self.assertEqual(value, catalog['contracts'][key])
+
+    def test_merge_is_complete_and_batch_helpers_cannot_collide(self):
+        first, second = copy.deepcopy(self.plan), copy.deepcopy(self.plan)
+        first['helpers'] = 'async function setup(page) { await page.goto("/"); }'
+        second['helpers'] = 'async function setup(page) { await page.reload(); }'
+        merged = merge_plans([first, second], self.catalog)
+        self.assertEqual(len(merged['cases']), 2)
+        self.assertNotEqual(merged['cases'][0]['id'], merged['cases'][1]['id'])
+        self.assertEqual(merged['helpers'], '')
+        syntax_check(render(merged))
+        with self.assertRaises(ValueError):
+            merge_plans([], self.catalog)
 
 
 if __name__ == '__main__':

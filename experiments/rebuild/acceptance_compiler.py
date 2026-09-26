@@ -131,12 +131,12 @@ def select_catalog(catalog, included):
             'contracts': {k: v for k, v in catalog['contracts'].items() if k in keys}}
 
 
-def completion(messages, destination):
+def completion(messages, destination, max_tokens=16000):
     # A candidate never receives the organizer credential, only a scoped token.
     base = os.environ.get('OPENAI_BASE_URL', '')
     if base != 'http://factory26-gateway:8021/v1' or not os.environ.get('OPENAI_API_KEY'):
         raise RuntimeError('this experimental compiler requires the cost-reserving organizer gateway')
-    payload = {'model': 'glm-5.3-flash', 'messages': messages, 'max_tokens': 16000,
+    payload = {'model': 'glm-5.3-flash', 'messages': messages, 'max_tokens': max_tokens,
                'temperature': 0, 'stream': False}
     (destination / 'request.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2))
     req = urllib.request.Request(base + '/chat/completions', data=json.dumps(payload).encode(),
@@ -196,14 +196,7 @@ def freeze(plan, catalog, output):
     return spec
 
 
-def compile_acceptance(requirements, output, included=None):
-    import yaml
-    raw = requirements.read_bytes()
-    catalog = select_catalog(compile_tree(yaml.safe_load(raw)), included)
-    catalog['source_sha256'] = hashlib.sha256(raw).hexdigest()
-    output.mkdir(parents=True, exist_ok=False)
-    (output / 'catalog.json').write_text(json.dumps(catalog, ensure_ascii=False, indent=2))
-    prompt = (HERE / 'prompts/acceptance.md').read_text()
+def compile_plan(catalog, output, prompt, max_tokens=16000):
     messages = [{'role': 'system', 'content': prompt},
                 {'role': 'user', 'content': json.dumps(compiler_input(catalog), ensure_ascii=False)}]
     # One schema/syntax correction is allowed before any application exists.
@@ -211,11 +204,11 @@ def compile_acceptance(requirements, output, included=None):
     for attempt in (1, 2):
         dest = output / f'compile-{attempt}'
         dest.mkdir()
-        body = completion(messages, dest)
+        body = completion(messages, dest, max_tokens)
         try:
             plan = validate_plan(json.loads(body), catalog)
             syntax_check(render(plan))
-            return freeze(plan, catalog, output)
+            return plan
         except (ValueError, TypeError) as exc:
             (dest / 'rejection.txt').write_text(str(exc))
             if attempt == 2:
@@ -225,13 +218,65 @@ def compile_acceptance(requirements, output, included=None):
             continue
 
 
+def partition_catalog(catalog, batch_size):
+    """Partition mandatory coverage, not its prerequisite/source context."""
+    if not 1 <= batch_size <= 3:
+        raise ValueError('acceptance batch size must be 1..3')
+    nodes = catalog['nodes']
+    for start in range(0, len(nodes), batch_size):
+        targets = nodes[start:start + batch_size]
+        target_ids = {n['id'] for n in targets}
+        context = select_catalog(catalog, list(target_ids))
+        yield {**context, 'nodes': targets,
+               'context_nodes': [n for n in context['nodes'] if n['id'] not in target_ids],
+               'batch_rule': 'Assert every mandatory target in this batch. Context nodes describe prerequisite setup, not extra mandatory cases. The controller checks their own batches separately before freezing the combined suite.'}
+
+
+def merge_plans(plans, catalog):
+    # Scope each batch's helper declarations inside its tests. Identically
+    # named helper functions from different calls cannot shadow each other.
+    cases = []
+    for number, plan in enumerate(plans, 1):
+        for case in plan['cases']:
+            digest = hashlib.sha256(json.dumps(case, sort_keys=True).encode()).hexdigest()[:8]
+            cases.append({**case, 'id': f'b{number:02d}-{case["id"][:48]}-{digest}',
+                          'body': plan['helpers'] + '\n' + case['body']})
+    combined = validate_plan({'helpers': '', 'cases': cases}, catalog)
+    syntax_check(render(combined))
+    return combined
+
+
+def compile_acceptance(requirements, output, included=None, batch_size=0):
+    import yaml
+    raw = requirements.read_bytes()
+    catalog = select_catalog(compile_tree(yaml.safe_load(raw)), included)
+    catalog['source_sha256'] = hashlib.sha256(raw).hexdigest()
+    output.mkdir(parents=True, exist_ok=False)
+    (output / 'catalog.json').write_text(json.dumps(catalog, ensure_ascii=False, indent=2))
+    prompt = (HERE / 'prompts/acceptance.md').read_text()
+    if not batch_size:
+        return freeze(compile_plan(catalog, output, prompt), catalog, output)
+    plans = []
+    for number, batch in enumerate(partition_catalog(catalog, batch_size), 1):
+        dest = output / f'batch-{number:02d}'
+        dest.mkdir()
+        (dest / 'catalog.json').write_text(json.dumps(batch, ensure_ascii=False, indent=2))
+        plan = compile_plan(batch, dest, prompt, max_tokens=8000)
+        (dest / 'plan.json').write_text(json.dumps(plan, ensure_ascii=False, indent=2))
+        plans.append(plan)
+        print(json.dumps({'batch': number, 'covered_ids': [n['id'] for n in batch['nodes']],
+                          'cases': len(plan['cases']), 'frozen': False}), flush=True)
+    return freeze(merge_plans(plans, catalog), catalog, output)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('requirements', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--include', action='append', help='explicit experiment subset; transitive dependency closure is retained')
+    parser.add_argument('--batch-size', type=int, choices=(0, 1, 2, 3), default=0)
     args = parser.parse_args()
-    result = compile_acceptance(args.requirements, args.output, args.include)
+    result = compile_acceptance(args.requirements, args.output, args.include, args.batch_size)
     print(json.dumps({'frozen': True, 'expected': result['expected'], 'requirements_sha256': result['requirements_sha256']}), flush=True)
 
 

@@ -2,6 +2,8 @@
 
 ## 当前执行路线（2026-09-26，优先于下方历史待上传安排）
 
+**下一唯一串行 `sheet-acceptance-v3-batched`（≤¥1/900秒）。** V2原样恢复也传输断开，未生成应用；不再重复大请求。相同13原子需求按最多3项分批，完整保留各批前置/祖先正文，所有批次合并后才冻结、不得漏覆盖。8项离线检查通过但非业务成绩。累计预留上界¥4.790611、无开放试验/锁（启动前）。观察同名mechanism目录和factory26-acceptance，不并行启动；见[分批实验](diagnostics/rebuild-sheet-batched-acceptance-2026-09-26.md)。
+
 **Sheet V2为传输终态失败，不是业务0分。** 唯一请求93秒后RemoteDisconnected，0模型响应；已全额保留¥0.218804，累计保守¥4.571807，按成绩优先授权追加记账、实际用量仍未知。下一唯一串行 `sheet-acceptance-v2-transport-recovery` 使用完全相同编译器/公开范围，≤¥1/600秒/2响应，仅一次传输恢复；不得重复V2或开始应用生成。详见[终态证据](diagnostics/rebuild-sheet-acceptance-v2-2026-09-26.md)。
 
 **Sheet V1验收编译已终态拒绝，未生成应用：** 两个完整响应分别有UI断言不足/漏8项依赖，保守¥0.049584，总¥4.353003，无开放任务/费用锁。下一唯一串行`sheet-acceptance-v2`，≤¥1/600秒/最多2响应；公开输入显式列全部13个必需原子ID，去掉容易被当作完整范围的requested_ids；新增受限内存CSV上传/下载帮助，绝不开放任意文件读取。10项编译检查、3项真实浏览器CSV工具正负对照通过，均不是Sheet业务成绩。冻结GitHub套件不改，旧V1不重跑；观察 `.cache/ab-campaign/mechanism/sheet-acceptance-v2/`。详情见[Sheet V1证据及修订](diagnostics/rebuild-sheet-acceptance-v1-2026-09-26.md)。

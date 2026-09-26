@@ -19,9 +19,13 @@ def main():
     parser.add_argument('name')
     parser.add_argument('requirements', type=Path)
     parser.add_argument('--include', action='append', required=True)
+    parser.add_argument('--batch-size', type=int, choices=(0, 1, 2, 3), default=0)
+    parser.add_argument('--seconds', type=int, default=600)
     args = parser.parse_args()
     if not args.name.replace('-', '').isalnum():
         raise ValueError('experiment name must be alphanumeric/hyphen')
+    if not 300 <= args.seconds <= 1200:
+        raise ValueError('bounded 300..1200 second acceptance trial required')
     status = control('/status', {'read': True})
     if status['unresolved_cost_lock'] or any(not t['closed'] for t in status['trials']):
         raise RuntimeError('an unresolved or active trial exists; no parallel call')
@@ -38,29 +42,30 @@ def main():
     (out / 'task').mkdir()
     shutil.copy2(args.requirements, out / 'task/requirements.yaml')
     metadata = {'kind': 'runtime_acceptance_compilation_not_app_generation',
-        'trial': args.name, 'phase': 'mechanism', 'cap_cny': 1.0, 'deadline_seconds': 600,
+        'trial': args.name, 'phase': 'mechanism', 'cap_cny': 1.0, 'deadline_seconds': args.seconds,
+        'batch_size': args.batch_size,
         'model': 'glm-5.3-flash', 'included': args.include, 'compiler_sha256': manifest(adapter),
         'source_sha256': manifest(out / 'task'), 'started_at': time.time(),
         'app_input': False, 'holdout_input': False, 'image': subprocess.check_output(
             ['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}'], text=True).strip()}
     (out / 'manifest.json').write_text(json.dumps(metadata, indent=2))
     (out / 'result').mkdir()
-    token = control('/trial', {'id': args.name, 'phase': 'mechanism', 'cap_cny': 1.0, 'seconds': 600})['token']
+    token = control('/trial', {'id': args.name, 'phase': 'mechanism', 'cap_cny': 1.0, 'seconds': args.seconds})['token']
     cmd = ['docker', 'run', '--rm', '--name', 'factory26-acceptance', '--network', 'factory26-ab-internal',
         '--memory', '1g', '--cpus', '2', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
         '--env', 'OPENAI_API_KEY', '--env', 'OPENAI_BASE_URL=http://factory26-gateway:8021/v1',
         '--env', 'PYTHONDONTWRITEBYTECODE=1']
     cmd += bind(adapter, '/compiler') + bind(out / 'task', '/task') + bind(out / 'result', '/result', True)
     cmd += ['--entrypoint', 'python', IMAGE, '/compiler/acceptance_compiler.py',
-            '/task/requirements.yaml', '--output', '/result/acceptance']
+            '/task/requirements.yaml', '--output', '/result/acceptance', '--batch-size', str(args.batch_size)]
     for nid in args.include:
         cmd += ['--include', nid]
-    print(f'Start {args.name}: max CNY1.00 / 600s; public requirements only', flush=True)
+    print(f'Start {args.name}: max CNY1.00 / {args.seconds}s; public requirements only', flush=True)
     try:
         with (out / 'compile.log').open('w') as log:
             proc = subprocess.Popen(cmd, env=dict(os.environ, OPENAI_API_KEY=token), stdout=log, stderr=subprocess.STDOUT)
             try:
-                rc = proc.wait(timeout=600)
+                rc = proc.wait(timeout=args.seconds)
             except subprocess.TimeoutExpired:
                 subprocess.run(['docker', 'stop', '--time', '5', 'factory26-acceptance'], capture_output=True)
                 proc.wait(timeout=15)
