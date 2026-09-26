@@ -55,10 +55,15 @@ def validate_plan(plan, catalog):
         body = case['body']
         if not isinstance(body, str) or len(body) > 20000 or len(UI_ASSERT.findall(body)) < 2:
             raise ValueError('case requires at least two awaited UI assertions')
-        if case['kind'] == 'positive':
+        if case['kind'] == 'persistence' and 'await restart(request)' not in body:
+            raise ValueError('persistence case must include a real restart and recheck: ' + case['id'])
+        # A successful create/change followed by restart is both a positive
+        # journey and persistence evidence; do not demand duplicate tests.
+        if case['kind'] in ('positive', 'persistence'):
             positives.update(case['requirement_ids'])
-    if positives != {n['id'] for n in catalog['nodes']}:
-        raise ValueError('each atomic requirement needs positive behavior coverage')
+    missing = {n['id'] for n in catalog['nodes']} - positives
+    if missing:
+        raise ValueError('missing successful positive/persistence journeys for: ' + ', '.join(sorted(missing)))
     return plan
 
 

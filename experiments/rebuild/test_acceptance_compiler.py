@@ -39,7 +39,8 @@ class AcceptanceCompilerTests(unittest.TestCase):
                "const expect = () => ({toBeVisible() {}});",
                "const f = Object.constructor;", "const f = Object['constructor'];",
                "process.exit(0);", "test.skip();", "await browser.newBrowserCDPSession();",
-               "test('injected', async () => {});"]
+               "test('injected', async () => {});",
+               "await expect(page.getByLabel('Email')).toHaveValue('unused-' + (await page.getByLabel('Email').inputValue()));"]
         for statement in bad:
             with self.subTest(statement=statement), self.assertRaises(ValueError):
                 plan = copy.deepcopy(self.plan)
@@ -58,6 +59,14 @@ class AcceptanceCompilerTests(unittest.TestCase):
         self.assertEqual([n['id'] for n in selected['nodes']], ['a','b'])
         self.assertEqual(set(selected['contracts']), {'ROOT','a','b'})
         self.assertEqual(selected['full_atomic_count'], 3)
+
+    def test_successful_persistence_is_positive_coverage_without_duplicate_tests(self):
+        plan = copy.deepcopy(self.plan)
+        plan['cases'][0]['kind'] = 'persistence'
+        with self.assertRaisesRegex(ValueError, 'real restart'):
+            validate_plan(plan, self.catalog)
+        plan['cases'][0]['body'] += "\nawait restart(request);\nawait page.reload();\nawait expect(page.getByTestId('count')).toHaveText('1');"
+        self.assertEqual(validate_plan(plan, self.catalog), plan)
 
     def test_freeze_is_write_once_and_hashes_actual_tests(self):
         with tempfile.TemporaryDirectory() as tmp:

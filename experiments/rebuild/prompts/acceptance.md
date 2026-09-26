@@ -8,7 +8,7 @@ persistence, permission), `requirement_ids` (nonempty array of atomic IDs),
 `source_quote` (an exact 20+ character substring of one cited public contract),
 and `body` (JavaScript statements for a Playwright test function).
 
-Cover every atomic ID with at least one positive case; combine related IDs into
+Cover every atomic ID with at least one successful positive OR persistence case; combine related IDs into
 complete user journeys when useful. Use at most three cases per atomic ID. Do
 not just check page visibility: perform the required action and assert its
 observable business result. Test rejection when specified, and check unchanged
@@ -47,6 +47,15 @@ entry and the resulting state. An HTTP 200, a constant assertion, or model prose
 is not acceptance. Do not weaken a requirement to make a hypothetical app pass.
 If source text is ambiguous, choose only the directly supported behavior and
 retain the exact quote; do not make up missing UI labels.
+
+A persistence case is a successful create/change workflow followed by real
+restart and recheck; it also counts as positive coverage. Save each input value
+in a variable BEFORE filling the form and compare against that same variable.
+Never compute an expected value from the current UI value (e.g. prepending text
+to inputValue() is an invalid circular/contradictory assertion). Required names
+must use exact:true for literal getByRole/getByLabel locators, especially
+Password versus Confirm password. Self-check every expected value against the
+actual input before responding; do not add redundant cases to fill labels.
 
 Helpers must be function declarations (not top-level const/let expressions).
 Use only the ordinary Playwright locator, UI action, assertion, newContext,

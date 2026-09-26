@@ -80,3 +80,26 @@ no-network/no-key container must execute the frozen suite against an HTTP-200
 empty page: every case must fail with zero skips. This negative control is
 necessary but not proof of business correctness. Foundation holdouts remain
 frozen and untouched. No new formal upload or score is produced by this trial.
+
+### V1 result and justified compiler revision
+
+V1 ended before freeze/app generation: both complete model responses rejected
+by coverage classification, cost upper bound ¥0.036540 (21,731 input / 6,841
+output tokens), no unknown-cost call. The generator supplied successful
+create/restart journeys as `persistence`; the validator only counted `positive`
+and its first correction failed to name missing IDs. Neither label proves
+acceptance, and duplicating journeys to satisfy labels wastes evaluation time.
+Inspection also found an impossible email assertion computing `unused-` plus
+the current input value; it was never accepted or used to score an app.
+
+V2 counts a successful persistence journey toward positive coverage, requires
+actual restart, identifies missing IDs explicitly, and rejects awaited UI reads
+inside expected assertion values. Prompt requires saved pre-action input values
+and exact literal UI locators. Existing foundation holdouts are unchanged; no
+frozen suite has been edited. Offline compiler/catalog checks: 9/9.
+
+Register `github-acceptance-v2`, same source/model/selection/cap ¥1/600s, same
+two-response maximum, before any application generation. This is one explained
+compiler revision, not a retry to select a better application score. Preserve
+both original V1 responses, rejections and charges. If V2 still cannot produce
+valid acceptance, diagnose it before any further model call.

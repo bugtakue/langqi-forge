@@ -14,7 +14,7 @@ const globals = new Set(['Date', 'Math', 'JSON', 'String', 'Number', 'Boolean',
   'Array', 'Object', 'RegExp', 'Error', 'URL', 'undefined', 'NaN', 'Infinity']);
 // Closed surface: generated code cannot use arbitrary Browser/Node methods.
 // This supplements, not replaces, the separate no-network grading container.
-const members = new Set(['goto', 'reload', 'url', 'getByRole', 'getByLabel',
+const members = new Set(['goto', 'reload', 'goBack', 'url', 'getByRole', 'getByLabel',
   'getByText', 'getByPlaceholder', 'getByTestId', 'locator', 'filter', 'and', 'or',
   'click', 'dblclick', 'fill', 'press', 'check', 'uncheck', 'selectOption',
   'inputValue', 'textContent', 'innerText', 'count', 'getAttribute', 'isVisible',
@@ -77,6 +77,12 @@ function validate(source) {
       if (n.callee.type==='Identifier' && n.callee.name==='expect' &&
           (!n.arguments[0] || /Literal$/.test(n.arguments[0].type)))
         reject('constant assertions are not behavior acceptance');
+      if (n.callee.type === 'MemberExpression' && /^to[A-Z]/.test(n.callee.property.name)) {
+        for (const argument of path.get('arguments')) {
+          if (argument.isAwaitExpression()) reject('expected values must not be read from the current UI');
+          argument.traverse({AwaitExpression() {reject('expected values must not be read from the current UI');}});
+        }
+      }
     }
   });
   return true;
