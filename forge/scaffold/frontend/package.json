@@ -1,0 +1,9 @@
+{
+  "name": "generated-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Generated application frontend (zero dependencies, vanilla ES modules)",
+  "scripts": {
+    "build": "node build.js"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "generated-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Generated application backend (zero dependencies)",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
