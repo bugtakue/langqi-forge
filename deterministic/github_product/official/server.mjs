@@ -1208,6 +1208,8 @@ async function handleApi(request, response, url) {
         } else if (body.kind === "label") {
           if (!canManageIssues(draft, record, actor)) return { status: 403, error: "Access denied" };
           issue.labels = issue.labels || [];
+          const known = (draft.labels || []).some((item) => item.owner === owner && item.repo === repo && item.name === value);
+          if (!issue.labels.includes(value) && !known) return { status: 400, error: "Label is not available" };
           const removing = issue.labels.includes(value);
           issue.labels = removing ? issue.labels.filter((item) => item !== value) : issue.labels.concat(value);
           issue.activity = issue.activity || [];
