@@ -78,6 +78,7 @@ class AgentFirstFallbackTests(unittest.TestCase):
         graph.agent_result(False, "later batch failed")
         graph.keep_baseline("later batch was not accepted")
         self.assertEqual(graph.context.state, "PLAN")
+        self.assertIn("browser_probe", graph.model_context())
         self.assertEqual(graph.context.completed_ids, ["REQ-1-1-1"])
         with self.assertRaises(RuntimeError):
             graph.start_fallback()

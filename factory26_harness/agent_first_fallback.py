@@ -318,7 +318,8 @@ class AgentFirstFallbackGraph:
             continuation = (
                 "\nThe workspace already contains the traced public-canvas baseline. "
                 "Implement the current batch on top of it. Keep controls that already "
-                "match the requirement text."
+                "match the requirement text. Before AUDIT PASS, use browser_probe on "
+                "one current-batch scenario. If the page already matches, leave the source unchanged."
             )
         return (
             "<agent_harness_context>\n"
