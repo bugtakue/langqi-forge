@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import tempfile
@@ -419,6 +420,67 @@ def _continuation_baseline_gap(staged: Path, tree: dict[str, Any]) -> str:
             f"{relative}:{needle}" for needle in needles if needle not in text
         )
     return ", ".join(missing)
+
+
+_REQUIREMENT_QUOTE = re.compile(r"[“\"]([^”\"\n]{2,60})[”\"]")
+
+
+def _requirement_quotes(nodes: Iterable[RequirementNode]) -> list[str]:
+    """Exact control and message text a scenario puts in quotation marks."""
+
+    found: list[str] = []
+    for node in nodes:
+        blobs = [node.description]
+        for scenario in node.scenarios:
+            for step in scenario.get("steps") or []:
+                if isinstance(step, dict) and isinstance(step.get("content"), str):
+                    blobs.append(step["content"])
+        for match in _REQUIREMENT_QUOTE.finditer("\n".join(blobs)):
+            text = " ".join(match.group(1).split())
+            if (
+                not text
+                or text in found
+                or text.startswith("http")
+                or "REQ-" in text
+                or "<" in text
+                or ">" in text
+                or "requested workflow" in text.casefold()
+                or " " not in text
+                or not text[:1].isalnum()
+                or text in {"steps", "keyword", "GIVEN", "WHEN", "THEN"}
+            ):
+                continue
+            found.append(text)
+    return found
+
+
+def _app_source_text(root: Path) -> str:
+    parts: list[str] = []
+    for relative in ("frontend/src/app.js", "frontend/src/styles.css", "backend/server.mjs"):
+        path = root / relative
+        if path.is_file():
+            parts.append(path.read_text(encoding="utf-8", errors="replace"))
+    return "\n".join(parts)
+
+
+def _missing_requirement_quotes(root: Path, nodes: Iterable[RequirementNode]) -> list[str]:
+    blob = _app_source_text(root)
+    return [quote for quote in _requirement_quotes(nodes) if quote not in blob]
+
+
+def _focus_unscored_batches(
+    root: Path, groups: list[list[RequirementNode]]
+) -> list[list[RequirementNode]]:
+    """One later batch per requirement that can still add a missing scenario string."""
+
+    focused: list[list[RequirementNode]] = []
+    for group in groups:
+        for node in group:
+            quotes = _requirement_quotes([node])
+            if not quotes or not _missing_requirement_quotes(root, [node]):
+                continue
+            focused.append([node])
+    return focused
 
 
 def _batch_turns(base_turns: int, *, continuation: bool) -> int:
@@ -848,6 +910,7 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     model_exception = False
                     fallback_execution: FallbackExecution | None = None
+                    continuation_missing: list[str] = []
                     try:
                         agent_task_outline = outline
                         continuation = bool(
@@ -855,9 +918,23 @@ def main(argv: list[str] | None = None) -> int:
                             and graph is not None
                             and graph.context.continuation
                         )
+                        continuation_missing = (
+                            _missing_requirement_quotes(output_dir, active_group)
+                            if continuation else []
+                        )
                         batch_turns = _batch_turns(
                             args.max_agent_turns, continuation=continuation
                         )
+                        if continuation_missing:
+                            listed = "\n".join(
+                                f"- {quote}" for quote in continuation_missing[:30]
+                            )
+                            agent_task_outline += (
+                                "\n\nExact requirement text still absent from the current "
+                                "source. Add the strings this batch's scenarios require, "
+                                "and leave every other matching control unchanged:\n"
+                                + listed
+                            )
                         if fallback_graph_active:
                             agent_task_outline += "\n\n" + graph.model_context()
                         result = CodingAgent(
@@ -1052,11 +1129,20 @@ def main(argv: list[str] | None = None) -> int:
                             and graph is not None
                             and graph.context.continuation
                         ):
+                            gained = [
+                                quote for quote in continuation_missing
+                                if quote in _app_source_text(staged)
+                            ]
                             gap = _continuation_baseline_gap(staged, tree)
-                            if gap:
+                            if gap or (continuation_missing and not gained):
+                                reason = (
+                                    "continuation removed the recovered canvas: " + gap
+                                    if gap
+                                    else "continuation kept the canvas; this batch added none of its missing requirement text"
+                                )
                                 result = AgentRun(
                                     False,
-                                    "continuation removed the recovered canvas: " + gap,
+                                    reason,
                                     tuple(sorted(tools.changed_files)),
                                     result.turns,
                                 )
@@ -1064,7 +1150,8 @@ def main(argv: list[str] | None = None) -> int:
                                 trace.record(
                                     "agent_continuation_baseline_kept",
                                     batch=index,
-                                    missing=gap,
+                                    missing=gap or ", ".join(continuation_missing[:12]),
+                                    gained=gained[:12],
                                 )
                         if result.completed and not just_recovered:
                             _promote_staged_app(staged, output_dir)
@@ -1194,6 +1281,15 @@ def main(argv: list[str] | None = None) -> int:
                     and not graph.context.continuation
                 ):
                     graph.continue_after_fallback()
+                    focused = _focus_unscored_batches(
+                        output_dir,
+                        [[node] for group in groups[index:] for node in group],
+                    )
+                    groups[index:] = focused
+                    trace.record(
+                        "agent_continuation_focused",
+                        batches=[[node.req_id for node in group] for group in focused],
+                    )
             if (
                 fallback_graph_active
                 and graph is not None

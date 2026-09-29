@@ -10,6 +10,7 @@ from factory26_harness import qualifier
 from factory26_harness.agent import AgentRun
 from factory26_harness.agent_first_fallback import AgentFirstFallbackGraph
 from factory26_harness.checks import CheckResult
+from factory26_harness.requirements import RequirementNode
 
 
 class _TraceFixture:
@@ -189,11 +190,11 @@ class AgentFirstFallbackTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(status, 0)
-            self.assertEqual(PassingAgent.calls, 2)
+            self.assertEqual(PassingAgent.calls, 1)
             report = json.loads((output / ".arc/harness-report.json").read_text(encoding="utf-8"))
             self.assertTrue(report["fallback_recovered"])
             self.assertTrue(report["agent_first_fallback"]["context"]["continuation"])
-            self.assertEqual(report["model_requests"], 4)
+            self.assertEqual(report["model_requests"], 2)
             self.assertEqual(report["implemented_requirements"], ["REQ-1-1-1", "REQ-1-1-2"])
             self.assertIn(
                 "register-form",
@@ -213,6 +214,36 @@ class AgentFirstFallbackTests(unittest.TestCase):
             )
         self.assertIn("register-form", gap)
         self.assertIn(">Add file</a>", gap)
+
+    def test_continuation_keeps_only_requirements_missing_quoted_text(self) -> None:
+        node = RequirementNode(
+            req_id="REQ-9",
+            name="Comment",
+            description='The button is “Add single comment”.',
+            dependencies=(),
+            scenarios=(),
+            visual_reference=(),
+            raw={},
+        )
+        present = RequirementNode(
+            req_id="REQ-8",
+            name="Sign in",
+            description='The button is “Sign in”.',
+            dependencies=(),
+            scenarios=(),
+            visual_reference=(),
+            raw={},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "frontend/src").mkdir(parents=True)
+            (root / "backend").mkdir()
+            (root / "frontend/src/app.js").write_text("<button>Sign in</button>", encoding="utf-8")
+            (root / "backend/server.mjs").write_text("export {}", encoding="utf-8")
+            missing = qualifier._missing_requirement_quotes(root, [node, present])
+            self.assertEqual(missing, ["Add single comment"])
+            focused = qualifier._focus_unscored_batches(root, [[present, node]])
+            self.assertEqual([[item.req_id for item in group] for group in focused], [["REQ-9"]])
 
     def test_submitted_entry_names_one_recovery_after_the_model(self) -> None:
         entry = Path(__file__).resolve().parents[1] / "main.py"
