@@ -1349,7 +1349,15 @@ async function handleApi(request, response, url) {
         }
         const text = String(body.body || "").trim();
         if (!text) return { status: 400, error: "Comment is required" };
-        const entry = { author: actor.username, body: text, path: pull.changedFiles && pull.changedFiles[0] || "src/search.ts", line: pull.line || "" };
+        const headCommits = (draft.commits || []).filter((item) => item.owner === owner && item.repo === repo && item.branch === pull.head);
+        const entry = {
+          author: actor.username,
+          body: text,
+          path: pull.changedFiles && pull.changedFiles[0] || "src/search.ts",
+          line: pull.line || "",
+          commit: headCommits.length ? headCommits[headCommits.length - 1].sha : "",
+          outdated: false,
+        };
         if (body.pending) {
           pull.draftComments = pull.draftComments || [];
           pull.draftComments.push(entry);
@@ -1579,6 +1587,9 @@ async function handleApi(request, response, url) {
           if (pull.owner === owner && pull.repo === repo && pull.head === branchName && pull.state === "open") {
             pull.approved = false;
             pull.check = "pending";
+            for (const comment of pull.lineComments || []) {
+              if (comment.commit !== sha) comment.outdated = true;
+            }
           }
         }
         return { status: 200, path: filePath, parent };
