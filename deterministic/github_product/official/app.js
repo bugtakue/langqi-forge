@@ -237,7 +237,8 @@ function blobHtml(repo, file) {
   const href = repoHref(repo, '/blob/' + encodeURIComponent(file.path)) + branchQuery(branch);
   const history = repoHref(repo, '/commits') + branchQuery(branch) + (file.path ? '&path=' + encodeURIComponent(file.path) : '');
   const phrase = String(file.content || '').includes('search flow') ? '<p>search flow</p>' : '';
-  return `<h1>${esc(file.path)}</h1><p>${esc(repo.owner)} / ${esc(repo.name)} / ${esc(file.path)}</p><p>${esc(branch)}</p><p><a href="${history}">Commits</a></p>${phrase}<pre>${esc(file.content || '')}</pre><a href="${href}">${esc(file.path)}</a>`;
+  const edit = repoHref(repo, '/edit') + branchQuery(branch) + '&path=' + encodeURIComponent(file.path);
+  return `<h1>${esc(file.path)}</h1><p>${esc(repo.owner)} / ${esc(repo.name)} / ${esc(file.path)}</p><p>${esc(branch)}</p><p><a href="${history}">Commits</a></p><p><a href="${edit}">Edit</a></p>${phrase}<pre>${esc(file.content || '')}</pre><a href="${href}">${esc(file.path)}</a>`;
 }
 
 function homeHtml(user) {
@@ -456,7 +457,10 @@ function compareHtml(repo, payload, state) {
 }
 
 function editorHtml(repo, state) {
-  return `<h1>Create new file</h1>${errors(state && state.messages)}<form id="file-form" novalidate><label>File name <input name="path" type="text" value="${esc(state && state.path ? state.path : '')}"></label><label>File contents <textarea name="content">${esc(state && state.content ? state.content : '')}</textarea></label><label>Commit message <input name="message" type="text" value=""></label><button type="submit">Commit changes</button></form><p>${esc(repo.defaultBranch || 'main')}</p>`;
+  const params = new URLSearchParams(location.search);
+  const preset = state && state.path ? state.path : (params.get("path") || "");
+  const original = state && Object.prototype.hasOwnProperty.call(state, "original") ? state.original : (params.get("path") || "");
+  return `<h1>Create new file</h1>${errors(state && state.messages)}<form id="file-form" novalidate><label>File name <input name="path" type="text" value="${esc(preset)}"></label><input type="hidden" name="original" value="${esc(original)}"><label>File contents <textarea name="content">${esc(state && state.content ? state.content : '')}</textarea></label><label>Commit message <input name="message" type="text" value=""></label><button type="submit">Commit changes</button></form><p>${esc(repo.defaultBranch || 'main')}</p>`;
 }
 
 function repoSettingsHtml(repo, file, payload) {
@@ -1098,12 +1102,13 @@ function bind(route) {
       try {
         const result = await api('POST', '/api/repos/' + encodeURIComponent(route.owner) + '/' + encodeURIComponent(route.repo) + '/file', {
           path: data.path || '', content: data.content || '', message: data.message || '', branch,
+          replace: Boolean(data.original) && data.original === (data.path || ''),
         });
         formState = null;
         const branchQuery = branch ? '?branch=' + encodeURIComponent(branch) : '';
         location.assign('/' + encodeURIComponent(route.owner) + '/' + encodeURIComponent(route.repo) + '/blob/' + encodeURIComponent(result.path) + branchQuery);
       } catch (error) {
-        formState = { kind: 'file', path: data.path || '', content: data.content || '', messages: [error.message] };
+        formState = { kind: 'file', path: data.path || '', original: data.original || '', content: data.content || '', messages: [error.message] };
         render();
       }
     });

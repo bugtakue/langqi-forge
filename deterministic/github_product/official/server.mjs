@@ -1545,6 +1545,14 @@ async function handleApi(request, response, url) {
         const branchName = String(body.branch || source.defaultBranch);
         const protectedBranch = (draft.protections || []).some((item) => item.owner === owner && item.repo === repo && item.branch === branchName);
         if (protectedBranch) return { status: 400, error: "Branch is protected" };
+        const onBranch = (item) => item.owner === owner && item.repo === repo && (item.branch || source.defaultBranch) === branchName;
+        const replacing = Boolean(body.replace);
+        if (!replacing) {
+          const conflict = (draft.files || []).some((item) => onBranch(item) && (
+            item.path === filePath || item.path.startsWith(`${filePath}/`) || filePath.startsWith(`${item.path}/`)
+          ));
+          if (conflict) return { status: 400, error: "A file already exists at this path" };
+        }
         const prior = draft.commits.filter((item) => item.owner === owner && item.repo === repo && item.branch === branchName);
         const parent = prior.length ? prior[prior.length - 1].sha : null;
         const existing = draft.files.find((item) => item.owner === owner && item.repo === repo && item.path === filePath
