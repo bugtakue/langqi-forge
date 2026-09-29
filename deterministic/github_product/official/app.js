@@ -422,8 +422,10 @@ function pullHtml(pull, repo) {
   const checkMeta = pull.checkBy ? `<p>${esc(pull.checkBy)}</p><p>${esc(pull.checkAt || '')}</p>` : '';
   const mergedMeta = pull.state === 'merged' ? `<p>${esc(pull.mergedBy || '')}</p><p>${esc(pull.mergedAt || '')}</p><p>${esc(pull.mergeSha || '')}</p>` : '';
   const checks = `<section><h2>Checks</h2><p>test: ${esc(checkValue)}</p>${checkEditor}${checkMeta}</section>`;
+  const reviewerNames = Array.isArray(pull.reviewerCandidates) ? pull.reviewerCandidates : ["bob-reviewer"];
+  const reviewerOptions = reviewerNames.map((name) => `<button type="button" role="option" class="reviewer-option" data-user="${esc(name)}" hidden>${esc(name)}</button>`).join("");
   const reviewerControl = manage
-    ? `<button type="button" id="open-reviewers">Reviewers</button><div id="reviewer-picker" hidden><label for="reviewer-search">Search</label><input id="reviewer-search" type="text"><button type="button" role="option" id="reviewer-bob">bob-reviewer</button></div>`
+    ? `<button type="button" id="open-reviewers">Reviewers</button><div id="reviewer-picker" hidden><label for="reviewer-search">Search</label><input id="reviewer-search" type="text">${reviewerOptions}</div>`
     : '';
   return `<h1>${esc(pull.title)}</h1>${pullTabs(repo, pull)}<p>${status}</p><p>${esc(pull.head)}</p><p>${esc(pull.base)}</p><p>${esc(pull.body || '')}</p>${ready}${checks}${merge}${close}${mergedMeta}${activity}${reviews}${reviewerControl}${reviewers}<div class="dialog-layer" id="merge-layer" hidden><div role="dialog" aria-label="Confirm merge"><p>Create a merge commit</p><button type="button" id="confirm-merge">Confirm merge</button></div></div>`;
 }
@@ -1293,19 +1295,21 @@ function bindCollaboration(route) {
     });
   }
   const reviewerSearch = document.querySelector('#reviewer-search');
-  const reviewerBob = document.querySelector('#reviewer-bob');
-  if (reviewerSearch && reviewerBob) {
-    reviewerBob.hidden = true;
+  if (reviewerSearch) {
     reviewerSearch.addEventListener('input', () => {
-      reviewerBob.hidden = !reviewerSearch.value || !'bob-reviewer'.includes(reviewerSearch.value);
+      const text = reviewerSearch.value;
+      document.querySelectorAll('.reviewer-option').forEach((button) => {
+        const name = button.getAttribute('data-user') || '';
+        button.hidden = !text || !name.includes(text);
+      });
     });
   }
-  if (reviewerBob) {
-    reviewerBob.addEventListener('click', async () => {
-      await api('POST', repoApi(route, 'pull-reviewer'), { number, username: 'bob-reviewer' });
+  document.querySelectorAll('.reviewer-option').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await api('POST', repoApi(route, 'pull-reviewer'), { number, username: button.getAttribute('data-user') || '' });
       render();
     });
-  }
+  });
   document.querySelectorAll('.remove-reviewer').forEach((button) => {
     button.addEventListener('click', async () => {
       await api('POST', repoApi(route, 'pull-reviewer'), { number, username: button.getAttribute('data-user') || '', remove: true });

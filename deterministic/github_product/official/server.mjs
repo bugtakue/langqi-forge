@@ -550,6 +550,33 @@ function canWriteRepo(state, record, user) {
   return Boolean(grant && ["Write", "Maintain", "Admin"].includes(grant.role));
 }
 
+function eligibleReviewers(state, record, pull) {
+  if (!record || !pull) return [];
+  const names = new Set();
+  for (const user of state.users || []) {
+    if (user.username !== pull.author && canWriteRepo(state, record, user)) names.add(user.username);
+  }
+  for (const grant of state.grants || []) {
+    if (grant.owner === record.owner && grant.repo === record.name && grant.subjectType === "user"
+      && grant.subject !== pull.author && ["Write", "Maintain", "Admin"].includes(grant.role)) {
+      names.add(grant.subject);
+    }
+  }
+  return [...names];
+}
+
+function eligibleAssignees(state, record) {
+  if (!record) return [];
+  const names = new Set();
+  for (const grant of state.grants || []) {
+    if (grant.owner === record.owner && grant.repo === record.name && grant.subjectType === "user"
+      && ["Triage", "Write", "Maintain", "Admin"].includes(grant.role)) {
+      names.add(grant.subject);
+    }
+  }
+  return [...names];
+}
+
 function canManageIssues(state, record, user) {
   if (!user || !record) return false;
   if (user.username === record.owner) return true;
@@ -1063,7 +1090,7 @@ async function handleApi(request, response, url) {
       }
       sendJson(response, 200, {
         ...issue,
-        candidates: ["bob-reviewer"],
+        candidates: eligibleAssignees(state, record),
         labelChoices: (state.labels || []).filter((item) => item.owner === owner && item.repo === repo).map((item) => item.name),
         milestoneChoices: (state.milestones || []).filter((item) => item.owner === owner && item.repo === repo).map((item) => item.name),
       });
@@ -1171,6 +1198,9 @@ async function handleApi(request, response, url) {
         if (body.kind === "assign") {
           if (!canManageIssues(draft, record, actor)) return { status: 403, error: "Access denied" };
           issue.assignees = issue.assignees || [];
+          if (!issue.assignees.includes(value) && !eligibleAssignees(draft, record).includes(value)) {
+            return { status: 400, error: "Assignee is not eligible" };
+          }
           const removing = issue.assignees.includes(value);
           issue.assignees = removing ? issue.assignees.filter((item) => item !== value) : issue.assignees.concat(value);
           issue.activity = issue.activity || [];
@@ -1207,6 +1237,7 @@ async function handleApi(request, response, url) {
         protection: protection || null,
         draftComments: (pull.draftComments || []).filter((item) => viewer && item.author === viewer.username),
         canManagePull: canManagePull(state, record, pull, viewer),
+        reviewerCandidates: eligibleReviewers(state, record, pull),
       } : { error: "Not found" };
       sendJson(response, pull ? 200 : 404, visible);
       return true;
