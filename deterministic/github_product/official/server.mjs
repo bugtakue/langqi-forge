@@ -1018,7 +1018,7 @@ async function handleApi(request, response, url) {
     });
     return true;
   }
-  const repoWrites = new Set(["fork", "file", "issue", "issue-state", "issue-edit", "issue-comment", "issue-react", "issue-meta", "access", "branch", "default-branch", "pull-state", "pull-create", "pull-line", "pull-review", "pull-reviewer", "pull-check", "visibility", "protection"]);
+  const repoWrites = new Set(["fork", "file", "issue", "issue-state", "issue-edit", "issue-comment", "issue-react", "issue-meta", "access", "branch", "default-branch", "pull-state", "pull-create", "pull-line", "pull-review", "pull-reviewer", "pull-milestone", "pull-check", "visibility", "protection"]);
   if ((request.method === "GET" || (request.method === "POST" && repoWrites.has(parts[4])))
     && parts[0] === "api" && parts[1] === "repos" && parts.length >= 4) {
     const owner = decodeURIComponent(parts[2]);
@@ -1214,6 +1214,9 @@ async function handleApi(request, response, url) {
           issue.activity.push(removing ? `Removed label ${value}` : `Added label ${value}`);
         } else {
           if (!canManageIssues(draft, record, actor)) return { status: 403, error: "Access denied" };
+          if (value !== "None" && !(draft.milestones || []).some((item) => item.owner === owner && item.repo === repo && item.name === value)) {
+            return { status: 400, error: "Milestone is not available" };
+          }
           issue.milestone = value === "None" ? "" : value;
           issue.activity = issue.activity || [];
           issue.activity.push(value === "None" ? "Cleared the milestone" : `Milestone ${value}`);
@@ -1238,6 +1241,8 @@ async function handleApi(request, response, url) {
         draftComments: (pull.draftComments || []).filter((item) => viewer && item.author === viewer.username),
         canManagePull: canManagePull(state, record, pull, viewer),
         reviewerCandidates: eligibleReviewers(state, record, pull),
+        milestone: pull.milestone || "",
+        milestoneChoices: (state.milestones || []).filter((item) => item.owner === owner && item.repo === repo).map((item) => item.name),
       } : { error: "Not found" };
       sendJson(response, pull ? 200 : 404, visible);
       return true;
@@ -1363,6 +1368,25 @@ async function handleApi(request, response, url) {
         const latest = new Map();
         pull.reviews.forEach((review) => latest.set(review.reviewer, review.decision));
         pull.approved = [...latest.values()].includes("Approve") && ![...latest.values()].includes("Request changes");
+        return { status: 200 };
+      });
+      sendJson(response, updated.status, updated.status === 200 ? { ok: true } : { error: updated.error });
+      return true;
+    }
+    if (action === "pull-milestone" && request.method === "POST") {
+      const body = await readBody(request);
+      const updated = await transact((draft) => {
+        const actor = currentUser(draft, request);
+        const pull = (draft.pulls || []).find((item) => item.owner === owner && item.repo === repo && item.number === Number(body.number));
+        if (!actor || !pull) return { status: 404, error: "Not found" };
+        if (!canManageIssues(draft, record, actor)) return { status: 403, error: "Access denied" };
+        const value = String(body.value || "");
+        if (value !== "None" && !(draft.milestones || []).some((item) => item.owner === owner && item.repo === repo && item.name === value)) {
+          return { status: 400, error: "Milestone is not available" };
+        }
+        pull.milestone = value === "None" ? "" : value;
+        pull.activity = pull.activity || [];
+        pull.activity.push(value === "None" ? "Cleared the milestone" : `Milestone ${value}`);
         return { status: 200 };
       });
       sendJson(response, updated.status, updated.status === 200 ? { ok: true } : { error: updated.error });
