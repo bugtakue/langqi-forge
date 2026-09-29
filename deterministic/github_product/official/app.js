@@ -482,10 +482,15 @@ function repoSettingsHtml(repo, file, payload) {
     return `<h1>Branches</h1><a href="${general}">General</a><form id="default-branch-form"><label for="default-branch">Default branch</label><select id="default-branch">${options}</select><button type="submit">Update</button></form>${adder}${summary}${form}<div class="dialog-layer" id="branch-confirm" hidden><div role="dialog" aria-label="Update default branch"><button type="button" id="confirm-default-branch">Update</button></div></div>`;
   }
   if (file === 'access') {
-    const grants = (payload.grants || []).map((grant) => `<li>${esc(grant.subject)} <label>Role <select class="grant-role" data-subject="${esc(grant.subject)}" data-type="${esc(grant.subjectType)}"><option>Read</option><option>Triage</option><option${grant.role === 'Write' ? ' selected' : ''}>Write</option><option>Maintain</option><option>Admin</option></select></label> <button type="button" class="save-grant" data-subject="${esc(grant.subject)}" data-type="${esc(grant.subjectType)}">Save</button></li>`).join('');
-    const choices = [...(payload.teams || []).map((team) => team.name), ...(payload.members || []).map((member) => member.username)];
-    const options = choices.map((name) => `<button type="button" class="access-choice" data-subject="${esc(name)}">${esc(name)}</button>`).join('');
-    return `<h1>Manage access</h1><button type="button" id="open-access">Add people or teams</button><form id="access-form" hidden><label for="access-search">Search</label><input id="access-search" type="text"><div id="access-choices">${options}</div><label for="access-role">Role</label><select id="access-role"><option>Read</option><option selected>Write</option><option>Maintain</option><option>Admin</option></select><button type="submit">Add</button></form><ul>${grants}</ul>`;
+    const roleOptions = (selected) => ["Read", "Triage", "Write", "Maintain", "Admin"]
+      .map((role) => `<option${role === selected ? " selected" : ""}>${role}</option>`).join("");
+    const grants = (payload.grants || []).map((grant) => `<li>${esc(grant.subject)} <label>Role <select class="grant-role" data-subject="${esc(grant.subject)}" data-type="${esc(grant.subjectType)}">${roleOptions(grant.role)}</select></label> <button type="button" class="save-grant" data-subject="${esc(grant.subject)}" data-type="${esc(grant.subjectType)}">Save</button></li>`).join('');
+    const choices = [
+      ...(payload.teams || []).map((team) => ({ name: team.name, type: "team" })),
+      ...(payload.members || []).map((member) => ({ name: member.username, type: "user" })),
+    ];
+    const options = choices.map((choice) => `<button type="button" class="access-choice" data-subject="${esc(choice.name)}" data-type="${choice.type}">${esc(choice.name)}</button>`).join('');
+    return `<h1>Manage access</h1><button type="button" id="open-access">Add people or teams</button><form id="access-form" hidden><label for="access-search">Search</label><input id="access-search" type="text"><div id="access-choices">${options}</div><label for="access-role">Role</label><select id="access-role">${roleOptions("Write")}</select><button type="submit">Add</button></form><ul>${grants}</ul>`;
   }
   if (file === 'general') {
     const control = payload.canAdmin
@@ -1154,15 +1159,19 @@ function bind(route) {
     });
   }
   let accessSubject = '';
+  let accessType = 'team';
   document.querySelectorAll('.access-choice').forEach((button) => {
-    button.addEventListener('click', () => { accessSubject = button.getAttribute('data-subject') || ''; });
+    button.addEventListener('click', () => {
+      accessSubject = button.getAttribute('data-subject') || '';
+      accessType = button.getAttribute('data-type') || 'team';
+    });
   });
   if (accessForm && route.owner && route.repo) {
     accessForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const role = document.querySelector('#access-role');
       await api('POST', '/api/repos/' + encodeURIComponent(route.owner) + '/' + encodeURIComponent(route.repo) + '/access', {
-        subject: accessSubject, subjectType: 'team', role: role ? role.value : 'Write',
+        subject: accessSubject, subjectType: accessType, role: role ? role.value : 'Write',
       });
       render();
     });

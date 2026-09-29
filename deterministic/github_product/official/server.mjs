@@ -526,28 +526,35 @@ function canManagePull(state, record, pull, user) {
   return canAdminRepo(state, record, user);
 }
 
+const ROLE_RANK = { Read: 1, Triage: 2, Write: 3, Maintain: 4, Admin: 5 };
+
+function effectiveRepoRole(state, record, user) {
+  if (!user || !record) return "";
+  if (user.username === record.owner) return "Admin";
+  if (record.organization && memberRole(state, record.organization, user.username) === "Owner") return "Admin";
+  let best = "";
+  const direct = repoGrant(state, record, "user", user.username);
+  if (direct) best = direct.role;
+  for (const membership of state.teamMembers || []) {
+    if (membership.username !== user.username) continue;
+    if (record.organization && membership.org !== record.organization) continue;
+    const grant = repoGrant(state, record, "team", membership.team);
+    if (grant && (ROLE_RANK[grant.role] || 0) > (ROLE_RANK[best] || 0)) best = grant.role;
+  }
+  return best;
+}
+
 function canAdminRepo(state, record, user) {
-  if (!user || !record) return false;
-  if (user.username === record.owner) return true;
-  if (record.organization && memberRole(state, record.organization, user.username) === "Owner") return true;
-  const grant = repoGrant(state, record, "user", user.username);
-  return Boolean(grant && (grant.role === "Admin" || grant.role === "Maintain"));
+  const role = effectiveRepoRole(state, record, user);
+  return role === "Admin" || role === "Maintain";
 }
 
 function isRepoAdmin(state, record, user) {
-  if (!user || !record) return false;
-  if (user.username === record.owner) return true;
-  if (record.organization && memberRole(state, record.organization, user.username) === "Owner") return true;
-  const grant = repoGrant(state, record, "user", user.username);
-  return Boolean(grant && grant.role === "Admin");
+  return effectiveRepoRole(state, record, user) === "Admin";
 }
 
 function canWriteRepo(state, record, user) {
-  if (!user || !record) return false;
-  if (user.username === record.owner) return true;
-  if (record.organization && memberRole(state, record.organization, user.username) === "Owner") return true;
-  const grant = repoGrant(state, record, "user", user.username);
-  return Boolean(grant && ["Write", "Maintain", "Admin"].includes(grant.role));
+  return (ROLE_RANK[effectiveRepoRole(state, record, user)] || 0) >= ROLE_RANK.Write;
 }
 
 function eligibleReviewers(state, record, pull) {
@@ -578,11 +585,7 @@ function eligibleAssignees(state, record) {
 }
 
 function canManageIssues(state, record, user) {
-  if (!user || !record) return false;
-  if (user.username === record.owner) return true;
-  if (record.organization && memberRole(state, record.organization, user.username) === "Owner") return true;
-  const grant = repoGrant(state, record, "user", user.username);
-  return Boolean(grant && ["Triage", "Maintain", "Admin"].includes(grant.role));
+  return ["Triage", "Maintain", "Admin"].includes(effectiveRepoRole(state, record, user));
 }
 
 function canSeeRepo(state, record, user) {
@@ -1485,7 +1488,7 @@ async function handleApi(request, response, url) {
       const body = await readBody(request);
       const updated = await transact((draft) => {
         const actor = currentUser(draft, request);
-        if (!actor || (memberRole(draft, record.organization, actor.username) !== "Owner" && actor.username !== record.owner)) {
+        if (!actor || !isRepoAdmin(draft, record, actor)) {
           return { status: 403, error: "Access denied" };
         }
         const subject = String(body.subject || "").trim();
