@@ -220,9 +220,9 @@ function findHtml(repo, query) {
   return `<h1>Search code</h1><a href="${href}">Code</a>`;
 }
 
-function filesHtml(repo, payload, query, pathFilter) {
+function filesHtml(repo, payload, query, pathFilter, language) {
   const files = payload.files || [];
-  const filter = `<form method="get"><label>Path <input name="path" value="${esc(pathFilter || '')}"></label><input type="hidden" name="q" value="${esc(query)}"><button type="submit">Filter</button></form>`;
+  const filter = `<form method="get"><label>Path <input name="path" value="${esc(pathFilter || '')}"></label><label>Language <input name="language" value="${esc(language || '')}"></label><input type="hidden" name="q" value="${esc(query)}"><button type="submit">Filter</button></form>`;
   if (query && !files.length) return `<h1>Code</h1>${filter}<p>No code results</p>`;
   const items = files.map((file) => {
     const href = '/' + encodeURIComponent(repo.owner) + '/' + encodeURIComponent(repo.name) + '/blob/' + encodeURIComponent(file.path);
@@ -598,8 +598,9 @@ async function pageHtml(route, query, user) {
   if (route.page === 'find') return findHtml(repo, query);
   if (route.page === 'files') {
     const pathFilter = new URLSearchParams(location.search).get('path') || '';
-    const filesQuery = base + '/files?q=' + encodeURIComponent(query) + (pathFilter ? '&path=' + encodeURIComponent(pathFilter) : '');
-    return filesHtml(repo, await api('GET', filesQuery), query, pathFilter);
+    const language = new URLSearchParams(location.search).get('language') || '';
+    const filesQuery = base + '/files?q=' + encodeURIComponent(query) + (pathFilter ? '&path=' + encodeURIComponent(pathFilter) : '') + (language ? '&language=' + encodeURIComponent(language) : '');
+    return filesHtml(repo, await api('GET', filesQuery), query, pathFilter, language);
   }
   if (route.page === 'blob') {
     const file = await api('GET', base + '/blob?path=' + encodeURIComponent(route.file) + branchParam);

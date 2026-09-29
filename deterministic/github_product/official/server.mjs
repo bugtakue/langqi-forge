@@ -1582,6 +1582,7 @@ async function handleApi(request, response, url) {
     if (action === "files") {
       const query = url.searchParams.get("q") || "";
       const pathPrefix = url.searchParams.get("path") || "";
+      const language = String(url.searchParams.get("language") || "").trim().toLowerCase();
       let matched = files;
       if (pathPrefix) {
         const prefix = pathPrefix.endsWith("/") ? pathPrefix : `${pathPrefix}/`;
@@ -1589,6 +1590,15 @@ async function handleApi(request, response, url) {
       }
       if (query) {
         matched = matched.filter((item) => item.path.includes(query) || item.content.includes(query));
+      }
+      if (language) {
+        const suffixes = {
+          markdown: [".md"],
+          typescript: [".ts", ".tsx"],
+          javascript: [".js", ".mjs"],
+          text: [".txt"],
+        }[language] || ["." + language.replace(/^\./, "")];
+        matched = matched.filter((item) => suffixes.some((suffix) => item.path.toLowerCase().endsWith(suffix)));
       }
       sendJson(response, 200, {
         branch,
