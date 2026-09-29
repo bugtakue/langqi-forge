@@ -78,7 +78,9 @@ class AgentFirstFallbackTests(unittest.TestCase):
         graph.agent_result(False, "later batch failed")
         graph.keep_baseline("later batch was not accepted")
         self.assertEqual(graph.context.state, "PLAN")
-        self.assertIn("browser_probe", graph.model_context())
+        context = graph.model_context()
+        self.assertIn("every scenario", context)
+        self.assertNotIn("leave the source unchanged", context)
         self.assertEqual(graph.context.completed_ids, ["REQ-1-1-1"])
         with self.assertRaises(RuntimeError):
             graph.start_fallback()
@@ -216,7 +218,12 @@ class AgentFirstFallbackTests(unittest.TestCase):
         entry = Path(__file__).resolve().parents[1] / "main.py"
         text = entry.read_text(encoding="utf-8")
         self.assertIn('os.environ.setdefault("FACTORY26_AGENT_FIRST_FALLBACK", "1")', text)
-        self.assertIn('os.environ.setdefault("FACTORY26_MAX_AGENT_TURNS", "12")', text)
+        self.assertIn('os.environ.setdefault("FACTORY26_MAX_AGENT_TURNS", "8")', text)
+        self.assertIn('os.environ.setdefault("FACTORY26_CONTINUATION_TURNS", "28")', text)
+        self.assertIn('os.environ.setdefault("FACTORY26_BATCH_SPEC_CHARS", "64000")', text)
+        self.assertIn('os.environ.setdefault("FACTORY26_MAX_MODEL_REQUESTS", "900")', text)
+        self.assertEqual(qualifier._batch_turns(8, continuation=False), 8)
+        self.assertEqual(qualifier._batch_turns(8, continuation=True), 28)
         self.assertLess(
             text.index("FACTORY26_AGENT_FIRST_FALLBACK"),
             text.index("raise SystemExit(main())"),

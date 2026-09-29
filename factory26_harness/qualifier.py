@@ -421,6 +421,19 @@ def _continuation_baseline_gap(staged: Path, tree: dict[str, Any]) -> str:
     return ", ".join(missing)
 
 
+def _batch_turns(base_turns: int, *, continuation: bool) -> int:
+    """Later batches get a larger model budget than the first recovery batch."""
+
+    if not continuation:
+        return base_turns
+    raw = os.environ.get("FACTORY26_CONTINUATION_TURNS", "28")
+    try:
+        extra = int(raw)
+    except ValueError:
+        return base_turns
+    return min(80, max(base_turns, extra))
+
+
 def _run_agent_first_fallback(
     graph: AgentFirstFallbackGraph,
     tree: dict[str, Any],
@@ -837,10 +850,18 @@ def main(argv: list[str] | None = None) -> int:
                     fallback_execution: FallbackExecution | None = None
                     try:
                         agent_task_outline = outline
+                        continuation = bool(
+                            fallback_graph_active
+                            and graph is not None
+                            and graph.context.continuation
+                        )
+                        batch_turns = _batch_turns(
+                            args.max_agent_turns, continuation=continuation
+                        )
                         if fallback_graph_active:
                             agent_task_outline += "\n\n" + graph.model_context()
                         result = CodingAgent(
-                            model, tools, trace, max_turns=args.max_agent_turns
+                            model, tools, trace, max_turns=batch_turns
                         ).implement(
                             active_group,
                             related_files=handoff_paths,

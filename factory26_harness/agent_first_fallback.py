@@ -317,9 +317,15 @@ class AgentFirstFallbackGraph:
         if self.context.continuation:
             continuation = (
                 "\nThe workspace already contains the traced public-canvas baseline. "
-                "Implement the current batch on top of it. Keep controls that already "
-                "match the requirement text. Before AUDIT PASS, use browser_probe on "
-                "one current-batch scenario. If the page already matches, leave the source unchanged."
+                "That baseline is not this batch. Official tests still fail on scenarios "
+                "outside the controls that already score. Read every scenario in the "
+                "current batch, including the exact control name, error message, "
+                "permission, and reload behavior. A visible label is not proof. "
+                "Use browser_probe on each scenario before AUDIT PASS. If that scenario "
+                "already behaves as written, leave its control unchanged and probe the "
+                "next scenario. If a message, role, permission, persistence, or reload "
+                "check is missing, edit the source to add it. Do not remove a control "
+                "that already matches, and do not stop after the first matching page."
             )
         return (
             "<agent_harness_context>\n"
