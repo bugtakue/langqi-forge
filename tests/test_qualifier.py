@@ -124,7 +124,7 @@ class QualifierTests(unittest.TestCase):
                 if not probed["ok"]:
                     raise AssertionError(probed)
 
-            def implement(self, nodes, related_files=(), *, task_outline=""):
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()):
                 self.model.request_count += 1
                 is_first = nodes[0].req_id == "REQ-1"
                 self._write_and_probe(
@@ -133,7 +133,7 @@ class QualifierTests(unittest.TestCase):
                 )
                 return AgentRun(True, "fixture self-audit", tuple(self.tools.changed_files), 1)
 
-            def repair(self, failure_text, related_files):
+            def repair(self, failure_text, related_files, **_extra):
                 if "First" not in failure_text:
                     raise AssertionError("regression failure omitted reproduction steps")
                 if not self.repair_succeeds:
@@ -202,7 +202,7 @@ class QualifierTests(unittest.TestCase):
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 self.model.request_count += 1
                 if nodes[0].req_id == "REQ-1":
                     path = "backend/server.mjs"
@@ -226,7 +226,7 @@ class QualifierTests(unittest.TestCase):
                     raise AssertionError(quick)
                 return AgentRun(True, "quick-only fixture", tuple(self.tools.changed_files), 1)
 
-            def repair(self, _failure_text, _related_files) -> AgentRun:
+            def repair(self, _failure_text, _related_files, **_extra) -> AgentRun:
                 return AgentRun(False, "startup repair declined", (), 1)
 
         with tempfile.TemporaryDirectory() as directory:
@@ -269,7 +269,7 @@ class QualifierTests(unittest.TestCase):
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 self.model.request_count += 1
                 edited = json.loads(self.tools.execute("replace_text", {
                     "path": "backend/server.mjs",
@@ -286,7 +286,7 @@ class QualifierTests(unittest.TestCase):
                     raise AssertionError(quick)
                 return AgentRun(True, "quick-only fixture", tuple(self.tools.changed_files), 1)
 
-            def repair(self, failure_text, related_files) -> AgentRun:
+            def repair(self, failure_text, related_files, **_extra) -> AgentRun:
                 if "backend exited" not in failure_text:
                     raise AssertionError(failure_text)
                 if not type(self).repair_succeeds:
@@ -351,7 +351,7 @@ class QualifierTests(unittest.TestCase):
             def __init__(self, model, tools, _trace, max_turns=20) -> None:
                 pass
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 type(self).attempted += 1
                 raise ModelGatewayUnavailable("attempt 1: HTTP 401")
 
@@ -394,7 +394,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 req_id = nodes[0].req_id
                 type(self).attempted.append(req_id)
                 if req_id != "REQ-1":
@@ -464,7 +464,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 ids = tuple(node.req_id for node in nodes)
                 type(self).attempted.append(ids)
                 type(self).observed_notes.append(self.tools.handoff_notes)
@@ -564,7 +564,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 ids = tuple(node.req_id for node in nodes)
                 type(self).attempted.append(ids)
                 self.model.request_count += 1
@@ -627,7 +627,7 @@ children:
             def __init__(self, model, tools, _trace, max_turns=20) -> None:
                 self.model = model
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 type(self).attempted.append(tuple(node.req_id for node in nodes))
                 self.model.request_count += 1
                 return AgentRun(False, "fixture failed", (), 1)
@@ -680,7 +680,7 @@ children:
             def __init__(self, model, tools, _trace, max_turns=20) -> None:
                 self.model = model
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 type(self).attempted += 1
                 self.model.request_count += 1
                 raise RuntimeError("fixture model gateway unavailable")
@@ -720,7 +720,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 req_id = nodes[0].req_id
                 type(self).attempted.append(req_id)
                 self.model.request_count += 1
@@ -817,7 +817,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 self.model.request_count += 1
                 return AgentRun(False, "fixture did not implement", (), 1)
 
@@ -891,7 +891,7 @@ children:
                 self.model.request_count += 1
                 return AgentRun(True, "repair fixture", tuple(self.tools.changed_files), 1)
 
-            def implement(self, _nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, _nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 result = self._edit(
                     "// The coding agent implements the requested application here.",
                     'document.querySelector("#app").innerHTML = "<h1>Example</h1>";',
@@ -900,7 +900,7 @@ children:
                 self.tools.browser_probe_verified_revision = self.tools.change_revision
                 return result
 
-            def repair(self, _failure_text, _related_files) -> AgentRun:
+            def repair(self, _failure_text, _related_files, **_extra) -> AgentRun:
                 return self._edit("<h1>Example</h1>", "<h1>Example repaired</h1>")
 
         with tempfile.TemporaryDirectory() as directory:
@@ -951,7 +951,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, _nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, _nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 edited = json.loads(self.tools.execute("replace_text", {
                     "path": "frontend/src/app.js",
                     "old": "// The coding agent implements the requested application here.",
@@ -963,7 +963,7 @@ children:
                 self.model.request_count += 1
                 return AgentRun(True, "implemented", tuple(self.tools.changed_files), 1)
 
-            def repair(self, _failure_text, _related_files) -> AgentRun:
+            def repair(self, _failure_text, _related_files, **_extra) -> AgentRun:
                 edited = json.loads(self.tools.execute("replace_text", {
                     "path": "frontend/src/app.js",
                     "old": "<h1>Committed</h1>",
@@ -1095,7 +1095,7 @@ children:
                 self.model = model
                 self.tools = tools
 
-            def implement(self, nodes, related_files=(), *, task_outline="") -> AgentRun:
+            def implement(self, nodes, related_files=(), *, task_outline="", accepted_ids=()) -> AgentRun:
                 type(self).observed.append(tuple(related_files))
                 type(self).outlines.append(json.loads(task_outline))
                 type(self).notes.append(self.tools.handoff_notes)
@@ -1599,6 +1599,141 @@ children:
                 started["payload"]["visual_references_unavailable"],
                 ["reference/unavailable.png"],
             )
+
+    def test_public_canvas_requires_a_model_tool_call(self) -> None:
+        class CanvasModel:
+            def __init__(self, trace, *, planned_turns=None) -> None:
+                self.trace = trace
+                self.planned_turns = planned_turns
+                self.request_count = 0
+                self.total_prompt_tokens = 20
+                self.total_completion_tokens = 8
+
+            def gateway_evidence(self) -> dict[str, str]:
+                return {"provenance": "scripted-test-fixture", "model": "fixture"}
+
+            def budget_evidence(self) -> dict[str, int | None]:
+                return {"planned_turns": self.planned_turns, "max_requests": 4}
+
+            def complete(self, messages, tools, **kwargs) -> ModelReply:
+                self.request_count += 1
+                self.trace.record("model_request", fixture=True, turn=self.request_count)
+                names = [
+                    ((tool.get("function") or {}).get("name"))
+                    for tool in tools or []
+                ]
+                if "materialize_verified_canvas" in names:
+                    call = {
+                        "id": "call-canvas",
+                        "type": "function",
+                        "function": {
+                            "name": "materialize_verified_canvas",
+                            "arguments": json.dumps({
+                                "requirement_name": "GitHub Collaboration Platform Core Requirements",
+                            }),
+                        },
+                    }
+                    return ModelReply(
+                        "", (call,), {"role": "assistant", "content": "", "tool_calls": [call]},
+                        12, 6, "r-tool",
+                    )
+                if any("CANVAS_READY" in str(message.get("content") or "") for message in messages):
+                    return ModelReply("CANVAS_READY", (), {"role": "assistant", "content": "CANVAS_READY"}, 4, 2, "r-ready")
+                return ModelReply(
+                    "REQ-1-1-1 stays in the application.",
+                    (),
+                    {"role": "assistant", "content": "REQ-1-1-1 stays in the application."},
+                    80,
+                    20,
+                    "r-review",
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = root / "requirements"
+            requirement_dir.mkdir()
+            (requirement_dir / "requirements.yaml").write_text(
+                """id: ROOT
+name: GitHub Collaboration Platform Core Requirements
+type: FOLDER
+description: Public collaboration canvas.
+children:
+  - id: REQ-1-1-1
+    name: Register
+    type: ATOMIC
+    description: Register an account.
+    dependencies: []
+    scenarios: []
+""",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            passing = [CheckResult("startup_health", True, "ok", (), 0.0)]
+            with (
+                patch.object(qualifier, "OpenAIChatClient", CanvasModel),
+                patch.object(qualifier, "run_full_checks", return_value=passing),
+            ):
+                status = qualifier.main([str(requirement_dir), "--output-dir", str(output)])
+            report = json.loads((output / ".arc" / "harness-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(status, 1, report)
+            self.assertEqual(report["status"], "failed")
+            self.assertGreaterEqual(report["model_requests"], 1)
+            self.assertNotIn("Forgot password", (output / "frontend/src/app.js").read_text(encoding="utf-8"))
+            plan = json.loads((output / ".arc" / "compiled-plan.json").read_text(encoding="utf-8"))
+            self.assertEqual(plan["route"], "model-generated-implementation")
+            self.assertFalse(plan["task_specific_prebuilt_code"])
+
+    def test_public_canvas_does_not_copy_when_the_model_refuses(self) -> None:
+        class RefusingModel:
+            def __init__(self, trace, *, planned_turns=None) -> None:
+                self.trace = trace
+                self.planned_turns = planned_turns
+                self.request_count = 0
+                self.total_prompt_tokens = 4
+                self.total_completion_tokens = 2
+
+            def gateway_evidence(self) -> dict[str, str]:
+                return {"provenance": "scripted-test-fixture", "model": "fixture"}
+
+            def budget_evidence(self) -> dict[str, int | None]:
+                return {"planned_turns": self.planned_turns, "max_requests": 4}
+
+            def complete(self, messages, tools, **kwargs) -> ModelReply:
+                self.request_count += 1
+                self.trace.record("model_request", fixture=True)
+                return ModelReply("no", (), {"role": "assistant", "content": "no"}, 4, 2, "r1")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            requirement_dir = root / "requirements"
+            requirement_dir.mkdir()
+            (requirement_dir / "requirements.yaml").write_text(
+                """id: ROOT
+name: Core Requirements for an Online Spreadsheet Data Workspace
+type: FOLDER
+description: Public spreadsheet canvas.
+children:
+  - id: REQ-1-1-1
+    name: Grid
+    type: ATOMIC
+    description: Show a grid.
+    dependencies: []
+    scenarios: []
+""",
+                encoding="utf-8",
+            )
+            output = root / "output"
+            passing = [CheckResult("startup_health", True, "ok", (), 0.0)]
+            with (
+                patch.object(qualifier, "OpenAIChatClient", RefusingModel),
+                patch.object(qualifier, "run_full_checks", return_value=passing),
+            ):
+                status = qualifier.main([str(requirement_dir), "--output-dir", str(output)])
+            report = json.loads((output / ".arc" / "harness-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(status, 1)
+            self.assertEqual(report["status"], "failed")
+            self.assertGreaterEqual(report["model_requests"], 1)
+            self.assertNotIn("Worksheet grid", (output / "frontend/src/app.js").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

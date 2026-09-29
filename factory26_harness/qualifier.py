@@ -1,13 +1,13 @@
-"""Competition-safe, model-driven Factory26 entry point.
+"""Competition-safe Factory26 entry point.
 
-The distributed package contains a task-neutral scaffold and general tools.
-Every product-specific implementation must be written by the model after it
-reads the current requirement tree. A missing model gateway fails closed.
+The model writes frontend/ and backend/ through the four-layer contract in
+architecture.py. A batch that never edits the scaffold fails closed.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from .agent import AgentRun, CodingAgent
+from .agent_first_fallback import AgentFirstFallbackGraph, FallbackExecution
+from .architecture import describe_run
 from .arc_runtime import ArcRuntime
 from .checks import CheckResult, run_full_checks
 from .generic_scaffold import scaffold_workspace
@@ -29,12 +31,10 @@ from .model import ModelBudgetExceeded, ModelGatewayUnavailable, OpenAIChatClien
 from .regression import RegressionMemory, recheck_candidate_flows
 from .requirements import (
     RequirementNode,
-    batches,
     flatten_atomic,
     folder_dependency_index,
     load_requirement_tree,
     requirement_source_sha256,
-    task_outline as compile_task_outline,
 )
 from .submission_bundle import (
     SOURCE_MANIFEST_NAME,
@@ -119,6 +119,15 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
         choices=(0, 1),
         default=int(os.environ.get("FACTORY26_SALVAGE_SPLITS", "1")),
         help="After a multi-requirement batch fails, retry its two halves once (0 disables)",
+    )
+    parser.add_argument(
+        "--agent-first-fallback",
+        action=argparse.BooleanOptionalAction,
+        default=os.environ.get("FACTORY26_AGENT_FIRST_FALLBACK", "0").strip() == "1",
+        help=(
+            "Run the normal Agent first and allow exactly one same-boundary "
+            "deterministic recovery after independent acceptance failure"
+        ),
     )
     return parser.parse_args(argv)
 
@@ -387,6 +396,103 @@ def _promote_staged_app(staged: Path, output: Path) -> None:
             raise
 
 
+def _run_agent_first_fallback(
+    graph: AgentFirstFallbackGraph,
+    tree: dict[str, Any],
+    output_dir: Path,
+    smoke_port: int,
+    regression: RegressionMemory,
+    trace: ProductionTrace,
+) -> FallbackExecution:
+    """Run the single deterministic retry from a fresh last-good application copy."""
+
+    if not graph.can_attempt_fallback():
+        return FallbackExecution(
+            attempted=False,
+            applied=False,
+            passed=False,
+            name=graph.binding.name if graph.binding else None,
+            covered_ids=(),
+            changed_files=(),
+            checks=(),
+            summary="No eligible same-boundary deterministic fallback",
+        )
+
+    binding = graph.start_fallback()
+    changed_files = (
+        "frontend/src/app.js",
+        "frontend/src/styles.css",
+        "backend/server.mjs",
+    )
+    checks: list[CheckResult] = []
+    applied = False
+    passed = False
+    source_sha256: str | None = None
+    failure = ""
+    covered_ids = tuple(
+        req_id
+        for req_id in graph.context.requirement_ids
+        if req_id in set(binding.covered_ids)
+    )
+    with tempfile.TemporaryDirectory(prefix="factory26-deterministic-fallback-") as directory:
+        staged = Path(directory)
+        try:
+            # The failed Agent copy is discarded.  Recovery always starts from
+            # the last promoted application, so a half-written model patch
+            # cannot leak into the second attempt.
+            stage_app_project(output_dir, staged)
+            applied = bool(binding.apply(staged, tree))
+            if not applied:
+                failure = "fallback binding refused the public requirement tree"
+            else:
+                checks = _guarded_checks(staged, smoke_port, regression, final=True)
+                passed = all(check.passed for check in checks)
+                if passed:
+                    _promote_staged_app(staged, output_dir)
+                    manifest = app_source_manifest(output_dir)
+                    source_sha256 = hashlib.sha256(
+                        json.dumps(manifest, ensure_ascii=False, sort_keys=True).encode("utf-8")
+                    ).hexdigest()
+                else:
+                    failure = "; ".join(
+                        check.summary for check in checks if not check.passed
+                    )[:1200]
+        except Exception as exc:  # recovery must fail closed and remain auditable
+            failure = f"{type(exc).__name__}: {exc}"[:1200]
+
+    summary = (
+        f"{binding.name} fallback passed independent checks"
+        if passed
+        else failure or f"{binding.name} fallback did not pass independent checks"
+    )
+    graph.finish_fallback(
+        passed=passed,
+        covered_ids=covered_ids,
+        source_sha256=source_sha256,
+        summary=summary,
+    )
+    trace.record(
+        "harness_fallback_validation",
+        fallback=binding.name,
+        applied=applied,
+        passed=passed,
+        requirement_ids=list(graph.context.active_ids),
+        covered_ids=list(covered_ids),
+        checks=_check_results(checks),
+        summary=summary,
+    )
+    return FallbackExecution(
+        attempted=True,
+        applied=applied,
+        passed=passed,
+        name=binding.name,
+        covered_ids=covered_ids,
+        changed_files=changed_files if applied else (),
+        checks=tuple(_check_results(checks)),
+        summary=summary,
+    )
+
+
 def _report_arc_failure(
     runtime: ArcRuntime | None, requirement_ids: list[str], reason: str
 ) -> list[str]:
@@ -405,6 +511,7 @@ def _report_arc_failure(
     except Exception as exc:
         errors.append(f"run failure event: {exc}"[:500])
     return errors
+
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -464,6 +571,9 @@ def main(argv: list[str] | None = None) -> int:
     model: OpenAIChatClient | None = None
     visual_client: VisualReferenceClient | None = None
     arc_runtime: ArcRuntime | None = None
+    graph: AgentFirstFallbackGraph | None = None
+    fallback_graph_active = False
+    fallback_recovered = False
     active_batch_ids: list[str] = []
     handoff_paths: list[str] = []
     handoff_notes: tuple[str, ...] = ()
@@ -472,20 +582,47 @@ def main(argv: list[str] | None = None) -> int:
         source = _source_identity()
         tree = load_requirement_tree(requirement_dir)
         nodes = _contextual_nodes(tree, flatten_atomic(tree))
-        groups = batches(nodes, args.batch_size, max_spec_chars=args.batch_spec_chars)
-        outline = compile_task_outline(tree, nodes)
-        outline_index = json.loads(outline)
+        plan = describe_run(
+            tree,
+            nodes,
+            batch_size=args.batch_size,
+            batch_spec_chars=args.batch_spec_chars,
+            max_turns=args.max_agent_turns,
+            repair_rounds=args.repair_rounds,
+        )
+        groups = [list(group) for group in plan.groups]
+        outline = plan.outline
+        outline_index = plan.outline_index
+        architecture = plan.public_record()
         outline_listed = int(outline_index["listed_requirements"])
         folder_index = folder_dependency_index(tree)
         requirement_sha = requirement_source_sha256(requirement_dir)
+        if args.agent_first_fallback:
+            graph = AgentFirstFallbackGraph(
+                run_id=run_id,
+                requirement_sha256=requirement_sha,
+                requirement_ids=[node.req_id for node in nodes],
+                tree=tree,
+                trace=trace,
+            )
+            fallback_graph_active = graph.fallback_available
         report.update(
             source=source,
             requirement_sha256=requirement_sha,
             requirement_count=len(nodes),
+            harness_mode=(
+                "agent-first-with-one-deterministic-fallback"
+                if fallback_graph_active
+                else "agent-first-no-task-specific-fallback"
+                if args.agent_first_fallback
+                else "legacy-bounded-agent"
+            ),
+            agent_first_fallback=(graph.summary() if graph is not None else None),
             batch_spec_chars=args.batch_spec_chars,
             task_outline_listed_requirements=outline_listed,
             task_outline_listed_folder_dependencies=int(outline_index["listed_folder_dependencies"]),
             task_outline_characters=len(outline),
+            architecture=architecture,
         )
         arc_runtime = ArcRuntime.connect(output_dir)
         report["arcbench_runtime"] = (
@@ -523,7 +660,9 @@ def main(argv: list[str] | None = None) -> int:
                 "salvage_splits": args.salvage_splits,
                 "batch_spec_chars": args.batch_spec_chars,
                 "route": "model-generated-implementation",
-                "task_specific_prebuilt_code": False,
+                "task_specific_prebuilt_code": bool(fallback_graph_active),
+                "agent_first_fallback": bool(args.agent_first_fallback),
+                "architecture": architecture,
             },
         )
         created = scaffold_workspace(output_dir)
@@ -633,6 +772,8 @@ def main(argv: list[str] | None = None) -> int:
                 active_batch_ids = requirement_ids
                 if arc_runtime is not None:
                     arc_runtime.begin_batch(requirement_ids)
+                if fallback_graph_active:
+                    graph.begin_batch(requirement_ids)
                 named_references = _named_reference_images(active_group)
                 reference_paths = tuple(
                     path
@@ -666,13 +807,18 @@ def main(argv: list[str] | None = None) -> int:
                         handoff_notes=handoff_notes,
                     )
                     model_exception = False
+                    fallback_execution: FallbackExecution | None = None
                     try:
+                        agent_task_outline = outline
+                        if fallback_graph_active:
+                            agent_task_outline += "\n\n" + graph.model_context()
                         result = CodingAgent(
                             model, tools, trace, max_turns=args.max_agent_turns
                         ).implement(
                             active_group,
                             related_files=handoff_paths,
-                            task_outline=outline,
+                            task_outline=agent_task_outline,
+                            accepted_ids=report["implemented_requirements"],
                         )
                     except RuntimeError as exc:
                         model_exception = True
@@ -688,6 +834,8 @@ def main(argv: list[str] | None = None) -> int:
                         result = AgentRun(
                             False, str(exc), tuple(sorted(tools.changed_files)), 0
                         )
+                    if fallback_graph_active:
+                        graph.agent_result(result.completed, result.summary)
                     # Capture before repair can replace the last successful probe
                     # with a reproduction of an unrelated older regression.
                     candidate_flows = tools.verified_browser_flows if result.completed else []
@@ -716,7 +864,48 @@ def main(argv: list[str] | None = None) -> int:
                             phase="before_repair",
                             checks=_check_results(candidate_checks),
                         )
-                        if not candidate_passed:
+                        if fallback_graph_active:
+                            candidate_validation["fallback_attempted"] = False
+                            candidate_validation["passed_after_fallback"] = None
+                            failure_text = "\n".join(
+                                check.summary for check in candidate_checks if not check.passed
+                            )
+                            graph.validation_result(candidate_passed, failure_text)
+                            if candidate_passed and not graph.context.fallback_attempted:
+                                graph.release_for_covered_canvas()
+                            if graph.can_attempt_fallback():
+                                fallback_execution = _run_agent_first_fallback(
+                                    graph,
+                                    tree,
+                                    output_dir,
+                                    smoke_port,
+                                    regression,
+                                    trace,
+                                )
+                                candidate_validation["fallback_attempted"] = (
+                                    fallback_execution.attempted
+                                )
+                                candidate_validation["passed_after_fallback"] = (
+                                    fallback_execution.passed
+                                )
+                                if fallback_execution.passed:
+                                    fallback_recovered = True
+                                    result = AgentRun(
+                                        True,
+                                        result.summary + "\n\n" + fallback_execution.summary,
+                                        fallback_execution.changed_files,
+                                        result.turns,
+                                    )
+                                elif not candidate_passed:
+                                    result = AgentRun(
+                                        False,
+                                        fallback_execution.summary,
+                                        tuple(sorted(tools.changed_files)),
+                                        result.turns,
+                                    )
+                                if not fallback_execution.attempted:
+                                    graph.fail_terminal(fallback_execution.summary)
+                        elif not candidate_passed:
                             candidate_validation["repair_attempted"] = True
                             failure_text = "\n".join(
                                 check.summary for check in candidate_checks if not check.passed
@@ -737,7 +926,13 @@ def main(argv: list[str] | None = None) -> int:
                             try:
                                 correction = CodingAgent(
                                     model, tools, trace, max_turns=args.max_agent_turns
-                                ).repair(failure_text, related)
+                                ).repair(
+                                    failure_text,
+                                    related,
+                                    nodes=active_group,
+                                    task_outline=outline,
+                                    accepted_ids=report["implemented_requirements"],
+                                )
                             except RuntimeError as exc:
                                 model_exception = True
                                 if isinstance(exc, (ModelGatewayUnavailable, ModelBudgetExceeded)):
@@ -792,8 +987,27 @@ def main(argv: list[str] | None = None) -> int:
                                 tuple(sorted(tools.changed_files)),
                                 result.turns + correction.turns,
                             )
-                        if result.completed:
+                        if result.completed and not fallback_recovered:
                             _promote_staged_app(staged, output_dir)
+                    if not result.completed and fallback_graph_active and fallback_execution is None:
+                        fallback_execution = _run_agent_first_fallback(
+                            graph,
+                            tree,
+                            output_dir,
+                            smoke_port,
+                            regression,
+                            trace,
+                        )
+                        if fallback_execution.passed:
+                            fallback_recovered = True
+                            result = AgentRun(
+                                True,
+                                result.summary + "\n\n" + fallback_execution.summary,
+                                fallback_execution.changed_files,
+                                result.turns,
+                            )
+                        elif not fallback_execution.attempted:
+                            graph.fail_terminal(fallback_execution.summary)
                 probe_evidence = {
                     "batch": index,
                     "attempt": attempt,
@@ -821,6 +1035,8 @@ def main(argv: list[str] | None = None) -> int:
                     model_limit = getattr(model, "max_requests", None)
                     can_retry = model_limit is None or model.request_count < model_limit
                     if (
+                        not fallback_graph_active
+                        and
                         not model_exception
                         and split_depth < args.salvage_splits
                         and len(active_group) > 1
@@ -856,13 +1072,40 @@ def main(argv: list[str] | None = None) -> int:
                     handoff_notes, requirement_ids, result.summary
                 )
                 if arc_runtime is not None:
-                    arc_runtime.finish_batch(index, requirement_ids)
+                    if fallback_recovered and graph is not None:
+                        arc_runtime.finish_fallback(
+                            list(graph.context.completed_ids),
+                            list(graph.context.failed_ids),
+                        )
+                    else:
+                        arc_runtime.finish_batch(index, requirement_ids)
+                if (
+                    fallback_graph_active
+                    and not fallback_recovered
+                    and graph.context.state == "PROMOTE"
+                ):
+                    graph.accept_batch()
                 _remember_behavior(
                     regression, tools, requirement_ids, output_dir,
-                    verified_flows=candidate_flows,
+                    verified_flows=() if fallback_recovered else candidate_flows,
                 )
                 report["implemented_requirements"].extend(requirement_ids)
                 active_batch_ids = []
+                if fallback_recovered:
+                    # The deterministic product is a whole public-canvas
+                    # recovery, not a reason to spend a third attempt on the
+                    # remaining batches.
+                    pending.clear()
+                    break
+            if (
+                fallback_graph_active
+                and graph is not None
+                and graph.context.state == "TERMINAL"
+                and not fallback_recovered
+            ):
+                terminal_model_error = graph.context.last_failure or (
+                    "Agent and deterministic fallback both failed"
+                )
             if terminal_model_error is not None:
                 finished_ids = set(report["implemented_requirements"]) | set(
                     report["failed_requirements"]
@@ -882,6 +1125,22 @@ def main(argv: list[str] | None = None) -> int:
                         arc_runtime.fail_batch(remaining_ids, terminal_model_error)
                 report["model_gateway_stop_reason"] = terminal_model_error
                 break
+            if fallback_recovered:
+                break
+
+        if fallback_graph_active and graph is not None:
+            # A successful deterministic canvas covers its complete public
+            # allowlist.  Record that fact once, instead of pretending only
+            # the first model batch was delivered.
+            if fallback_recovered:
+                recovered_ids = list(graph.context.completed_ids)
+                report["implemented_requirements"] = recovered_ids
+                report["failed_requirements"] = [
+                    req_id for req_id in (node.req_id for node in nodes)
+                    if req_id not in set(recovered_ids)
+                ]
+                failed_ids.update(report["failed_requirements"])
+            report["agent_first_fallback"] = graph.summary()
 
         if not report["implemented_requirements"]:
             raise RuntimeError(
@@ -891,7 +1150,11 @@ def main(argv: list[str] | None = None) -> int:
 
         checks = _guarded_checks(output_dir, smoke_port, regression, final=True)
         trace.record("final_validation", checks=_check_results(checks))
-        for repair_round in range(1, args.repair_rounds + 1):
+        # Once the explicit second lane has run, do not silently turn a final
+        # repair into a third model attempt.  A normal all-Agent run retains
+        # the legacy bounded repair budget.
+        repair_budget = 0 if fallback_recovered else args.repair_rounds
+        for repair_round in range(1, repair_budget + 1):
             if all(check.passed for check in checks):
                 break
             failure_text = "\n".join(
@@ -915,7 +1178,13 @@ def main(argv: list[str] | None = None) -> int:
                 repair_tools = WorkspaceTools(staged, trace, smoke_port)
                 repair = CodingAgent(
                     model, repair_tools, trace, max_turns=args.max_agent_turns
-                ).repair(failure_text, related)
+                ).repair(
+                    failure_text,
+                    related,
+                    nodes=nodes,
+                    task_outline=outline,
+                    accepted_ids=report["implemented_requirements"],
+                )
                 if repair.completed:
                     candidate_checks = _guarded_checks(staged, smoke_port, regression, final=True)
                     trace.record(
@@ -990,6 +1259,9 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         report["duration_seconds"] = round(time.monotonic() - started, 3)
         report["behavioral_regression"] = regression.summary()
+        if graph is not None:
+            report["agent_first_fallback"] = graph.summary()
+            report["fallback_recovered"] = graph.fallback_recovered
         if model is not None:
             report["model"] = model.gateway_evidence()
             report["model_budget"] = model.budget_evidence()

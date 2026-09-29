@@ -73,6 +73,8 @@ _PROGRESS_EVENTS = {
     "agent_session_started", "agent_session_completed", "agent_session_stalled",
     "agent_session_exhausted", "model_output_truncated", "model_gateway_circuit_open",
     "agent_context_compacted",
+    "harness_graph_transition", "harness_fallback_started",
+    "harness_fallback_finished", "harness_fallback_validation",
 }
 _PROGRESS_FIELDS = {
     "batch", "attempt", "stage", "requirement_ids", "completed", "changed_files",
@@ -83,6 +85,8 @@ _PROGRESS_FIELDS = {
     "fresh_observation_messages", "soft_limit_exceeded",
     "retained_specification_ids",
     "source_snapshot_bytes", "source_snapshot_files", "source_snapshot_complete_files",
+    "event", "graph_event", "next_state", "previous_state", "fallback", "passed", "applied",
+    "covered_ids", "fallback_available", "context_version",
 }
 
 

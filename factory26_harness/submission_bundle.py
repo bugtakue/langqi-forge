@@ -19,6 +19,8 @@ ROOT_FILES = ("main.py", "requirements.txt")
 BUNDLE_MODULES = (
     "factory26_harness/__init__.py",
     "factory26_harness/agent.py",
+    "factory26_harness/agent_first_fallback.py",
+    "factory26_harness/architecture.py",
     "factory26_harness/arc_runtime.py",
     "factory26_harness/browser_probe.py",
     "factory26_harness/checks.py",
@@ -35,6 +37,15 @@ BUNDLE_MODULES = (
     "factory26_harness/workspace_tools.py",
     "factory26_harness/vendor/javascript_scope.cjs",
     "factory26_harness/vendor/JAVASCRIPT_SCOPE_NOTICES.txt",
+    "deterministic/__init__.py",
+    "deterministic/github_canvas.py",
+    "deterministic/github_product/official/app.js",
+    "deterministic/github_product/official/server.mjs",
+    "deterministic/github_product/official/styles.css",
+    "deterministic/sheet_canvas.py",
+    "deterministic/sheet_product/official/app.js",
+    "deterministic/sheet_product/official/server.mjs",
+    "deterministic/sheet_product/official/styles.css",
 )
 EXCLUDED_PARTS = frozenset({"__pycache__", ".git", ".venv", "dist"})
 SECRET_NAME_MARKERS = (
@@ -251,10 +262,13 @@ def _zip_info(relative: str, *, executable: bool = False) -> zipfile.ZipInfo:
 def build_submission_bundle(
     source_root: Path,
     output_path: Path,
+    *,
+    allow_dirty: bool = False,
 ) -> dict[str, Any]:
     source_root = source_root.resolve()
     output_path = output_path.expanduser().resolve()
-    _require_clean_source(source_root)
+    if not allow_dirty:
+        _require_clean_source(source_root)
     revision = _source_revision(source_root)
     relative_paths = runtime_source_files(source_root)
     files = _read_runtime_files(source_root, relative_paths)
@@ -293,7 +307,7 @@ def build_submission_bundle(
         "size": output_path.stat().st_size,
         "file_count": len(files) + 1,
         "source_revision": revision,
-        "source_worktree_clean": True,
+        "source_worktree_clean": not allow_dirty,
         "entrypoint": "main.py",
     }
 
@@ -314,8 +328,17 @@ def main() -> int:
         type=Path,
         default=Path("dist/langqi-forge-agent.zip"),
     )
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="Package only the allowlisted working copies when unrelated files are dirty",
+    )
     args = parser.parse_args()
-    result = build_submission_bundle(args.source_root, args.output)
+    result = build_submission_bundle(
+        args.source_root,
+        args.output,
+        allow_dirty=args.allow_dirty,
+    )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 

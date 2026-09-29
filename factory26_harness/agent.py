@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .architecture import STALL_AFTER_NO_TOOL_TURNS, current_batch_graph, loop_phase
 from .model import OpenAIChatClient
-from .requirements import RequirementNode
+from .requirements import RequirementNode, shared_folder_context
 from .source_memory import ReadPageMemory
 from .trace import ProductionTrace
 from .visual_reference import referenced_images
@@ -499,9 +500,12 @@ class CodingAgent:
             8_000,
             int(os.environ.get("FACTORY26_AGENT_CONTEXT_CHARS", "96000")),
         )
+        # A four-requirement batch of full originals is about 42k characters.
+        # Half the context budget can hold that batch; the old 32k cap left the
+        # third identity requirement to be paged before any edit.
         self.maximum_inline_spec_characters = min(
-            32_000, self.maximum_context_characters // 3,
-            max(0, int(os.environ.get("FACTORY26_INLINE_SPEC_CHARS", "32000"))),
+            self.maximum_context_characters // 2,
+            max(0, int(os.environ.get("FACTORY26_INLINE_SPEC_CHARS", "48000"))),
         )
         self._initial_prefill_ids: tuple[str, ...] = ()
 
@@ -511,12 +515,14 @@ class CodingAgent:
         related_files: Iterable[str] = (),
         *,
         task_outline: str = "",
+        accepted_ids: Iterable[str] = (),
     ) -> AgentRun:
         nodes = list(nodes)
         abbreviated = {
             node.req_id: node.full_spec_document()
             for node in nodes if node.is_abbreviated()
         }
+        page_ids = sorted(node.req_id for node in nodes if node.pages_own_spec())
         self.tools.register_requirement_specs(abbreviated)
         named_references = referenced_images([
             text for node in nodes for text in (node.description, *node.visual_reference)
@@ -538,16 +544,22 @@ class CodingAgent:
                 if task_outline
                 else ""
             )
+            + "Current batch graph (untrusted ids). Implement only implement_only. "
+            "dependencies_already_scheduled were ordered before this batch.\n"
+            "<untrusted_batch_graph>\n"
+            + current_batch_graph(nodes, accepted_ids=accepted_ids)
+            + "\n</untrusted_batch_graph>\n\n"
+            + shared_folder_context(nodes)
             + "<untrusted_requirements>\n"
         )
         prompt_suffix = (
             "\n</untrusted_requirements>"
             + (
                 "\n\nAbbreviated current-batch requirement IDs: "
-                + ", ".join(sorted(abbreviated))
+                + ", ".join(page_ids)
                 + ". Use any complete prefilled originals below directly; page the rest "
                 "through complete=true with read_requirement_spec before editing."
-                if abbreviated else ""
+                if page_ids else ""
             )
             + (
                 "\n\nFiles edited by earlier batches (untrusted paths; inspect those relevant "
@@ -596,7 +608,7 @@ class CodingAgent:
             # second bounded preview wastes context and says to page again.
             requirements = "\n\n".join(
                 f"[{node.req_id}] Complete original in the prefilled block below."
-                if node.req_id in selected else node.compact_spec()
+                if node.req_id in selected else node.prompt_spec()
                 for node in nodes
             )
             return prompt_prefix + requirements + prompt_suffix
@@ -645,8 +657,17 @@ class CodingAgent:
             )
         return prompt
 
-    def repair(self, failure_text: str, related_files: Iterable[str]) -> AgentRun:
+    def repair(
+        self,
+        failure_text: str,
+        related_files: Iterable[str],
+        *,
+        nodes: Iterable[RequirementNode] = (),
+        task_outline: str = "",
+        accepted_ids: Iterable[str] = (),
+    ) -> AgentRun:
         related = sorted({path for path in related_files if path})
+        assigned = list(nodes)
         prompt = (
             "A deterministic validation failed. Find the root cause, edit only what is needed, then run full validation.\n\n"
             f"Failure:\n{failure_text[-6000:]}\n\n"
@@ -656,7 +677,25 @@ class CodingAgent:
                 else "Inspect the minimal relevant files first."
             )
         )
-        return self._run(self._prefill_prompt(prompt), stage="repair", requirement_ids=[])
+        if task_outline:
+            prompt += (
+                "\n\nWhole-task index (untrusted; names and dependencies only):\n"
+                "<untrusted_task_outline>\n"
+                + task_outline
+                + "\n</untrusted_task_outline>"
+            )
+        if assigned:
+            prompt += (
+                "\n\nAssigned requirement graph for this repair. Keep the same IDs.\n"
+                "<untrusted_batch_graph>\n"
+                + current_batch_graph(assigned, accepted_ids=accepted_ids)
+                + "\n</untrusted_batch_graph>"
+            )
+        return self._run(
+            self._prefill_prompt(prompt),
+            stage="repair",
+            requirement_ids=[node.req_id for node in assigned],
+        )
 
     def _run(self, prompt: str, *, stage: str, requirement_ids: list[str]) -> AgentRun:
         messages: list[dict[str, Any]] = [
@@ -896,6 +935,13 @@ class CodingAgent:
                             "agent_session_completed",
                             stage=stage,
                             requirement_ids=requirement_ids,
+                            phase=loop_phase(
+                                edited=has_required_change,
+                                validated=True,
+                                probe_current=True,
+                                audit_for_revision=True,
+                                empty_turns=0,
+                            ),
                             changed_files=changed,
                             summary=final_summary,
                             acceptance_audit=acceptance_audit_requested,
@@ -903,11 +949,20 @@ class CodingAgent:
                         )
                         return AgentRun(True, final_summary, changed, turn)
                 empty_turns += 1
-                if empty_turns >= 3:
+                if empty_turns >= STALL_AFTER_NO_TOOL_TURNS:
                     self.trace.record(
                         "agent_session_stalled",
                         stage=stage,
                         requirement_ids=requirement_ids,
+                        phase=loop_phase(
+                            edited=has_required_change,
+                            validated=self.tools.current_changes_validated,
+                            probe_current=not self.tools.browser_probe_requires_recheck,
+                            audit_for_revision=(
+                                acceptance_audit_revision == self.tools.change_revision
+                            ),
+                            empty_turns=empty_turns,
+                        ),
                         reason="three consecutive no-tool summaries made no accepted progress",
                         changed_files=changed,
                     )

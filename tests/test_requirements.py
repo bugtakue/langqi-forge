@@ -68,6 +68,41 @@ class RequirementCompilerTests(unittest.TestCase):
         self.assertIn("read_requirement_spec", node.compact_spec())
         self.assertIn("PARENT_EXTRA", node.full_spec_document())
 
+    def test_long_folder_rules_do_not_force_every_child_to_be_paged(self) -> None:
+        tree = {
+            "id": "ROOT",
+            "type": "FOLDER",
+            "name": "Product",
+            "description": "SHARED_RULE " * 400,
+            "children": [
+                {"id": "SHORT", "type": "ATOMIC", "name": "Short action", "description": "Do the short action."},
+            ],
+        }
+        node = _contextual_nodes(tree, flatten_atomic(tree))[0]
+        self.assertTrue(node.is_abbreviated())
+        self.assertFalse(node.pages_own_spec())
+        self.assertIn("Do the short action.", node.prompt_spec())
+        self.assertNotIn("[ABBREVIATED:", node.prompt_spec())
+        self.assertIn("SHARED_RULE", node.full_spec_document())
+        from factory26_harness.agent import AgentRun, CodingAgent
+        from factory26_harness.requirements import shared_folder_context
+        from factory26_harness.trace import ProductionTrace
+        from factory26_harness.workspace_tools import WorkspaceTools
+        from unittest.mock import patch
+
+        self.assertEqual(shared_folder_context([node]).count("SHARED_RULE"), 400)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = ProductionTrace(root / "trace.jsonl")
+            agent = CodingAgent(None, WorkspaceTools(root, trace, 3993), trace, max_turns=2)
+            with patch.object(agent, "_run", return_value=AgentRun(False, "not executed", (), 0)) as run:
+                agent.implement([node])
+            prompt = run.call_args.args[0]
+        self.assertIn("<untrusted_folder_context>", prompt)
+        self.assertIn("SHARED_RULE", prompt)
+        self.assertNotIn("Abbreviated current-batch requirement IDs:", prompt)
+        self.assertIn("Do the short action.", prompt)
+
     def test_parent_folder_dependencies_reach_the_atomic_prompt(self) -> None:
         tree = {
             "id": "ROOT", "type": "FOLDER", "children": [

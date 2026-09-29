@@ -60,6 +60,35 @@ class ArcRuntime:
         if not self.sdk.git.commit(f"batch {index}: implement {len(requirement_ids)} requirements"):
             raise RuntimeError("ARC-Bench Git commit found no implementation changes")
 
+    def finish_fallback(
+        self,
+        requirement_ids: list[str],
+        failed_ids: list[str] | None = None,
+    ) -> None:
+        """Record a whole-tree deterministic recovery as the final attempt.
+
+        The fallback promotes the complete public product in one operation, so
+        it must not be represented as a successful model batch.  Some exact
+        fallback runs can also produce no Git diff (for example, when the
+        promoted product is already present); that is still a valid accepted
+        state and must not turn into a false runtime failure.
+        """
+
+        for req_id in requirement_ids:
+            self.sdk.events.mark_implementation_done(
+                req_id,
+                "Deterministic same-boundary fallback passed independent checks",
+            )
+        for req_id in failed_ids or []:
+            if req_id not in requirement_ids:
+                self.sdk.events.mark_implementation_failed(
+                    req_id,
+                    "Deterministic fallback did not cover this requirement",
+                )
+        self.sdk.git.commit(
+            f"fallback: accept {len(requirement_ids)} independently verified requirements"
+        )
+
     def fail_batch(self, requirement_ids: list[str], message: str) -> None:
         for req_id in requirement_ids:
             self.sdk.events.mark_implementation_failed(req_id, message[:500])

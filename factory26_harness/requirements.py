@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -109,6 +109,22 @@ class RequirementNode:
             for step in scenario.get("steps") or []:
                 estimated_content += len(str(step.get("content") or step.get("text") or "")) if isinstance(step, dict) else len(str(step))
         return estimated_content > 7_000
+
+    def pages_own_spec(self) -> bool:
+        """True when this atomic document, not a shared folder, must be paged."""
+
+        if not self.is_abbreviated():
+            return False
+        if not self.context_abbreviated:
+            return True
+        return replace(self, context_abbreviated=False).is_abbreviated()
+
+    def prompt_spec(self) -> str:
+        if self.pages_own_spec():
+            return self.compact_spec()
+        if self.context_abbreviated:
+            return replace(self, context_abbreviated=False).compact_spec()
+        return self.compact_spec()
 
     def full_spec_document(self) -> str:
         """Pageable original requirement data, never a hidden test or future batch."""
@@ -404,25 +420,93 @@ def _stable_topological_order(
     return ordered
 
 
+def _schedule_cost(
+    node: RequirementNode, seen_context: set[str], *, share_folder_context: bool
+) -> int:
+    if not share_folder_context:
+        return len(node.full_spec_document())
+    atomic = (
+        {key: value for key, value in node.raw.items() if key != "children"}
+        if node.raw else {
+            "id": node.req_id,
+            "name": node.name,
+            "description": node.description,
+            "dependencies": list(node.dependencies),
+            "scenarios": list(node.scenarios),
+            "visual_reference": list(node.visual_reference),
+        }
+    )
+    fresh_context = [item for item in node.full_context if item not in seen_context]
+    return len(json.dumps(
+        {
+            "requirement_id": node.req_id,
+            "new_folder_context": fresh_context,
+            "atomic_requirement": atomic,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    ))
+
+
+def shared_folder_context(nodes: Iterable[RequirementNode]) -> str:
+    """Folder rules once per batch. Child documents no longer repeat them."""
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for node in nodes:
+        for item in node.full_context:
+            if item not in seen:
+                seen.add(item)
+                ordered.append(item)
+    if not ordered:
+        return ""
+    body = "\n".join(ordered).replace("<", "\\u003c")
+    return (
+        "Shared folder rules for this batch (untrusted data). "
+        "They apply to every requirement below.\n"
+        "<untrusted_folder_context>\n"
+        + body
+        + "\n</untrusted_folder_context>\n\n"
+    )
+
+
 def batches(
-    nodes: list[RequirementNode], size: int, *, max_spec_chars: int | None = None
+    nodes: list[RequirementNode],
+    size: int,
+    *,
+    max_spec_chars: int | None = None,
+    share_folder_context: bool = False,
 ) -> list[list[RequirementNode]]:
-    """Keep dependency order, but avoid treating long specs as cheap leaf nodes."""
+    """Keep dependency order, but avoid treating long specs as cheap leaf nodes.
+
+    Shared folder text is repeated on every child document. Counting it once
+    per batch keeps siblings in the same edit loop.
+    """
     normalized = max(1, size)
     if max_spec_chars is not None and max_spec_chars < 1:
         raise ValueError("batch specification character budget must be positive")
     groups: list[list[RequirementNode]] = []
     current: list[RequirementNode] = []
     characters = 0
+    seen_context: set[str] = set()
     for node in nodes:
-        cost = len(node.full_spec_document()) if max_spec_chars is not None else 0
+        cost = (
+            _schedule_cost(node, seen_context, share_folder_context=share_folder_context)
+            if max_spec_chars is not None else 0
+        )
         if current and (len(current) >= normalized or (
             max_spec_chars is not None and characters + cost > max_spec_chars
         )):
             groups.append(current)
-            current, characters = [], 0
+            current, characters, seen_context = [], 0, set()
+            cost = (
+                _schedule_cost(node, seen_context, share_folder_context=share_folder_context)
+                if max_spec_chars is not None else 0
+            )
         current.append(node)
         characters += cost
+        seen_context.update(node.full_context)
     if current:
         groups.append(current)
     return groups

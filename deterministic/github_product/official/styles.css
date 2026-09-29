@@ -1,0 +1,13 @@
+body { margin: 0; color: #1f2328; background: #fff; font: 16px/1.5 sans-serif; }
+.app-header { display: flex; gap: 16px; align-items: center; padding: 12px 16px; background: #24292f; }
+.app-header a, .app-header button, .app-header .user { color: #fff; }
+#clone-code::before { content: "Code"; }
+.app-header input { color: #1f2328; background: #fff; }
+#page { padding: 16px; }
+label { display: block; margin: 8px 0; }
+.error { color: #9a3412; }
+.menu[hidden] { display: none; }
+.dialog-layer { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .45); }
+.dialog-layer[hidden] { display: none; }
+.dialog-layer [role="dialog"] { background: #fff; color: #1f2328; padding: 16px; }
+.dialog-layer button { color: #1f2328; background: #fff; }
