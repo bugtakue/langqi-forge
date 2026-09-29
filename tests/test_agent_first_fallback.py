@@ -197,6 +197,20 @@ class AgentFirstFallbackTests(unittest.TestCase):
                 (output / "frontend/src/app.js").read_text(encoding="utf-8"),
             )
 
+    def test_continuation_refuses_a_batch_that_deletes_the_canvas(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            staged = Path(directory)
+            (staged / "frontend/src").mkdir(parents=True)
+            (staged / "backend").mkdir()
+            (staged / "frontend/src/app.js").write_text("<h1>rewritten</h1>", encoding="utf-8")
+            (staged / "backend/server.mjs").write_text("export {}", encoding="utf-8")
+            gap = qualifier._continuation_baseline_gap(
+                staged,
+                {"name": "GitHub Collaboration Platform Core Requirements"},
+            )
+        self.assertIn("register-form", gap)
+        self.assertIn(">Add file</a>", gap)
+
     def test_submitted_entry_names_one_recovery_after_the_model(self) -> None:
         entry = Path(__file__).resolve().parents[1] / "main.py"
         text = entry.read_text(encoding="utf-8")

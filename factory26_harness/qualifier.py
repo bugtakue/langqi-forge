@@ -396,6 +396,31 @@ def _promote_staged_app(staged: Path, output: Path) -> None:
             raise
 
 
+def _continuation_baseline_gap(staged: Path, tree: dict[str, Any]) -> str:
+    """Return missing canvas markers. An empty string means the baseline is intact."""
+
+    markers = {
+        "GitHub Collaboration Platform Core Requirements": (
+            ("frontend/src/app.js", ("register-form", ">Add file</a>")),
+            ("backend/server.mjs", ("Branch is protected",)),
+        ),
+        "Core Requirements for an Online Spreadsheet Data Workspace": (
+            ("frontend/src/app.js", ("Create pivot table", "Formula bar")),
+            ("backend/server.mjs", ("q3-sales", "#DIV/0!")),
+        ),
+    }.get(str(tree.get("name") or ""))
+    if not markers:
+        return ""
+    missing: list[str] = []
+    for relative, needles in markers:
+        path = staged / relative
+        text = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+        missing.extend(
+            f"{relative}:{needle}" for needle in needles if needle not in text
+        )
+    return ", ".join(missing)
+
+
 def _run_agent_first_fallback(
     graph: AgentFirstFallbackGraph,
     tree: dict[str, Any],
@@ -1000,6 +1025,26 @@ def main(argv: list[str] | None = None) -> int:
                         just_recovered = (
                             fallback_execution is not None and fallback_execution.passed
                         )
+                        if (
+                            result.completed
+                            and not just_recovered
+                            and graph is not None
+                            and graph.context.continuation
+                        ):
+                            gap = _continuation_baseline_gap(staged, tree)
+                            if gap:
+                                result = AgentRun(
+                                    False,
+                                    "continuation removed the recovered canvas: " + gap,
+                                    tuple(sorted(tools.changed_files)),
+                                    result.turns,
+                                )
+                                graph.keep_baseline(result.summary)
+                                trace.record(
+                                    "agent_continuation_baseline_kept",
+                                    batch=index,
+                                    missing=gap,
+                                )
                         if result.completed and not just_recovered:
                             _promote_staged_app(staged, output_dir)
                     if not result.completed and fallback_graph_active and fallback_execution is None:
