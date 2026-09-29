@@ -1535,18 +1535,20 @@ async function handleApi(request, response, url) {
       const saved = await transact((draft) => {
         const actor = currentUser(draft, request);
         const source = draft.repositories.find((item) => item.owner === owner && item.name === repo);
-        if (!actor || !source || !canSeeRepo(draft, source, actor)) return { status: 403, error: "Access denied" };
+        if (!actor || !source || !canWriteRepo(draft, source, actor)) return { status: 403, error: "Access denied" };
         const filePath = String(body.path || "").trim();
         const message = String(body.message || "").trim();
         if (!filePath || filePath.startsWith("/") || filePath.includes("..")) return { status: 400, error: "Invalid file path" };
-        if (!message) return { status: 400, error: "Commit message is required" };
+        if (!message || message.length > 72) return { status: 400, error: "Commit message is required" };
         const branchName = String(body.branch || source.defaultBranch);
+        const prior = draft.commits.filter((item) => item.owner === owner && item.repo === repo && item.branch === branchName);
+        const parent = prior.length ? prior[prior.length - 1].sha : null;
         const existing = draft.files.find((item) => item.owner === owner && item.repo === repo && item.path === filePath
           && (item.branch || source.defaultBranch) === branchName);
         if (existing) existing.content = String(body.content || "");
         else draft.files.push({ owner, repo, path: filePath, branch: branchName, content: String(body.content || "") });
         draft.commits.push({
-          owner, repo, branch: branchName, sha: randomUUID().slice(0, 7), parent: null, author: actor.username,
+          owner, repo, branch: branchName, sha: randomUUID().slice(0, 7), parent, author: actor.username,
           message, time: "just now", files: [filePath], additions: 1, deletions: 0,
           patches: { [filePath]: [`+${String(body.content || "").split("\n")[0] || ""}`] },
         });
