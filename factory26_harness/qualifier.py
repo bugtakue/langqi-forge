@@ -770,7 +770,9 @@ def main(argv: list[str] | None = None) -> int:
                     report["salvage_attempts"] += 1
                 requirement_ids = [node.req_id for node in active_group]
                 active_batch_ids = requirement_ids
-                if arc_runtime is not None:
+                if arc_runtime is not None and not (
+                    graph is not None and graph.context.continuation
+                ):
                     arc_runtime.begin_batch(requirement_ids)
                 if fallback_graph_active:
                     graph.begin_batch(requirement_ids)
@@ -905,6 +907,14 @@ def main(argv: list[str] | None = None) -> int:
                                     )
                                 if not fallback_execution.attempted:
                                     graph.fail_terminal(fallback_execution.summary)
+                            elif graph.context.continuation and not candidate_passed:
+                                result = AgentRun(
+                                    False,
+                                    "continuation checks failed; recovered canvas kept",
+                                    tuple(sorted(tools.changed_files)),
+                                    result.turns,
+                                )
+                                graph.keep_baseline(result.summary)
                         elif not candidate_passed:
                             candidate_validation["repair_attempted"] = True
                             failure_text = "\n".join(
@@ -987,27 +997,34 @@ def main(argv: list[str] | None = None) -> int:
                                 tuple(sorted(tools.changed_files)),
                                 result.turns + correction.turns,
                             )
-                        if result.completed and not fallback_recovered:
+                        just_recovered = (
+                            fallback_execution is not None and fallback_execution.passed
+                        )
+                        if result.completed and not just_recovered:
                             _promote_staged_app(staged, output_dir)
                     if not result.completed and fallback_graph_active and fallback_execution is None:
-                        fallback_execution = _run_agent_first_fallback(
-                            graph,
-                            tree,
-                            output_dir,
-                            smoke_port,
-                            regression,
-                            trace,
-                        )
-                        if fallback_execution.passed:
-                            fallback_recovered = True
-                            result = AgentRun(
-                                True,
-                                result.summary + "\n\n" + fallback_execution.summary,
-                                fallback_execution.changed_files,
-                                result.turns,
+                        if graph.context.continuation:
+                            if graph.context.state != "PLAN":
+                                graph.keep_baseline(result.summary)
+                        else:
+                            fallback_execution = _run_agent_first_fallback(
+                                graph,
+                                tree,
+                                output_dir,
+                                smoke_port,
+                                regression,
+                                trace,
                             )
-                        elif not fallback_execution.attempted:
-                            graph.fail_terminal(fallback_execution.summary)
+                            if fallback_execution.passed:
+                                fallback_recovered = True
+                                result = AgentRun(
+                                    True,
+                                    result.summary + "\n\n" + fallback_execution.summary,
+                                    fallback_execution.changed_files,
+                                    result.turns,
+                                )
+                            elif not fallback_execution.attempted:
+                                graph.fail_terminal(fallback_execution.summary)
                 probe_evidence = {
                     "batch": index,
                     "attempt": attempt,
@@ -1032,6 +1049,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 if not result.completed:
                     active_batch_ids = []
+                    if graph is not None and graph.context.continuation:
+                        continue
                     model_limit = getattr(model, "max_requests", None)
                     can_retry = model_limit is None or model.request_count < model_limit
                     if (
@@ -1072,16 +1091,27 @@ def main(argv: list[str] | None = None) -> int:
                     handoff_notes, requirement_ids, result.summary
                 )
                 if arc_runtime is not None:
-                    if fallback_recovered and graph is not None:
+                    just_recovered = (
+                        fallback_execution is not None and fallback_execution.passed
+                    )
+                    if just_recovered and graph is not None:
                         arc_runtime.finish_fallback(
                             list(graph.context.completed_ids),
                             list(graph.context.failed_ids),
                         )
+                    elif graph is not None and graph.context.continuation:
+                        try:
+                            arc_runtime.finish_batch(index, requirement_ids)
+                        except RuntimeError as exc:
+                            trace.record(
+                                "agent_continuation_commit_skipped",
+                                batch=index,
+                                error=str(exc)[:300],
+                            )
                     else:
                         arc_runtime.finish_batch(index, requirement_ids)
                 if (
                     fallback_graph_active
-                    and not fallback_recovered
                     and graph.context.state == "PROMOTE"
                 ):
                     graph.accept_batch()
@@ -1091,12 +1121,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 report["implemented_requirements"].extend(requirement_ids)
                 active_batch_ids = []
-                if fallback_recovered:
-                    # The deterministic product is a whole public-canvas
-                    # recovery, not a reason to spend a third attempt on the
-                    # remaining batches.
-                    pending.clear()
-                    break
+                if (
+                    fallback_recovered
+                    and graph is not None
+                    and graph.context.state == "TERMINAL"
+                    and not graph.context.continuation
+                ):
+                    graph.continue_after_fallback()
             if (
                 fallback_graph_active
                 and graph is not None
@@ -1124,8 +1155,6 @@ def main(argv: list[str] | None = None) -> int:
                     if arc_runtime is not None:
                         arc_runtime.fail_batch(remaining_ids, terminal_model_error)
                 report["model_gateway_stop_reason"] = terminal_model_error
-                break
-            if fallback_recovered:
                 break
 
         if fallback_graph_active and graph is not None:

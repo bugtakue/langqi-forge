@@ -19,18 +19,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from deterministic import github_canvas, sheet_canvas
-
-
 _TRANSITIONS: dict[str, frozenset[str]] = {
     "PLAN": frozenset({"AGENT_ATTEMPT"}),
     "AGENT_ATTEMPT": frozenset({"VALIDATE", "FALLBACK_GATE", "TERMINAL"}),
     "VALIDATE": frozenset({"PROMOTE", "FALLBACK_GATE", "TERMINAL"}),
     "PROMOTE": frozenset({"PLAN", "FALLBACK_GATE", "TERMINAL"}),
-    "FALLBACK_GATE": frozenset({"FALLBACK_ATTEMPT", "TERMINAL"}),
+    "FALLBACK_GATE": frozenset({"FALLBACK_ATTEMPT", "PLAN", "TERMINAL"}),
     "FALLBACK_ATTEMPT": frozenset({"VALIDATE_FALLBACK", "TERMINAL"}),
     "VALIDATE_FALLBACK": frozenset({"PROMOTE", "TERMINAL"}),
-    "TERMINAL": frozenset(),
+    "TERMINAL": frozenset({"PLAN"}),
 }
 
 
@@ -49,6 +46,7 @@ class AgentContext:
     context_version: int = 0
     fallback_attempted: bool = False
     fallback_recovered: bool = False
+    continuation: bool = False
     last_good_source_sha: str | None = None
     last_failure: str = ""
     evidence_refs: list[str] = field(default_factory=list)
@@ -77,6 +75,7 @@ class AgentContext:
             "last_failure": self.last_failure[:700],
             "fallback_attempted": self.fallback_attempted,
             "fallback_recovered": self.fallback_recovered,
+            "continuation": self.continuation,
             "evidence_refs": list(self.evidence_refs),
         }
 
@@ -102,6 +101,17 @@ class FallbackExecution:
 
 def resolve_fallback_binding(tree: dict[str, Any]) -> FallbackBinding | None:
     """Resolve only an exact public canvas identity, never a fuzzy task match."""
+
+    # The competition-safe bundle intentionally omits task-specific fallback
+    # modules.  Local experiments may provide the optional ``deterministic``
+    # package next to this module; absence therefore means "no fallback", not
+    # a broken Agent entry point.
+    try:
+        from deterministic import github_canvas, sheet_canvas
+    except ModuleNotFoundError as exc:
+        if exc.name == "deterministic":
+            return None
+        raise
 
     candidates = (
         ("github-canvas", github_canvas),
@@ -255,6 +265,34 @@ class AgentFirstFallbackGraph:
         self.context.active_ids = ()
         self._transition("PLAN", "accepted Agent work becomes the next graph checkpoint")
 
+    def continue_after_fallback(self) -> None:
+        """Keep the recovered canvas, then let later batches go through the agent."""
+
+        if self.context.state != "TERMINAL" or not self.context.fallback_recovered:
+            raise RuntimeError("agent continuation requires a recovered fallback")
+        self.context.continuation = True
+        self._transition(
+            "PLAN",
+            "recovered canvas stays; remaining requirement batches still go through the agent",
+        )
+        self.trace.record(
+            "harness_agent_continuation_started",
+            completed_ids=list(self.context.completed_ids),
+        )
+
+    def keep_baseline(self, summary: str) -> None:
+        """Drop one continuation batch without erasing the recovered canvas."""
+
+        self.context.last_failure = str(summary)[:700]
+        if self.context.state != "PLAN":
+            self._transition("PLAN", "continuation batch discarded; recovered canvas remains")
+        self.trace.record(
+            "harness_agent_continuation_discarded",
+            requirement_ids=list(self.context.active_ids),
+            summary=self.context.last_failure,
+        )
+        self.context.active_ids = ()
+
     def release_for_covered_canvas(self) -> None:
         """Leave a passed agent attempt so the one covered-canvas recovery can run."""
 
@@ -275,11 +313,19 @@ class AgentFirstFallbackGraph:
     def model_context(self) -> str:
         """Bounded state for the next model prompt; no old tool calls are replayed."""
 
+        continuation = ""
+        if self.context.continuation:
+            continuation = (
+                "\nThe workspace already contains the traced public-canvas baseline. "
+                "Implement the current batch on top of it. Keep controls that already "
+                "match the requirement text."
+            )
         return (
             "<agent_harness_context>\n"
             + json.dumps(self.context.compact(), ensure_ascii=False, sort_keys=True)
             + "\nFull prior observations remain in the sealed trace; use current tools to re-read source."
-            "\n</agent_harness_context>"
+            + continuation
+            + "\n</agent_harness_context>"
         )
 
     def summary(self) -> dict[str, Any]:

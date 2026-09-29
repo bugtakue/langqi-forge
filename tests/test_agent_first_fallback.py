@@ -71,6 +71,13 @@ class AgentFirstFallbackTests(unittest.TestCase):
 
         self.assertTrue(graph.fallback_recovered)
         self.assertEqual(graph.context.state, "TERMINAL")
+        graph.continue_after_fallback()
+        self.assertEqual(graph.context.state, "PLAN")
+        self.assertTrue(graph.context.continuation)
+        graph.begin_batch(["REQ-1-1-1"])
+        graph.agent_result(False, "later batch failed")
+        graph.keep_baseline("later batch was not accepted")
+        self.assertEqual(graph.context.state, "PLAN")
         self.assertEqual(graph.context.completed_ids, ["REQ-1-1-1"])
         with self.assertRaises(RuntimeError):
             graph.start_fallback()
@@ -179,10 +186,11 @@ class AgentFirstFallbackTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(status, 0)
-            self.assertEqual(PassingAgent.calls, 1)
+            self.assertEqual(PassingAgent.calls, 2)
             report = json.loads((output / ".arc/harness-report.json").read_text(encoding="utf-8"))
             self.assertTrue(report["fallback_recovered"])
-            self.assertEqual(report["model_requests"], 2)
+            self.assertTrue(report["agent_first_fallback"]["context"]["continuation"])
+            self.assertEqual(report["model_requests"], 4)
             self.assertEqual(report["implemented_requirements"], ["REQ-1-1-1", "REQ-1-1-2"])
             self.assertIn(
                 "register-form",
@@ -193,7 +201,7 @@ class AgentFirstFallbackTests(unittest.TestCase):
         entry = Path(__file__).resolve().parents[1] / "main.py"
         text = entry.read_text(encoding="utf-8")
         self.assertIn('os.environ.setdefault("FACTORY26_AGENT_FIRST_FALLBACK", "1")', text)
-        self.assertIn('os.environ.setdefault("FACTORY26_MAX_AGENT_TURNS", "8")', text)
+        self.assertIn('os.environ.setdefault("FACTORY26_MAX_AGENT_TURNS", "12")', text)
         self.assertLess(
             text.index("FACTORY26_AGENT_FIRST_FALLBACK"),
             text.index("raise SystemExit(main())"),
