@@ -1266,7 +1266,9 @@ async function handleApi(request, response, url) {
         if (body.action === "merge") {
           if (!canAdminRepo(draft, record, actor) || pull.state !== "open") return { status: 403, error: "Access denied" };
           const rule = (draft.protections || []).find((item) => item.owner === owner && item.repo === repo && item.branch === pull.base);
-          const changesRequested = (pull.reviews || []).some((review) => review.decision === "Request changes");
+          const latestReview = new Map();
+          (pull.reviews || []).forEach((review) => latestReview.set(review.reviewer, review.decision));
+          const changesRequested = [...latestReview.values()].includes("Request changes");
           if (changesRequested || (rule && rule.review && !pull.approved)) {
             return { status: 400, error: "Review required by branch protection" };
           }
@@ -1541,18 +1543,27 @@ async function handleApi(request, response, url) {
         if (!filePath || filePath.startsWith("/") || filePath.includes("..")) return { status: 400, error: "Invalid file path" };
         if (!message || message.length > 72) return { status: 400, error: "Commit message is required" };
         const branchName = String(body.branch || source.defaultBranch);
+        const protectedBranch = (draft.protections || []).some((item) => item.owner === owner && item.repo === repo && item.branch === branchName);
+        if (protectedBranch) return { status: 400, error: "Branch is protected" };
         const prior = draft.commits.filter((item) => item.owner === owner && item.repo === repo && item.branch === branchName);
         const parent = prior.length ? prior[prior.length - 1].sha : null;
         const existing = draft.files.find((item) => item.owner === owner && item.repo === repo && item.path === filePath
           && (item.branch || source.defaultBranch) === branchName);
         if (existing) existing.content = String(body.content || "");
         else draft.files.push({ owner, repo, path: filePath, branch: branchName, content: String(body.content || "") });
+        const sha = randomUUID().slice(0, 7);
         draft.commits.push({
-          owner, repo, branch: branchName, sha: randomUUID().slice(0, 7), parent, author: actor.username,
+          owner, repo, branch: branchName, sha, parent, author: actor.username,
           message, time: "just now", files: [filePath], additions: 1, deletions: 0,
           patches: { [filePath]: [`+${String(body.content || "").split("\n")[0] || ""}`] },
         });
-        return { status: 200, path: filePath };
+        for (const pull of draft.pulls || []) {
+          if (pull.owner === owner && pull.repo === repo && pull.head === branchName && pull.state === "open") {
+            pull.approved = false;
+            pull.check = "pending";
+          }
+        }
+        return { status: 200, path: filePath, parent };
       });
       sendJson(response, saved.status, saved.status === 200 ? { ok: true, path: saved.path } : { error: saved.error });
       return true;
