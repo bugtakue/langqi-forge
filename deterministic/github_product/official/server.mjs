@@ -908,7 +908,14 @@ async function handleApi(request, response, url) {
           }
           draft.members = (draft.members || []).filter((item) => !(item.org === name && item.username === query));
           draft.teamMembers = (draft.teamMembers || []).filter((item) => !(item.org === name && item.username === query));
-          draft.grants = (draft.grants || []).filter((item) => !(item.subjectType === "user" && item.subject === query && item.organization === name));
+          const orgRepos = new Set((draft.repositories || [])
+            .filter((item) => item.organization === name)
+            .map((item) => `${item.owner}/${item.name}`));
+          draft.grants = (draft.grants || []).filter((item) => {
+            if (item.subjectType !== "user" || item.subject !== query) return true;
+            if (item.organization === name) return false;
+            return !orgRepos.has(`${item.owner}/${item.repo}`);
+          });
           return { status: 200 };
         }
         if (!account) return { status: 400, error: "Account not found" };
