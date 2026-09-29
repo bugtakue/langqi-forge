@@ -1430,7 +1430,7 @@ async function handleApi(request, response, url) {
       const updated = await transact((draft) => {
         const actor = currentUser(draft, request);
         const source = draft.repositories.find((item) => item.owner === owner && item.name === repo);
-        if (!actor || !source || !canAdminRepo(draft, source, actor)) return { status: 403, error: "Access denied" };
+        if (!actor || !source || !isRepoAdmin(draft, source, actor)) return { status: 403, error: "Access denied" };
         source.visibility = body.visibility === "private" ? "private" : "public";
         return { status: 200 };
       });

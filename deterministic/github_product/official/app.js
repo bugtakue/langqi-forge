@@ -493,7 +493,7 @@ function repoSettingsHtml(repo, file, payload) {
     return `<h1>Manage access</h1><button type="button" id="open-access">Add people or teams</button><form id="access-form" hidden><label for="access-search">Search</label><input id="access-search" type="text"><div id="access-choices">${options}</div><label for="access-role">Role</label><select id="access-role">${roleOptions("Write")}</select><button type="submit">Add</button></form><ul>${grants}</ul>`;
   }
   if (file === 'general') {
-    const control = payload.canAdmin
+    const control = payload.isAdmin
       ? `<button type="button" id="change-visibility">Change visibility</button><div class="dialog-layer" id="visibility-layer" hidden><div role="dialog" aria-label="Change visibility"><label><input type="radio" name="visibility" value="public"> Public</label><button type="button" id="confirm-visibility">Confirm visibility</button></div></div>`
       : '';
     const label = payload.visibility === 'private' ? 'Private' : 'Public';
