@@ -189,12 +189,15 @@ class AgentFirstFallbackTests(unittest.TestCase):
                 (output / "frontend/src/app.js").read_text(encoding="utf-8"),
             )
 
-    def test_submitted_entry_does_not_enable_task_specific_recovery(self) -> None:
+    def test_submitted_entry_names_one_recovery_after_the_model(self) -> None:
         entry = Path(__file__).resolve().parents[1] / "main.py"
         text = entry.read_text(encoding="utf-8")
-        self.assertNotIn("FACTORY26_AGENT_FIRST_FALLBACK", text)
-        self.assertNotIn("FACTORY26_MAX_AGENT_TURNS", text)
-        self.assertIn("raise SystemExit(main())", text)
+        self.assertIn('os.environ.setdefault("FACTORY26_AGENT_FIRST_FALLBACK", "1")', text)
+        self.assertIn('os.environ.setdefault("FACTORY26_MAX_AGENT_TURNS", "8")', text)
+        self.assertLess(
+            text.index("FACTORY26_AGENT_FIRST_FALLBACK"),
+            text.index("raise SystemExit(main())"),
+        )
 
     def test_recovered_public_canvases_pass_real_startup_checks(self) -> None:
         from deterministic import github_canvas, sheet_canvas

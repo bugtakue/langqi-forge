@@ -48,4 +48,4 @@ GitHub 公开需求是 47 个原子。表格公开需求是 24 个原子。同�
 8. 检查通过才提升到输出目录，否则丢弃这份副本。
 9. 一轮下来没有任何批次完成，拒绝留下未编辑的脚手架。
 
-计划写在输出目录的 `.arc/compiled-plan.json`。路线是 `model-generated-implementation`。正式入口只跑模型。公开画布恢复要显式加上 `--agent-first-fallback`，这时 `task_specific_prebuilt_code` 才记为 true，轨迹里写明恢复名称。报告里的 `architecture` 字段是上面四层的当次记录。
+计划写在输出目录的 `.arc/compiled-plan.json`。路线是 `model-generated-implementation`。正式入口先跑模型，这一批最多 8 轮，然后对匹配到的公开画布做一次恢复。恢复名称写在轨迹里，`task_specific_prebuilt_code` 记为 true。报告里的 `architecture` 字段是上面四层的当次记录。
